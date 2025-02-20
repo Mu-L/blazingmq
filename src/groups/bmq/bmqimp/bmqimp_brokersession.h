@@ -31,7 +31,6 @@
 // Thread safe.
 
 // BMQ
-
 #include <bmqimp_eventqueue.h>
 #include <bmqimp_eventsstats.h>
 #include <bmqimp_messagecorrelationidcontainer.h>
@@ -56,13 +55,12 @@
 #include <bmqt_sessionoptions.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcio_channel.h>
-#include <mwcma_countingallocatorstore.h>
-#include <mwcst_statcontext.h>
-#include <mwcst_statvalue.h>
-#include <mwcu_samethreadchecker.h>
-#include <mwcu_throttledaction.h>
+#include <bmqio_channel.h>
+#include <bmqma_countingallocatorstore.h>
+#include <bmqst_statcontext.h>
+#include <bmqst_statvalue.h>
+#include <bmqu_samethreadchecker.h>
+#include <bmqu_throttledaction.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -102,7 +100,7 @@ class Queue;
 
 /// Provides an executor suitable for submitting functors on session's FSM
 /// thread. Note that this class conforms to the Executor concept as defined
-/// in the `mwcex` package documentation.
+/// in the `bmqex` package documentation.
 class BrokerSession_Executor {
   private:
     // PRIVATE DATA
@@ -135,6 +133,7 @@ class BrokerSession_Executor {
 class BrokerSession BSLS_CPP11_FINAL {
   public:
     // PUBLIC TYPES
+    typedef bmqp::BlobPoolUtil::BlobSpPool BlobSpPool;
 
     /// Invoked as a result of a response from the broker to a session event
     /// submitted by the user, `EventCallback` is an alias for a callback
@@ -377,6 +376,9 @@ class BrokerSession BSLS_CPP11_FINAL {
         bsl::vector<StateTransition> d_transitionTable;
         // State transition table
 
+        /// HiRes timer value of the begin start/stop operation
+        bsls::Types::Int64 d_beginTimestamp;
+
       private:
         // PRIVATE MANIPULATORS
 
@@ -390,7 +392,7 @@ class BrokerSession BSLS_CPP11_FINAL {
         /// Unconditionally set STARTED state as a reaction to the specified
         /// `event` and store the specified `channel` pointer.
         void setStarted(FsmEvent::Enum                         event,
-                        const bsl::shared_ptr<mwcio::Channel>& channel);
+                        const bsl::shared_ptr<bmqio::Channel>& channel);
 
         /// Unconditionally set STOPPED state as a reaction to the specified
         /// `event`.  If the specified `isStartTimeout` flag is `true` then
@@ -407,6 +409,11 @@ class BrokerSession BSLS_CPP11_FINAL {
         /// specified `event` and execute state entry logic.  Return value
         /// if not void indicates state entry logic execution result.
         void setClosingChannel(FsmEvent::Enum event);
+
+        /// Log start/stop operation time for the specified `operation`,
+        /// using the stored operation begin timestamp.
+        /// Reset the begin timestamp to 0.
+        void logOperationTime(const char* operation);
 
       public:
         // CREATORS
@@ -435,7 +442,7 @@ class BrokerSession BSLS_CPP11_FINAL {
         void handleStopRequest();
 
         /// Handle IO channel up event that provides the specified `channel`
-        void handleChannelUp(const bsl::shared_ptr<mwcio::Channel>& channel);
+        void handleChannelUp(const bsl::shared_ptr<bmqio::Channel>& channel);
 
         /// Handle IO channel down event
         void handleChannelDown();
@@ -455,11 +462,21 @@ class BrokerSession BSLS_CPP11_FINAL {
 
     class QueueFsm {
       private:
+        // PRIVATE TYPES
+
+        typedef bsl::unordered_map<bsl::string, bsls::Types::Int64>
+            TimestampMap;
+
+        // PRIVATE DATA
+
         BrokerSession& d_session;
         // Reference to the parent object
 
         bsl::vector<QueueStateTransition> d_transitionTable;
         // State transition table
+
+        TimestampMap d_timestampMap;
+        // Map of HiRes timestamp of the operation beginning per each queue
 
       private:
         // PRIVATE MANIPULATORS
@@ -581,6 +598,13 @@ class BrokerSession BSLS_CPP11_FINAL {
         /// Initiate the resumption of a queue.
         void actionInitiateQueueResume(const bsl::shared_ptr<Queue>& queue);
 
+        /// Log start/stop/configure operation time for the specified
+        /// `queueUri` and `operation`, using the stored operation begin
+        /// timestamp. After logging, begin timestamp is removed from
+        /// timestamps map.
+        void logOperationTime(const bsl::string& queueUri,
+                              const char*        operation);
+
       public:
         // CREATORS
         QueueFsm(BrokerSession& session);
@@ -679,7 +703,7 @@ class BrokerSession BSLS_CPP11_FINAL {
 
   private:
     // DATA
-    mwcma::CountingAllocatorStore d_allocators;
+    bmqma::CountingAllocatorStore d_allocators;
     // Allocator store to spawn new
     // allocators for sub-components
 
@@ -697,7 +721,10 @@ class BrokerSession BSLS_CPP11_FINAL {
     // Raw pointer (held, not owned) to
     // the blob buffer factory to use.
 
-    bsl::shared_ptr<mwcio::Channel> d_channel_sp;
+    /// Pool of shared pointers to blobs.  Held, not owned.
+    BlobSpPool* d_blobSpPool_p;
+
+    bsl::shared_ptr<bmqio::Channel> d_channel_sp;
     // Channel to use for communication,
     // held not owned
 
@@ -758,7 +785,7 @@ class BrokerSession BSLS_CPP11_FINAL {
     bslmt::ThreadUtil::Handle d_fsmThread;
     // FSM thread handle
 
-    mwcu::SameThreadChecker d_fsmThreadChecker;
+    bmqu::SameThreadChecker d_fsmThreadChecker;
     // Mechanism to check if a method is
     // called in the FSM thread
 
@@ -787,13 +814,13 @@ class BrokerSession BSLS_CPP11_FINAL {
     // resume queues that have not yet
     // received responses.
 
-    mwcu::ThrottledActionParams d_throttledFailedPostMessage;
-    // State for mwcu::ThrottledAction,
+    bmqu::ThrottledActionParams d_throttledFailedPostMessage;
+    // State for bmqu::ThrottledAction,
     // across all queues for when posting
     // fails due to BW_LIMIT.
 
-    mwcu::ThrottledActionParams d_throttledFailedAckMessages;
-    // State for mwcu::ThrottledAction,
+    bmqu::ThrottledActionParams d_throttledFailedAckMessages;
+    // State for bmqu::ThrottledAction,
     // across all queues.
 
     bmqimp::MessageDumper d_messageDumper;
@@ -851,6 +878,12 @@ class BrokerSession BSLS_CPP11_FINAL {
     // Map queueId and the queue
     // retransmission timeout provided by
     // the broker
+
+    unsigned int d_nextInternalSubscriptionId;
+    // Assists generating unique ids for Configure requests.
+
+    int d_doConfigureStream;
+    // Temporary safety switch to control configure request.
 
   private:
     // NOT IMPLEMENTED
@@ -933,10 +966,6 @@ class BrokerSession BSLS_CPP11_FINAL {
     /// This method gets called each time a new control event (received from
     /// the broker) is available on the channel.
     void processControlEvent(const bmqp::Event& event);
-
-    /// This method gets called each time a new heart beat event (sent by
-    /// the broker) is available on the channel.
-    void onHeartbeat();
 
     void enableMessageRetransmission(const bmqp::PutMessageIterator& putIter,
                                      const bsls::TimeInterval&       sentTime);
@@ -1308,7 +1337,7 @@ class BrokerSession BSLS_CPP11_FINAL {
     /// Invoked from the FSM thread as a handler to the channel status event
     /// specified as `eventSp` and sent by the IO thread.  This method
     /// updates the channel status and sends related user events.
-    void doSetChannel(const bsl::shared_ptr<mwcio::Channel> channel,
+    void doSetChannel(const bsl::shared_ptr<bmqio::Channel> channel,
                       const bsl::shared_ptr<Event>&         eventSp);
 
     /// Invoked from the FSM thread as a handler to the session start
@@ -1324,12 +1353,8 @@ class BrokerSession BSLS_CPP11_FINAL {
     /// Invoked from the FSM thread as a handler to the channel watermark
     /// event specified as `eventSp` with the specified watermark `type`
     /// sent by the IO thread.
-    void doHandleChannelWatermark(mwcio::ChannelWatermarkType::Enum type,
+    void doHandleChannelWatermark(bmqio::ChannelWatermarkType::Enum type,
                                   const bsl::shared_ptr<Event>&     eventSp);
-
-    /// Invoked from the FSM thread as a handler to the heartbeat event
-    /// specified as `eventSp` sent by the IO thread.
-    void doHandleHeartbeat(const bsl::shared_ptr<Event>& eventSp);
 
     /// Invoked from the FSM thread to start channel closing.
     void disconnectChannel();
@@ -1410,13 +1435,13 @@ class BrokerSession BSLS_CPP11_FINAL {
     /// channel `highWaterMark` value.  If a special extention buffer is not
     /// empty append the `blob` into the buffer and return success.  If the
     /// write operation fails with e_LIMIT error which indicates HWM
-    /// condition put the specified `blob` into the buffer and return
+    /// condition put the specified `blob_sp` into the buffer and return
     /// success.  In all other cases return the result of the write
     /// operation.
     bmqt::GenericResult::Enum
     requestWriterCb(const RequestManagerType::RequestSp& context,
                     const bmqp::QueueId&                 queueId,
-                    const bdlbb::Blob&                   blob,
+                    const bsl::shared_ptr<bdlbb::Blob>&  blob_sp,
                     bsls::Types::Int64                   highWatermark);
 
     /// Write the specified `blob` into the channel providing the specified
@@ -1460,14 +1485,15 @@ class BrokerSession BSLS_CPP11_FINAL {
 
     // CREATORS
 
-    /// Create a new object using the specified `scheduler` and
-    /// `bufferFactory`.  Use the configuration from the specified
+    /// Create a new object using the specified `scheduler`, `bufferFactory`
+    /// and `blobSpPool_p`.  Use the configuration from the specified
     /// `sessionOptions`.  If the specified `eventHandlerCb` is defined,
     /// invoke it for any events.  Invoke the specified `stateCb` when
     /// the session makes state transition.  All memory allocations will be
     /// done using the specified `allocator`.
     BrokerSession(bdlmt::EventScheduler*                  scheduler,
                   bdlbb::BlobBufferFactory*               bufferFactory,
+                  BlobSpPool*                             blobSpPool_p,
                   const bmqt::SessionOptions&             sessionOptions,
                   const EventQueue::EventHandlerCallback& eventHandlerCb,
                   const StateFunctor&                     stateCb,
@@ -1481,9 +1507,9 @@ class BrokerSession BSLS_CPP11_FINAL {
     /// Configure this component to keep track of statistics: create a
     /// sub-context from the specified `rootStatContext`, using the
     /// specified `start` and `end` snapshot location.
-    void initializeStats(mwcst::StatContext* rootStatContext,
-                         const mwcst::StatValue::SnapshotLocation& start,
-                         const mwcst::StatValue::SnapshotLocation& end);
+    void initializeStats(bmqst::StatContext* rootStatContext,
+                         const bmqst::StatValue::SnapshotLocation& start,
+                         const bmqst::StatValue::SnapshotLocation& end);
 
     /// Process the specified `packet`.  This method gets called each time a
     /// new `packet` (sent by the broker) is available on the channel.  It
@@ -1491,12 +1517,13 @@ class BrokerSession BSLS_CPP11_FINAL {
     /// Return error status in case the packet cannot be handled by any
     /// reason.
     bmqt::GenericResult::Enum processPacket(const bdlbb::Blob& packet);
+    bmqt::GenericResult::Enum processPacket(const bmqp::Event& event);
 
     /// Set the specified `channel` to use for communication with the
     /// bmqbrkr.  If `channel` is non null, this is a newly-established
     /// `channel`.  Otherwise, if `channel` is null, this means the
     /// connection with the broker was lost.
-    void setChannel(const bsl::shared_ptr<mwcio::Channel>& channel);
+    void setChannel(const bsl::shared_ptr<bmqio::Channel>& channel);
 
     /// Start the broker session and block until start result or the
     /// specified `timeout` is expired.  Return 0 on success or non-zero on
@@ -1625,7 +1652,7 @@ class BrokerSession BSLS_CPP11_FINAL {
     /// Return transition table of the Session FSM.
     bsl::vector<StateTransition> getSessionFsmTransitionTable() const;
 
-    void handleChannelWatermark(mwcio::ChannelWatermarkType::Enum type);
+    void handleChannelWatermark(bmqio::ChannelWatermarkType::Enum type);
     // Called when the channel watermark event happens.  The watermark type
     // is indicated by the specified 'type'.
 

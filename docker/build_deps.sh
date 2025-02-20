@@ -2,22 +2,48 @@
 
 # This script downloads, builds, and installs the required build dependencies of BMQ
 # from github.com/bloomberg. Software packages are installed to the /opt/bb prefix.
+# If the optional argument '--only-download' is provided, the script will only download
+# dependencies (build and install steps are skipped).
 
 set -euxo pipefail
+
+if [ $# == 1 ]; then
+  if [[ $1 == "--only-download" ]]; then
+    DO_BUILD=false
+  else
+     echo "Unexpected optional argument, only '--only-download' is supported"
+     exit 1
+  fi
+else
+    DO_BUILD=true
+fi
 
 fetch_git() {
     local org=$1
     local repo=$2
-    local branch=${3:-"main"}
     mkdir -p srcs
-    curl -SL "https://github.com/${org}/${repo}/archive/refs/heads/${branch}.tar.gz" | tar -xzC srcs/
-    mv "srcs/${repo}-${branch}" "srcs/${repo}"
+
+    if [ -d "srcs/${repo}" ]; then
+        return 0
+    fi
+
+    if [ -z "${3:-}" ]
+    then
+        # Clone the latest 'main' branch if no specific release tag provided
+        local branch="main"
+        curl -SL "https://github.com/${org}/${repo}/archive/refs/heads/${branch}.tar.gz" | tar -xzC srcs/
+        mv "srcs/${repo}-${branch}" "srcs/${repo}"
+    else
+        local tag=$3
+        curl -SL "https://github.com/${org}/${repo}/archive/refs/tags/${tag}.tar.gz" | tar -xzC srcs/
+        mv "srcs/${repo}-${tag}" "srcs/${repo}"
+    fi
 }
 
 fetch_deps() {
-    fetch_git bloomberg bde-tools
-    fetch_git bloomberg bde
-    fetch_git bloomberg ntf-core
+    fetch_git bloomberg bde-tools 4.13.0.0
+    fetch_git bloomberg bde 4.18.0.0
+    fetch_git bloomberg ntf-core 2.4.2
 }
 
 configure() {
@@ -36,8 +62,13 @@ build_bde() {
 
 build_ntf() {
     pushd srcs/ntf-core
-    sed -i s/CMakeLists.txt//g ./configure
-    ./configure --prefix /opt/bb --without-usage-examples --without-applications
+    ./configure                      \
+        --keep                       \
+        --prefix /opt/bb             \
+        --without-usage-examples     \
+        --without-applications       \
+        --without-warnings-as-errors \
+        --ufid opt_64_cpp17
     make -j8
     make install
     popd
@@ -50,4 +81,6 @@ build() {
 
 fetch_deps
 configure
-build
+if [ "${DO_BUILD}" = true ]; then
+    build
+fi

@@ -35,7 +35,7 @@
 #include <bsls_alignedbuffer.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -187,6 +187,56 @@ int areEqual(const JournalOpRecord& lhs, const JournalOpRecord& rhs)
     }
 
     return 0;
+}
+
+/// Assert if the record currently pointed by iterator 'it' isn't equal to the
+/// record stored in 'node'.
+void assertEqual(const JournalFileIterator& it, const NodeType& node)
+{
+    const unsigned int i     = it.recordIndex();
+    RecordType::Enum   rtype = it.recordType();
+    BMQTST_ASSERT_EQ_D(i, rtype, node.first);
+
+    switch (rtype) {
+    case RecordType::e_MESSAGE: {
+        const MessageRecord& m1 = *reinterpret_cast<const MessageRecord*>(
+            node.second.buffer());
+        const MessageRecord& m2 = it.asMessageRecord();
+
+        BMQTST_ASSERT_EQ_D(i, 0, areEqual(m1, m2));
+    } break;
+    case RecordType::e_CONFIRM: {
+        const ConfirmRecord& m1 = *reinterpret_cast<const ConfirmRecord*>(
+            node.second.buffer());
+        const ConfirmRecord& m2 = it.asConfirmRecord();
+
+        BMQTST_ASSERT_EQ_D(i, 0, areEqual(m1, m2));
+    } break;
+    case RecordType::e_DELETION: {
+        const DeletionRecord& m1 = *reinterpret_cast<const DeletionRecord*>(
+            node.second.buffer());
+        const DeletionRecord& m2 = it.asDeletionRecord();
+
+        BMQTST_ASSERT_EQ_D(i, 0, areEqual(m1, m2));
+    } break;
+    case RecordType::e_QUEUE_OP: {
+        const QueueOpRecord& m1 = *reinterpret_cast<const QueueOpRecord*>(
+            node.second.buffer());
+        const QueueOpRecord& m2 = it.asQueueOpRecord();
+
+        BMQTST_ASSERT_EQ_D(i, 0, areEqual(m1, m2));
+    } break;
+    case RecordType::e_JOURNAL_OP: {
+        const JournalOpRecord& m1 = *reinterpret_cast<const JournalOpRecord*>(
+            node.second.buffer());
+
+        const JournalOpRecord& m2 = it.asJournalOpRecord();
+
+        BMQTST_ASSERT_EQ_D(i, 0, areEqual(m1, m2));
+    } break;
+    case RecordType::e_UNDEFINED:
+    default: BMQTST_ASSERT_EQ_D(i, 100, 101);  // will fail
+    }
 }
 
 void addRecords(MemoryBlock*         block,
@@ -343,14 +393,14 @@ static void test1_breathingTest()
 //    Basic functionality.
 // --------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     {
         PV("Default object");
 
         JournalFileIterator it;
-        ASSERT_EQ(false, it.isValid());
-        ASSERT_EQ(-1, it.nextRecord());
+        BMQTST_ASSERT_EQ(false, it.isValid());
+        BMQTST_ASSERT_EQ(-1, it.nextRecord());
     }
 
     {
@@ -361,8 +411,8 @@ static void test1_breathingTest()
 
         FileHeader          fh;
         JournalFileIterator it(&mfd, fh, false);
-        ASSERT_EQ(false, it.isValid());
-        ASSERT_EQ(-1, it.nextRecord());
+        BMQTST_ASSERT_EQ(false, it.isValid());
+        BMQTST_ASSERT_EQ(-1, it.nextRecord());
     }
 
     {
@@ -373,8 +423,8 @@ static void test1_breathingTest()
 
         FileHeader          fh;
         JournalFileIterator it(&mfd, fh, true);
-        ASSERT_EQ(false, it.isValid());
-        ASSERT_EQ(-1, it.nextRecord());
+        BMQTST_ASSERT_EQ(false, it.isValid());
+        BMQTST_ASSERT_EQ(-1, it.nextRecord());
     }
 }
 
@@ -386,7 +436,7 @@ static void test2_forwardIteration()
 //   Forward iteration with non-zero journal records.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("FORWARD ITERATION");
+    bmqtst::TestHelper::printTestName("FORWARD ITERATION");
 
     unsigned int numRecords = 5000;
 
@@ -394,13 +444,14 @@ static void test2_forwardIteration()
         sizeof(FileHeader) + sizeof(JournalFileHeader) +
         numRecords * FileStoreProtocol::k_JOURNAL_RECORD_SIZE;
 
-    char*       p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
     MemoryBlock block(p, totalSize);
     FileHeader  fileHeader;
     bsls::Types::Uint64 lastRecordPos = 0;
     bsls::Types::Uint64 lastSyncPtPos = 0;
 
-    RecordsListType records(s_allocator_p);
+    RecordsListType records(bmqtst::TestHelperUtil::allocator());
 
     addRecords(&block,
                &fileHeader,
@@ -417,75 +468,29 @@ static void test2_forwardIteration()
 
     JournalFileIterator it(&mfd, fileHeader, false);
 
-    ASSERT_EQ(true, it.isValid());
-    ASSERT_EQ(&mfd, it.mappedFileDescriptor());
-    ASSERT_EQ(false, it.isReverseMode());
-    ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
-    ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
+    BMQTST_ASSERT_EQ(true, it.isValid());
+    BMQTST_ASSERT_EQ(&mfd, it.mappedFileDescriptor());
+    BMQTST_ASSERT_EQ(false, it.isReverseMode());
+    BMQTST_ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
+    BMQTST_ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
 
     bsl::list<NodeType>::const_iterator recordIter = records.begin();
     unsigned int                        i          = 0;
     int                                 rc         = 0;
     while ((rc = it.nextRecord()) == 1) {
-        ASSERT_EQ_D(i, false, recordIter == records.end());
+        BMQTST_ASSERT_EQ_D(i, false, recordIter == records.end());
+        BMQTST_ASSERT_EQ_D(i, it.recordIndex(), i);
 
-        RecordType::Enum rtype = it.recordType();
-        ASSERT_EQ_D(i, rtype, recordIter->first);
-        ASSERT_EQ_D(i, it.recordIndex(), i);
-
-        switch (rtype) {
-        case RecordType::e_MESSAGE: {
-            const MessageRecord& m1 = *reinterpret_cast<const MessageRecord*>(
-                recordIter->second.buffer());
-
-            const MessageRecord& m2 = it.asMessageRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-
-        } break;
-        case RecordType::e_CONFIRM: {
-            const ConfirmRecord& m1 = *reinterpret_cast<const ConfirmRecord*>(
-                recordIter->second.buffer());
-            const ConfirmRecord& m2 = it.asConfirmRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-
-        } break;
-        case RecordType::e_DELETION: {
-            const DeletionRecord& m1 =
-                *reinterpret_cast<const DeletionRecord*>(
-                    recordIter->second.buffer());
-            const DeletionRecord& m2 = it.asDeletionRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_QUEUE_OP: {
-            const QueueOpRecord& m1 = *reinterpret_cast<const QueueOpRecord*>(
-                recordIter->second.buffer());
-            const QueueOpRecord& m2 = it.asQueueOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_JOURNAL_OP: {
-            const JournalOpRecord& m1 =
-                *reinterpret_cast<const JournalOpRecord*>(
-                    recordIter->second.buffer());
-            const JournalOpRecord& m2 = it.asJournalOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_UNDEFINED:
-        default: ASSERT_EQ_D(i, 100, 101);  // will fail
-        }
+        assertEqual(it, *recordIter);
 
         ++i;
         ++recordIter;
     }
 
-    ASSERT_EQ(i, records.size());
-    ASSERT_EQ(false, it.isValid());
+    BMQTST_ASSERT_EQ(i, records.size());
+    BMQTST_ASSERT_EQ(false, it.isValid());
 
-    s_allocator_p->deallocate(p);
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 static void test3_forwardIterationWithZeroJournalRecords()
@@ -496,13 +501,14 @@ static void test3_forwardIterationWithZeroJournalRecords()
 //   Forward iteration with zero journal records.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("FORWARD ITERATION WITH ZERO JOURNAL"
+    bmqtst::TestHelper::printTestName("FORWARD ITERATION WITH ZERO JOURNAL"
                                       " RECORDS");
 
     bsls::Types::Uint64 totalSize = sizeof(FileHeader) +
                                     sizeof(JournalFileHeader);
 
-    char* p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
 
     MemoryBlock         block(p, totalSize);
     FileHeader          fileHeader;
@@ -524,14 +530,32 @@ static void test3_forwardIterationWithZeroJournalRecords()
         mfd.setFileSize(totalSize);
 
         JournalFileIterator it(&mfd, *fh, false);
-        ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(true, it.isValid());
         unsigned int numRecords = 0;
         while (it.nextRecord() == 1) {
-            ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
+            BMQTST_ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
             ++numRecords;
         }
 
-        ASSERT_EQ(0U, numRecords);
+        BMQTST_ASSERT_EQ(0U, numRecords);
+    }
+
+    {
+        // The same case with advance()
+        MappedFileDescriptor mfd;
+        mfd.setFd(-1);  // invalid fd will suffice.
+        mfd.setBlock(block);
+        mfd.setFileSize(totalSize);
+
+        JournalFileIterator it(&mfd, *fh, false);
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        unsigned int numRecords = 0;
+        while (it.advance(10) == 1) {
+            BMQTST_ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
+            numRecords += 10;
+        }
+
+        BMQTST_ASSERT_EQ(0U, numRecords);
     }
 
     {
@@ -542,18 +566,37 @@ static void test3_forwardIterationWithZeroJournalRecords()
         mfd.setFileSize(totalSize);
 
         JournalFileIterator it;
-        ASSERT_EQ(0, it.reset(&mfd, *fh, false));
-        ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0, it.reset(&mfd, *fh, false));
+        BMQTST_ASSERT_EQ(true, it.isValid());
         unsigned int numRecords = 0;
         while (1 == it.nextRecord()) {
-            ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
+            BMQTST_ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
             ++numRecords;
         }
 
-        ASSERT_EQ(0U, numRecords);
+        BMQTST_ASSERT_EQ(0U, numRecords);
     }
 
-    s_allocator_p->deallocate(p);
+    {
+        // The same case with advance()
+        MappedFileDescriptor mfd;
+        mfd.setFd(-1);  // invalid fd will suffice.
+        mfd.setBlock(block);
+        mfd.setFileSize(totalSize);
+
+        JournalFileIterator it;
+        BMQTST_ASSERT_EQ(0, it.reset(&mfd, *fh, false));
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        unsigned int numRecords = 0;
+        while (1 == it.advance(10)) {
+            BMQTST_ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
+            numRecords += 10;
+        }
+
+        BMQTST_ASSERT_EQ(0U, numRecords);
+    }
+
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 static void test4_backwardIteration()
@@ -564,7 +607,7 @@ static void test4_backwardIteration()
 //   Backward iteration with non-zero journal record
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BACKWARD ITERATION");
+    bmqtst::TestHelper::printTestName("BACKWARD ITERATION");
 
     const unsigned int k_NUM_RECORDS = 5000;
 
@@ -572,13 +615,14 @@ static void test4_backwardIteration()
         sizeof(FileHeader) + sizeof(JournalFileHeader) +
         k_NUM_RECORDS * FileStoreProtocol::k_JOURNAL_RECORD_SIZE;
 
-    char* p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
 
     MemoryBlock         block(p, totalSize);
     FileHeader          fileHeader;
     bsls::Types::Uint64 lastRecordPos = 0;
     bsls::Types::Uint64 lastSyncPtPos = 0;
-    RecordsListType     records(s_allocator_p);
+    RecordsListType     records(bmqtst::TestHelperUtil::allocator());
 
     addRecords(&block,
                &fileHeader,
@@ -594,75 +638,30 @@ static void test4_backwardIteration()
     mfd.setFileSize(totalSize);
 
     JournalFileIterator it(&mfd, fileHeader, true);  // backward iteration
-    ASSERT_EQ(true, it.isValid());
-    ASSERT_EQ(&mfd, it.mappedFileDescriptor());
-    ASSERT_EQ(true, it.isReverseMode());
-    ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
-    ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
+    BMQTST_ASSERT_EQ(true, it.isValid());
+    BMQTST_ASSERT_EQ(&mfd, it.mappedFileDescriptor());
+    BMQTST_ASSERT_EQ(true, it.isReverseMode());
+    BMQTST_ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
+    BMQTST_ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
 
     bsl::list<NodeType>::const_reverse_iterator recordIter = records.rbegin();
 
     unsigned int i  = 0;
     int          rc = 0;
     while (1 == (rc = it.nextRecord())) {
-        ASSERT_EQ_D(i, false, recordIter == records.crend());
+        BMQTST_ASSERT_EQ_D(i, false, recordIter == records.crend());
+        BMQTST_ASSERT_EQ_D(i, it.recordIndex(), k_NUM_RECORDS - i - 1);
 
-        RecordType::Enum rtype = it.recordType();
-        ASSERT_EQ_D(i, rtype, recordIter->first);
-        ASSERT_EQ_D(i, it.recordIndex(), k_NUM_RECORDS - i - 1);
-
-        switch (rtype) {
-        case RecordType::e_MESSAGE: {
-            const MessageRecord& m1 = *reinterpret_cast<const MessageRecord*>(
-                recordIter->second.buffer());
-            const MessageRecord& m2 = it.asMessageRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-
-        } break;
-        case RecordType::e_CONFIRM: {
-            const ConfirmRecord& m1 = *reinterpret_cast<const ConfirmRecord*>(
-                recordIter->second.buffer());
-            const ConfirmRecord& m2 = it.asConfirmRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-
-        } break;
-        case RecordType::e_DELETION: {
-            const DeletionRecord& m1 =
-                *reinterpret_cast<const DeletionRecord*>(
-                    recordIter->second.buffer());
-            const DeletionRecord& m2 = it.asDeletionRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_QUEUE_OP: {
-            const QueueOpRecord& m1 = *reinterpret_cast<const QueueOpRecord*>(
-                recordIter->second.buffer());
-            const QueueOpRecord& m2 = it.asQueueOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_JOURNAL_OP: {
-            const JournalOpRecord& m1 =
-                *reinterpret_cast<const JournalOpRecord*>(
-                    recordIter->second.buffer());
-            const JournalOpRecord& m2 = it.asJournalOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_UNDEFINED:
-        default: ASSERT_EQ_D(i, 100, 101);  // will fail
-        }
+        assertEqual(it, *recordIter);
 
         ++i;
         ++recordIter;
     }
 
-    ASSERT_EQ(i, records.size());
-    ASSERT_EQ(false, it.isValid());
+    BMQTST_ASSERT_EQ(i, records.size());
+    BMQTST_ASSERT_EQ(false, it.isValid());
 
-    s_allocator_p->deallocate(p);
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 static void test5_backwardIterationWithZeroJournalEntries()
@@ -673,13 +672,14 @@ static void test5_backwardIterationWithZeroJournalEntries()
 //   Backward iteration with zero journal records.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BACKWARD ITERATION WITH ZERO JOURNAL"
+    bmqtst::TestHelper::printTestName("BACKWARD ITERATION WITH ZERO JOURNAL"
                                       " RECORDS");
 
     bsls::Types::Uint64 totalSize = sizeof(FileHeader) +
                                     sizeof(JournalFileHeader);
 
-    char* p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
 
     MemoryBlock         block(p, totalSize);
     FileHeader          fileHeader;
@@ -701,13 +701,30 @@ static void test5_backwardIterationWithZeroJournalEntries()
         mfd.setFileSize(totalSize);
 
         JournalFileIterator it(&mfd, fileHeader, true);
-        ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(true, it.isValid());
         unsigned int numRecords = 0;
         while (1 == it.nextRecord()) {
             ++numRecords;
         }
 
-        ASSERT_EQ(0U, numRecords);
+        BMQTST_ASSERT_EQ(0U, numRecords);
+    }
+
+    {
+        // The same case with advance()
+        MappedFileDescriptor mfd;
+        mfd.setFd(-1);  // invalid fd will suffice.
+        mfd.setBlock(block);
+        mfd.setFileSize(totalSize);
+
+        JournalFileIterator it(&mfd, fileHeader, true);
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        unsigned int numRecords = 0;
+        while (1 == it.advance(10)) {
+            numRecords += 10;
+        }
+
+        BMQTST_ASSERT_EQ(0U, numRecords);
     }
 
     {
@@ -718,17 +735,35 @@ static void test5_backwardIterationWithZeroJournalEntries()
         mfd.setFileSize(totalSize);
 
         JournalFileIterator it;
-        ASSERT_EQ(0, it.reset(&mfd, *fh, true));
-        ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0, it.reset(&mfd, *fh, true));
+        BMQTST_ASSERT_EQ(true, it.isValid());
         unsigned int numRecords = 0;
         while (1 == it.nextRecord()) {
             ++numRecords;
         }
 
-        ASSERT_EQ(0U, numRecords);
+        BMQTST_ASSERT_EQ(0U, numRecords);
     }
 
-    s_allocator_p->deallocate(p);
+    {
+        // Create iterator with values in reset()
+        MappedFileDescriptor mfd;
+        mfd.setFd(-1);  // invalid fd will suffice.
+        mfd.setBlock(block);
+        mfd.setFileSize(totalSize);
+
+        JournalFileIterator it;
+        BMQTST_ASSERT_EQ(0, it.reset(&mfd, *fh, true));
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        unsigned int numRecords = 0;
+        while (1 == it.advance(10)) {
+            numRecords += 10;
+        }
+
+        BMQTST_ASSERT_EQ(0U, numRecords);
+    }
+
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 static void test6_forwardIterationOfSparseJournalFileNoRecords()
@@ -744,12 +779,13 @@ static void test6_forwardIterationOfSparseJournalFileNoRecords()
 //   the journal.
 // --------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("FORWARD ITERATION OF SPARSE JOURNAL"
+    bmqtst::TestHelper::printTestName("FORWARD ITERATION OF SPARSE JOURNAL"
                                       " FILE WITH NO RECORDS");
 
     bsls::Types::Uint64 totalSize = 1024 * 1024 * 10;  // 10MB sparse file
 
-    char* p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
     // When this block gets passed to the JournalFileIterator c'tor, it will
     // iterate over the record-set and parse the type of each. To avoid reading
     // uninitialized memory, we zero-out the buffer now.
@@ -775,16 +811,36 @@ static void test6_forwardIterationOfSparseJournalFileNoRecords()
         mfd.setFileSize(totalSize);
 
         JournalFileIterator it(&mfd, *fh, false);
-        ASSERT_EQ(true, it.isValid());
-        ASSERT_EQ(0ULL, it.lastRecordPosition());
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0ULL, it.lastRecordPosition());
 
         unsigned int numRecords = 0;
         while (1 == it.nextRecord()) {
-            ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
+            BMQTST_ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
             ++numRecords;
         }
 
-        ASSERT_EQ(0U, numRecords);
+        BMQTST_ASSERT_EQ(0U, numRecords);
+    }
+
+    {
+        // The same case with advance()
+        MappedFileDescriptor mfd;
+        mfd.setFd(-1);  // invalid fd will suffice.
+        mfd.setBlock(block);
+        mfd.setFileSize(totalSize);
+
+        JournalFileIterator it(&mfd, *fh, false);
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0ULL, it.lastRecordPosition());
+
+        unsigned int numRecords = 0;
+        while (1 == it.advance(10)) {
+            BMQTST_ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
+            numRecords += 10;
+        }
+
+        BMQTST_ASSERT_EQ(0U, numRecords);
     }
 
     {
@@ -795,20 +851,41 @@ static void test6_forwardIterationOfSparseJournalFileNoRecords()
         mfd.setFileSize(totalSize);
 
         JournalFileIterator it;
-        ASSERT_EQ(0, it.reset(&mfd, *fh, false));
-        ASSERT_EQ(true, it.isValid());
-        ASSERT_EQ(0ULL, it.lastRecordPosition());
+        BMQTST_ASSERT_EQ(0, it.reset(&mfd, *fh, false));
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0ULL, it.lastRecordPosition());
 
         unsigned int numRecords = 0;
         while (1 == it.nextRecord()) {
-            ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
+            BMQTST_ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
             ++numRecords;
         }
 
-        ASSERT_EQ(0U, numRecords);
+        BMQTST_ASSERT_EQ(0U, numRecords);
     }
 
-    s_allocator_p->deallocate(p);
+    {
+        // The same case with advance()
+        MappedFileDescriptor mfd;
+        mfd.setFd(-1);  // invalid fd will suffice.
+        mfd.setBlock(block);
+        mfd.setFileSize(totalSize);
+
+        JournalFileIterator it;
+        BMQTST_ASSERT_EQ(0, it.reset(&mfd, *fh, false));
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0ULL, it.lastRecordPosition());
+
+        unsigned int numRecords = 0;
+        while (1 == it.advance(10)) {
+            BMQTST_ASSERT_EQ_D(numRecords, numRecords, it.recordIndex());
+            numRecords += 10;
+        }
+
+        BMQTST_ASSERT_EQ(0U, numRecords);
+    }
+
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 static void test7_backwardIterationOfSparseJournalFileNoRecords()
@@ -824,12 +901,13 @@ static void test7_backwardIterationOfSparseJournalFileNoRecords()
 //   the journal.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BACKWARD ITERATION OF SPARSE JOURNAL"
+    bmqtst::TestHelper::printTestName("BACKWARD ITERATION OF SPARSE JOURNAL"
                                       " FILE WITH NO RECORDS");
 
     bsls::Types::Uint64 totalSize = 1024 * 1024 * 10;  // 10MB sparse file
 
-    char* p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
     // When this block gets passed to the JournalFileIterator c'tor, it will
     // iterate over the record-set and parse the type of each. To avoid reading
     // uninitialized memory, we zero-out the buffer now.
@@ -855,15 +933,34 @@ static void test7_backwardIterationOfSparseJournalFileNoRecords()
         mfd.setFileSize(totalSize);
 
         JournalFileIterator it(&mfd, *fh, true);
-        ASSERT_EQ(true, it.isValid());
-        ASSERT_EQ(0ULL, it.lastRecordPosition());
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0ULL, it.lastRecordPosition());
 
         unsigned int numRecords = 0;
         while (1 == it.nextRecord()) {
             ++numRecords;
         }
 
-        ASSERT_EQ(0U, numRecords);
+        BMQTST_ASSERT_EQ(0U, numRecords);
+    }
+
+    {
+        // The same case with advance()
+        MappedFileDescriptor mfd;
+        mfd.setFd(-1);  // invalid fd will suffice.
+        mfd.setBlock(block);
+        mfd.setFileSize(totalSize);
+
+        JournalFileIterator it(&mfd, *fh, true);
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0ULL, it.lastRecordPosition());
+
+        unsigned int numRecords = 0;
+        while (1 == it.advance(10)) {
+            numRecords += 10;
+        }
+
+        BMQTST_ASSERT_EQ(0U, numRecords);
     }
 
     {
@@ -874,19 +971,39 @@ static void test7_backwardIterationOfSparseJournalFileNoRecords()
         mfd.setFileSize(totalSize);
 
         JournalFileIterator it;
-        ASSERT_EQ(0, it.reset(&mfd, *fh, true));
-        ASSERT_EQ(true, it.isValid());
-        ASSERT_EQ(0ULL, it.lastRecordPosition());
+        BMQTST_ASSERT_EQ(0, it.reset(&mfd, *fh, true));
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0ULL, it.lastRecordPosition());
 
         unsigned int numRecords = 0;
         while (1 == it.nextRecord()) {
             ++numRecords;
         }
 
-        ASSERT_EQ(0U, numRecords);
+        BMQTST_ASSERT_EQ(0U, numRecords);
     }
 
-    s_allocator_p->deallocate(p);
+    {
+        // The same case with advance()
+        MappedFileDescriptor mfd;
+        mfd.setFd(-1);  // invalid fd will suffice.
+        mfd.setBlock(block);
+        mfd.setFileSize(totalSize);
+
+        JournalFileIterator it;
+        BMQTST_ASSERT_EQ(0, it.reset(&mfd, *fh, true));
+        BMQTST_ASSERT_EQ(true, it.isValid());
+        BMQTST_ASSERT_EQ(0ULL, it.lastRecordPosition());
+
+        unsigned int numRecords = 0;
+        while (1 == it.advance(10)) {
+            numRecords += 10;
+        }
+
+        BMQTST_ASSERT_EQ(0U, numRecords);
+    }
+
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 static void test8_forwardIterationOfSparseJournalFileWithRecords()
@@ -902,7 +1019,7 @@ static void test8_forwardIterationOfSparseJournalFileWithRecords()
 //   to the journal.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("FORWARD ITERATION OF SPARSE JOURNAL"
+    bmqtst::TestHelper::printTestName("FORWARD ITERATION OF SPARSE JOURNAL"
                                       " FILE WITH RECORDS");
 
     const unsigned int k_NUM_RECORDS = 5432;
@@ -912,7 +1029,8 @@ static void test8_forwardIterationOfSparseJournalFileWithRecords()
         k_NUM_RECORDS * FileStoreProtocol::k_JOURNAL_RECORD_SIZE +
         1024 * 1024 * 10;  // 10MB of sparse area
 
-    char* p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
     // When this block gets passed to the JournalFileIterator c'tor, it will
     // iterate over the record-set and parse the type of each. To avoid reading
     // uninitialized memory, we zero-out the buffer now.
@@ -923,7 +1041,7 @@ static void test8_forwardIterationOfSparseJournalFileWithRecords()
     bsls::Types::Uint64 lastRecordPos = 0;
     bsls::Types::Uint64 lastSyncPtPos = 0;
 
-    RecordsListType records(s_allocator_p);
+    RecordsListType records(bmqtst::TestHelperUtil::allocator());
 
     addRecords(&block,
                &fileHeader,
@@ -939,73 +1057,29 @@ static void test8_forwardIterationOfSparseJournalFileWithRecords()
     mfd.setFileSize(totalSize);
 
     JournalFileIterator it(&mfd, fileHeader, false);
-    ASSERT_EQ(true, it.isValid());
-    ASSERT_EQ(&mfd, it.mappedFileDescriptor());
-    ASSERT_EQ(false, it.isReverseMode());
-    ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
-    ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
+    BMQTST_ASSERT_EQ(true, it.isValid());
+    BMQTST_ASSERT_EQ(&mfd, it.mappedFileDescriptor());
+    BMQTST_ASSERT_EQ(false, it.isReverseMode());
+    BMQTST_ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
+    BMQTST_ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
 
     bsl::list<NodeType>::const_iterator recordIter = records.begin();
     unsigned int                        i          = 0;
     int                                 rc         = 0;
     while (1 == (rc = it.nextRecord())) {
-        ASSERT_EQ_D(i, false, recordIter == records.end());
+        BMQTST_ASSERT_EQ_D(i, false, recordIter == records.end());
+        BMQTST_ASSERT_EQ_D(i, it.recordIndex(), i);
 
-        RecordType::Enum rtype = it.recordType();
-        ASSERT_EQ_D(i, rtype, recordIter->first);
-        ASSERT_EQ_D(i, it.recordIndex(), i);
-
-        switch (rtype) {
-        case RecordType::e_MESSAGE: {
-            const MessageRecord& m1 = *reinterpret_cast<const MessageRecord*>(
-                recordIter->second.buffer());
-            const MessageRecord& m2 = it.asMessageRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-
-        } break;
-        case RecordType::e_CONFIRM: {
-            const ConfirmRecord& m1 = *reinterpret_cast<const ConfirmRecord*>(
-                recordIter->second.buffer());
-            const ConfirmRecord& m2 = it.asConfirmRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_DELETION: {
-            const DeletionRecord& m1 =
-                *reinterpret_cast<const DeletionRecord*>(
-                    recordIter->second.buffer());
-            const DeletionRecord& m2 = it.asDeletionRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_QUEUE_OP: {
-            const QueueOpRecord& m1 = *reinterpret_cast<const QueueOpRecord*>(
-                recordIter->second.buffer());
-            const QueueOpRecord& m2 = it.asQueueOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_JOURNAL_OP: {
-            const JournalOpRecord& m1 =
-                *reinterpret_cast<const JournalOpRecord*>(
-                    recordIter->second.buffer());
-            const JournalOpRecord& m2 = it.asJournalOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_UNDEFINED:
-        default: ASSERT_EQ_D(i, 100, 101);  // will fail
-        }
+        assertEqual(it, *recordIter);
 
         ++i;
         ++recordIter;
     }
 
-    ASSERT_EQ(i, records.size());
-    ASSERT_EQ(false, it.isValid());
+    BMQTST_ASSERT_EQ(i, records.size());
+    BMQTST_ASSERT_EQ(false, it.isValid());
 
-    s_allocator_p->deallocate(p);
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 static void test9_backwardIterationOfSparseJournalFileWithRecords()
@@ -1021,7 +1095,7 @@ static void test9_backwardIterationOfSparseJournalFileWithRecords()
 //   to the journal.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BACKWARD ITERATION OF SPARSE JOURNAL"
+    bmqtst::TestHelper::printTestName("BACKWARD ITERATION OF SPARSE JOURNAL"
                                       " FILE WITH RECORDS");
 
     const unsigned int k_NUM_RECORDS = 5432;
@@ -1031,7 +1105,8 @@ static void test9_backwardIterationOfSparseJournalFileWithRecords()
         k_NUM_RECORDS * FileStoreProtocol::k_JOURNAL_RECORD_SIZE +
         1024 * 1024 * 50;  // 50MB of sparse area
 
-    char* p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
     // When this block gets passed to the JournalFileIterator c'tor, it will
     // iterate over the record-set and parse the type of each. To avoid reading
     // uninitialized memory, we zero-out the buffer now.
@@ -1042,7 +1117,7 @@ static void test9_backwardIterationOfSparseJournalFileWithRecords()
     bsls::Types::Uint64 lastRecordPos = 0;
     bsls::Types::Uint64 lastSyncPtPos = 0;
 
-    RecordsListType records(s_allocator_p);
+    RecordsListType records(bmqtst::TestHelperUtil::allocator());
 
     addRecords(&block,
                &fileHeader,
@@ -1058,72 +1133,30 @@ static void test9_backwardIterationOfSparseJournalFileWithRecords()
     mfd.setFileSize(totalSize);
 
     JournalFileIterator it(&mfd, fileHeader, true);
-    ASSERT_EQ(true, it.isValid());
-    ASSERT_EQ(&mfd, it.mappedFileDescriptor());
-    ASSERT_EQ(true, it.isReverseMode());
-    ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
-    ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
+    BMQTST_ASSERT_EQ(true, it.isValid());
+    BMQTST_ASSERT_EQ(&mfd, it.mappedFileDescriptor());
+    BMQTST_ASSERT_EQ(true, it.isReverseMode());
+    BMQTST_ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
+    BMQTST_ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
 
     bsl::list<NodeType>::const_reverse_iterator recordIter = records.rbegin();
     unsigned int                                i          = 0;
     int                                         rc         = 0;
     while (1 == (rc = it.nextRecord())) {
-        ASSERT_EQ_D(i, false, recordIter == records.crend());
+        BMQTST_ASSERT_EQ_D(i, false, recordIter == records.crend());
 
-        RecordType::Enum rtype = it.recordType();
-        ASSERT_EQ_D(i, rtype, recordIter->first);
-        ASSERT_EQ_D(i, it.recordIndex(), k_NUM_RECORDS - i - 1);
+        BMQTST_ASSERT_EQ_D(i, it.recordIndex(), k_NUM_RECORDS - i - 1);
 
-        switch (rtype) {
-        case RecordType::e_MESSAGE: {
-            const MessageRecord& m1 = *reinterpret_cast<const MessageRecord*>(
-                recordIter->second.buffer());
-            const MessageRecord& m2 = it.asMessageRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_CONFIRM: {
-            const ConfirmRecord& m1 = *reinterpret_cast<const ConfirmRecord*>(
-                recordIter->second.buffer());
-            const ConfirmRecord& m2 = it.asConfirmRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_DELETION: {
-            const DeletionRecord& m1 =
-                *reinterpret_cast<const DeletionRecord*>(
-                    recordIter->second.buffer());
-            const DeletionRecord& m2 = it.asDeletionRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_QUEUE_OP: {
-            const QueueOpRecord& m1 = *reinterpret_cast<const QueueOpRecord*>(
-                recordIter->second.buffer());
-            const QueueOpRecord& m2 = it.asQueueOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_JOURNAL_OP: {
-            const JournalOpRecord& m1 =
-                *reinterpret_cast<const JournalOpRecord*>(
-                    recordIter->second.buffer());
-            const JournalOpRecord& m2 = it.asJournalOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_UNDEFINED:
-        default: ASSERT_EQ_D(i, 100, 101);  // will fail
-        }
+        assertEqual(it, *recordIter);
 
         ++i;
         ++recordIter;
     }
 
-    ASSERT_EQ(i, records.size());
-    ASSERT_EQ(false, it.isValid());
+    BMQTST_ASSERT_EQ(i, records.size());
+    BMQTST_ASSERT_EQ(false, it.isValid());
 
-    s_allocator_p->deallocate(p);
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 static void test10_bidirectionalIteration()
@@ -1134,7 +1167,7 @@ static void test10_bidirectionalIteration()
 //   Bi-directional iteration.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BIDIRECTIONAL ITERATION");
+    bmqtst::TestHelper::printTestName("BIDIRECTIONAL ITERATION");
 
     unsigned int k_NUM_RECORDS = 5000;
 
@@ -1142,13 +1175,14 @@ static void test10_bidirectionalIteration()
         sizeof(FileHeader) + sizeof(JournalFileHeader) +
         +k_NUM_RECORDS * FileStoreProtocol::k_JOURNAL_RECORD_SIZE;
 
-    char* p = static_cast<char*>(s_allocator_p->allocate(totalSize));
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
 
     MemoryBlock         block(p, totalSize);
     FileHeader          fileHeader;
     bsls::Types::Uint64 lastRecordPos = 0;
     bsls::Types::Uint64 lastSyncPtPos = 0;
-    RecordsListType     records(s_allocator_p);
+    RecordsListType     records(bmqtst::TestHelperUtil::allocator());
 
     addRecords(&block,
                &fileHeader,
@@ -1164,12 +1198,12 @@ static void test10_bidirectionalIteration()
     mfd.setFileSize(totalSize);
     JournalFileIterator it(&mfd, fileHeader, false);
 
-    ASSERT_EQ(true, it.hasRecordSizeRemaining());
-    ASSERT_EQ(true, it.isValid());
-    ASSERT_EQ(&mfd, it.mappedFileDescriptor());
-    ASSERT_EQ(false, it.isReverseMode());
-    ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
-    ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
+    BMQTST_ASSERT_EQ(true, it.hasRecordSizeRemaining());
+    BMQTST_ASSERT_EQ(true, it.isValid());
+    BMQTST_ASSERT_EQ(&mfd, it.mappedFileDescriptor());
+    BMQTST_ASSERT_EQ(false, it.isReverseMode());
+    BMQTST_ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
+    BMQTST_ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
 
     bsl::list<NodeType>::const_iterator recordIter = records.begin();
     const unsigned int                  increment  = k_NUM_RECORDS / 100;
@@ -1180,8 +1214,8 @@ static void test10_bidirectionalIteration()
     int          rc                 = 0;
     bool         forward            = true;
     while (recordIter != records.end()) {
-        ASSERT_EQ_D(i, true, it.hasRecordSizeRemaining());
-        ASSERT_EQ_D(i, 1, (rc = it.nextRecord()));
+        BMQTST_ASSERT_EQ_D(i, true, it.hasRecordSizeRemaining());
+        BMQTST_ASSERT_EQ_D(i, 1, (rc = it.nextRecord()));
 
         unsigned int expectedIndex = 0;
         // Determine the expected index based on our iteration direction.
@@ -1204,52 +1238,9 @@ static void test10_bidirectionalIteration()
                 expectedIndex = currentRecordCount - (i % currentRecordCount);
             }
         }
-        ASSERT_EQ_D(i, expectedIndex, it.recordIndex());
+        BMQTST_ASSERT_EQ_D(i, expectedIndex, it.recordIndex());
 
-        RecordType::Enum rtype = it.recordType();
-        ASSERT_EQ_D(i, rtype, recordIter->first);
-        switch (rtype) {
-        case RecordType::e_MESSAGE: {
-            const MessageRecord& m1 = *reinterpret_cast<const MessageRecord*>(
-                recordIter->second.buffer());
-            const MessageRecord& m2 = it.asMessageRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_CONFIRM: {
-            const ConfirmRecord& m1 = *reinterpret_cast<const ConfirmRecord*>(
-                recordIter->second.buffer());
-            const ConfirmRecord& m2 = it.asConfirmRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_DELETION: {
-            const DeletionRecord& m1 =
-                *reinterpret_cast<const DeletionRecord*>(
-                    recordIter->second.buffer());
-            const DeletionRecord& m2 = it.asDeletionRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_QUEUE_OP: {
-            const QueueOpRecord& m1 = *reinterpret_cast<const QueueOpRecord*>(
-                recordIter->second.buffer());
-            const QueueOpRecord& m2 = it.asQueueOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_JOURNAL_OP: {
-            const JournalOpRecord& m1 =
-                *reinterpret_cast<const JournalOpRecord*>(
-                    recordIter->second.buffer());
-
-            const JournalOpRecord& m2 = it.asJournalOpRecord();
-
-            ASSERT_EQ_D(i, 0, areEqual(m1, m2));
-        } break;
-        case RecordType::e_UNDEFINED:
-        default: ASSERT_EQ_D(i, 100, 101);  // will fail
-        }
+        assertEqual(it, *recordIter);
 
         if (count == 0) {
             if ((forward = !forward)) {
@@ -1273,10 +1264,156 @@ static void test10_bidirectionalIteration()
         }
     }
 
-    ASSERT_EQ(false, it.isReverseMode());
-    ASSERT_EQ(false, it.hasRecordSizeRemaining());
+    BMQTST_ASSERT_EQ(false, it.isReverseMode());
+    BMQTST_ASSERT_EQ(false, it.hasRecordSizeRemaining());
 
-    s_allocator_p->deallocate(p);
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
+}
+
+static void test11_forwardAdvance()
+// ------------------------------------------------------------------------
+// FORWARD ITERATION
+//
+// Testing:
+//   Advance.
+// ------------------------------------------------------------------------
+{
+    bmqtst::TestHelper::printTestName("FORWARD ADVANCE");
+
+    unsigned int k_NUM_RECORDS = 5001;
+
+    bsls::Types::Uint64 totalSize =
+        sizeof(FileHeader) + sizeof(JournalFileHeader) +
+        +k_NUM_RECORDS * FileStoreProtocol::k_JOURNAL_RECORD_SIZE;
+
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
+
+    MemoryBlock         block(p, totalSize);
+    FileHeader          fileHeader;
+    bsls::Types::Uint64 lastRecordPos = 0;
+    bsls::Types::Uint64 lastSyncPtPos = 0;
+    RecordsListType     records(bmqtst::TestHelperUtil::allocator());
+
+    addRecords(&block,
+               &fileHeader,
+               &lastRecordPos,
+               &lastSyncPtPos,
+               &records,
+               k_NUM_RECORDS);
+
+    // Create iterator
+    MappedFileDescriptor mfd;
+    mfd.setFd(-1);  // invalid fd will suffice.
+    mfd.setBlock(block);
+    mfd.setFileSize(totalSize);
+    JournalFileIterator it(&mfd, fileHeader, false);
+
+    BMQTST_ASSERT_EQ(true, it.hasRecordSizeRemaining());
+    BMQTST_ASSERT_EQ(true, it.isValid());
+    BMQTST_ASSERT_EQ(&mfd, it.mappedFileDescriptor());
+    BMQTST_ASSERT_EQ(false, it.isReverseMode());
+    BMQTST_ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
+    BMQTST_ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
+    BMQTST_ASSERT_EQ(
+        1,
+        it.nextRecord());  // Set iterator to first record position
+
+    bsl::list<NodeType>::const_iterator recordIter = records.cbegin();
+    const unsigned int                  increment  = k_NUM_RECORDS / 100;
+
+    unsigned int i  = 0;
+    int          rc = 0;
+    while (i + 1 < k_NUM_RECORDS) {
+        i += increment;
+        bsl::advance(recordIter, increment);
+        BMQTST_ASSERT_EQ_D(i, true, it.hasRecordSizeRemaining());
+        BMQTST_ASSERT_EQ_D(i, 1, (rc = it.advance(increment)));
+        BMQTST_ASSERT_EQ_D(i, i, it.recordIndex());
+
+        assertEqual(it, *recordIter);
+    }
+
+    // Last one
+    BMQTST_ASSERT_EQ(false, it.isReverseMode());
+    BMQTST_ASSERT_EQ(false, it.hasRecordSizeRemaining());
+    // Not enough bytes remaining to advance
+    BMQTST_ASSERT_NE_D(i, 1, (rc = it.advance(increment)));
+
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
+}
+
+static void test12_backwardAdvance()
+// ------------------------------------------------------------------------
+// BACKWARD ADVANCE
+//
+// Testing:
+//   Advance.
+// ------------------------------------------------------------------------
+{
+    bmqtst::TestHelper::printTestName("BACKWARD ADVANCE");
+
+    unsigned int k_NUM_RECORDS = 5001;
+
+    bsls::Types::Uint64 totalSize =
+        sizeof(FileHeader) + sizeof(JournalFileHeader) +
+        +k_NUM_RECORDS * FileStoreProtocol::k_JOURNAL_RECORD_SIZE;
+
+    char* p = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(totalSize));
+
+    MemoryBlock         block(p, totalSize);
+    FileHeader          fileHeader;
+    bsls::Types::Uint64 lastRecordPos = 0;
+    bsls::Types::Uint64 lastSyncPtPos = 0;
+    RecordsListType     records(bmqtst::TestHelperUtil::allocator());
+
+    addRecords(&block,
+               &fileHeader,
+               &lastRecordPos,
+               &lastSyncPtPos,
+               &records,
+               k_NUM_RECORDS);
+
+    // Create iterator
+    MappedFileDescriptor mfd;
+    mfd.setFd(-1);  // invalid fd will suffice.
+    mfd.setBlock(block);
+    mfd.setFileSize(totalSize);
+    JournalFileIterator it(&mfd, fileHeader, true);  // backward iteration
+
+    BMQTST_ASSERT_EQ(true, it.hasRecordSizeRemaining());
+    BMQTST_ASSERT_EQ(true, it.isValid());
+    BMQTST_ASSERT_EQ(&mfd, it.mappedFileDescriptor());
+    BMQTST_ASSERT_EQ(true, it.isReverseMode());
+    BMQTST_ASSERT_EQ(lastRecordPos, it.lastRecordPosition());
+    BMQTST_ASSERT_EQ(lastSyncPtPos, it.lastSyncPointPosition());
+    BMQTST_ASSERT_EQ(
+        1,
+        it.nextRecord());  // Set iterator to first record position
+
+    bsl::list<NodeType>::const_reverse_iterator recordIter = records.crbegin();
+    const unsigned int increment = k_NUM_RECORDS / 100;
+
+    unsigned int i  = k_NUM_RECORDS - 1;
+    int          rc = 0;
+    while (i > 1) {
+        i -= increment;
+        bsl::advance(recordIter, increment);
+        BMQTST_ASSERT_EQ_D(i, true, it.hasRecordSizeRemaining());
+        BMQTST_ASSERT_EQ_D(i, 1, (rc = it.advance(increment)));
+        BMQTST_ASSERT_EQ_D(i, i, it.recordIndex());
+
+        assertEqual(it, *recordIter);
+    }
+
+    // Last one
+    BMQTST_ASSERT_EQ(true, it.isReverseMode());
+    BMQTST_ASSERT_EQ(false, it.hasRecordSizeRemaining());
+    // Not enough bytes remaining to advance
+    BMQTST_ASSERT_NE_D(i, 1, (rc = it.advance(increment)));
+
+    bmqtst::TestHelperUtil::allocator()->deallocate(p);
 }
 
 // ============================================================================
@@ -1285,12 +1422,14 @@ static void test10_bidirectionalIteration()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     mqbu::MessageGUIDUtil::initialize();
 
     switch (_testCase) {
     case 0:
+    case 12: test12_backwardAdvance(); break;
+    case 11: test11_forwardAdvance(); break;
     case 10: test10_bidirectionalIteration(); break;
     case 9: test9_backwardIterationOfSparseJournalFileWithRecords(); break;
     case 8: test8_forwardIterationOfSparseJournalFileWithRecords(); break;
@@ -1303,11 +1442,11 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_GBL_ALLOC);
     // NOTE: for some reason the default allcoator verification never
     // succeeds.
 }

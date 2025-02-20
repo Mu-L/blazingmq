@@ -70,12 +70,16 @@ class QueueEngine {
 
     // MANIPULATORS
 
-    /// Configure this instance.  Return zero on success, non-zero value
+    /// Configure this instance.  The specified `isReconfigure` flag indicates
+    /// if queue is being reconfigured. Return zero on success, non-zero value
     /// otherwise and populate the specified `errorDescription`.
-    virtual int configure(bsl::ostream& errorDescription) = 0;
+    virtual int configure(bsl::ostream& errorDescription,
+                          bool          isReconfigure) = 0;
 
-    /// Reset the internal state of this engine.
-    virtual void resetState() = 0;
+    /// Reset the internal state of this engine.  If the optionally specified
+    /// 'isShuttingDown' is 'true', clear the routing state but keep the Apps
+    /// state for CONFIRMs processing.
+    virtual void resetState(bool isShuttingDown = false) = 0;
 
     /// Rebuild the internal state of this engine.  This method is invoked
     /// when the queue this engine is associated with is created from an
@@ -191,19 +195,47 @@ class QueueEngine {
     /// THREAD: This method is called from the Queue's dispatcher thread.
     virtual void onTimer(bsls::Types::Int64 currentTimer) = 0;
 
-    /// Called after the specified `appIdKeyPair` has been dynamically
+    /// Called after the specified `addedAppIds` have been dynamically
     /// registered.
     ///
     /// THREAD: This method is called from the Queue's dispatcher thread.
     virtual void
-    afterAppIdRegistered(const mqbi::Storage::AppIdKeyPair& appIdKeyPair);
+    afterAppIdRegistered(const mqbi::Storage::AppInfos& addedAppIds);
 
-    /// Called after the specified `appIdKeyPair` has been dynamically
+    /// Called after the specified `removedAppIds` have been dynamically
     /// unregistered.
     ///
     /// THREAD: This method is called from the Queue's dispatcher thread.
     virtual void
-    afterAppIdUnregistered(const mqbi::Storage::AppIdKeyPair& appIdKeyPair);
+    afterAppIdUnregistered(const mqbi::Storage::AppInfos& removedAppIds);
+
+    /// Called after creation of a new storage for the  specified
+    /// `appIdKeyPair`.
+    ///
+    /// THREAD: This method is called from the Queue's dispatcher thread.
+    virtual void registerStorage(const bsl::string&      appId,
+                                 const mqbu::StorageKey& appKey,
+                                 unsigned int            appOrdinal);
+
+    /// Called after removal of the storage for the specified
+    /// `appIdKeyPair`.
+    ///
+    /// THREAD: This method is called from the Queue's dispatcher thread.
+    virtual void unregisterStorage(const bsl::string&      appId,
+                                   const mqbu::StorageKey& appKey,
+                                   unsigned int            appOrdinal);
+
+    /// Given the specified 'putHeader', 'appData', 'mpi', and 'timestamp',
+    /// evaluate all application subscriptions and exclude applications with
+    /// negative results from message delivery.  Return 0 on success or an
+    /// non-zero error code on failure.
+    ///
+    /// THREAD: This method is called from the Queue's dispatcher thread.
+    virtual StorageResult::Enum
+    evaluateAppSubscriptions(const bmqp::PutHeader&              putHeader,
+                             const bsl::shared_ptr<bdlbb::Blob>& appData,
+                             const bmqp::MessagePropertiesInfo&  mpi,
+                             bsls::Types::Uint64 timestamp) = 0;
 
     // ACCESSORS
 
@@ -216,6 +248,14 @@ class QueueEngine {
     /// Load into the specified `out` object the internal information about
     /// this queue engine and associated queue handles.
     virtual void loadInternals(mqbcmd::QueueEngine* out) const = 0;
+
+    /// Log appllication subscription info for the specified `appId` into the
+    /// specified `stream`.
+    ///
+    /// THREAD: This method is called from the Queue's dispatcher thread.
+    virtual bsl::ostream&
+    logAppSubscriptionInfo(bsl::ostream&      stream,
+                           const bsl::string& appId) const;
 };
 
 }  // close package namespace

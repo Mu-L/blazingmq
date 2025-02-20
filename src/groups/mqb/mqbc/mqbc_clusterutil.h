@@ -17,15 +17,19 @@
 #ifndef INCLUDED_MQBC_CLUSTERUTIL
 #define INCLUDED_MQBC_CLUSTERUTIL
 
-//@PURPOSE: Provide generic utilities for a cluster.
-//
-//@CLASSES:
-//  mqbc::ClusterUtil: Generic utilities for a cluster.
-//
-//@DESCRIPTION: 'mqbc::ClusterUtil' provides generic utilities for a cluster.
+/// @file mqbc_clusterutil.h
+///
+/// @brief Provide generic utilities for a cluster.
+///
+/// @bbref{mqbc::ClusterUtil} provides generic utilities for a cluster.
+///
+/// Thread Safety                                    {#mqbc_clusterutil_thread}
+/// =============
+///
+/// This component is designed to be executed only by the cluster *DISPATCHER*
+/// thread.
 
 // MQB
-
 #include <mqbc_clusterdata.h>
 #include <mqbc_clusterstate.h>
 #include <mqbc_clusterstateledger.h>
@@ -83,9 +87,9 @@ struct ClusterUtil {
 
   public:
     // TYPES
-    typedef ClusterStateQueueInfo::AppIdInfo       AppIdInfo;
-    typedef ClusterStateQueueInfo::AppIdInfos      AppIdInfos;
-    typedef ClusterStateQueueInfo::AppIdInfosCIter AppIdInfosCIter;
+    typedef ClusterStateQueueInfo::AppInfo       AppInfo;
+    typedef ClusterStateQueueInfo::AppInfos      AppInfos;
+    typedef ClusterStateQueueInfo::AppInfosCIter AppInfosCIter;
 
     typedef mqbc::ClusterState::QueueInfoSp      QueueInfoSp;
     typedef ClusterState::UriToQueueInfoMap      UriToQueueInfoMap;
@@ -99,9 +103,7 @@ struct ClusterUtil {
     typedef mqbi::ClusterStateManager::QueueAssignmentResult
         QueueAssignmentResult;
 
-    typedef mqbi::ClusterStateManager::QueueAssigningCb QueueAssigningCb;
-
-    /// Map of NodeSession -> number of new partitions to assign to it
+    /// Map of `NodeSession` -> number of new partitions to assign to it
     typedef bsl::unordered_map<ClusterNodeSession*, unsigned int>
                                                 NumNewPartitionsMap;
     typedef NumNewPartitionsMap::const_iterator NumNewPartitionsMapCIter;
@@ -130,11 +132,10 @@ struct ClusterUtil {
     /// Return true if the specified `spoPair` is valid, false otherwise.
     static bool isValid(const bmqp_ctrlmsg::SyncPointOffsetPair& spoPair);
 
-    /// Set the specified `uri` to have the specified `pendingUnassignment`
-    /// status in the specified `clusterState`.
+    /// Set the specified `uri` to have the `k_UNASSIGNING` state in the
+    /// specified `clusterState`.
     static void setPendingUnassignment(ClusterState*    clusterState,
-                                       const bmqt::Uri& uri,
-                                       bool             pendingUnassignment);
+                                       const bmqt::Uri& uri);
 
     /// Load into the specified `message` the message encoded in the
     /// specified `eventBlob` using the specified `allocator`.
@@ -163,14 +164,14 @@ struct ClusterUtil {
     static int getNextPartitionId(const ClusterState& clusterState,
                                   const bmqt::Uri&    uri);
 
-    /// Callback invoked when the specified `partitionId` gets assigned to
-    /// the specified `primary` with the specified `leaseId`, replacing the
-    /// specified `oldPrimary` with the specified `oldLeaseId`, using the
-    /// specified `clusterData` and notifying the specified
-    /// `storageManager`.  Note that null is a valid value for the
-    /// `primary`, and it implies that there is no primary for that
-    /// partition.  Also note that this method will be invoked when the
-    /// `primary` or it status or both change.
+    /// Callback invoked when the specified 'partitionId' gets assigned to
+    /// the specified 'primary' with the specified 'leaseId' and the
+    /// specified 'status', replacing the specified 'oldPrimary' with the
+    /// specified 'oldLeaseId', using the specified 'clusterData' and
+    /// notifying the specified 'storageManager'.  Note that null is a valid
+    /// value for the 'primary', and it implies that there is no primary for
+    /// that partition.  Also note that this method will be invoked when the
+    /// 'primary' or it status or both change.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
@@ -180,13 +181,14 @@ struct ClusterUtil {
                                  int                   partitionId,
                                  mqbnet::ClusterNode*  primary,
                                  unsigned int          leaseId,
-                                 mqbnet::ClusterNode*  oldPrimary,
-                                 unsigned int          oldLeaseId);
+                                 bmqp_ctrlmsg::PrimaryStatus::Value status,
+                                 mqbnet::ClusterNode*               oldPrimary,
+                                 unsigned int oldLeaseId);
 
     /// Process the queue assignment in the specified `request`, received
     /// from the specified `requester`, using the specified `clusterState`,
-    /// `clusterData`, `ledger`, `cluster`, `queueAssigningCb` and
-    /// `allocator`.  Return the queue assignment result.
+    /// `clusterData`, `ledger`, `cluster`,  and `allocator`.  Return the queue
+    /// assignment result.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
@@ -196,23 +198,20 @@ struct ClusterUtil {
                                   ClusterStateLedger*  ledger,
                                   const mqbi::Cluster* cluster,
                                   const bmqp_ctrlmsg::ControlMessage& request,
-                                  mqbnet::ClusterNode*    requester,
-                                  const QueueAssigningCb& queueAssigningCb,
-                                  bslma::Allocator*       allocator);
+                                  mqbnet::ClusterNode* requester,
+                                  bslma::Allocator*    allocator);
 
     /// Populate the specified `advisory` with information describing a
     /// queue assignment of the specified `uri` living in the specified
-    /// `domain`, using the specified `clusterState`, `clusterData` and
-    /// `isCSLMode` flag.  Load into the specified `key` the unique queue
-    /// key generated.
+    /// `domain`, using the specified `clusterState`, `clusterData`.  Load into
+    /// the specified `key` the unique queue key generated.
     static void populateQueueAssignmentAdvisory(
         bmqp_ctrlmsg::QueueAssignmentAdvisory* advisory,
         mqbu::StorageKey*                      key,
         ClusterState*                          clusterState,
         ClusterData*                           clusterData,
         const bmqt::Uri&                       uri,
-        const mqbi::Domain*                    domain,
-        bool                                   isCSLMode);
+        const mqbi::Domain*                    domain);
 
     /// Populate the specified `advisory` with information describing a
     /// queue unassignment of the specified `uri` having the specified `key`
@@ -234,26 +233,24 @@ struct ClusterUtil {
     /// adviosry to the specified `ledger`.  Return a value indicating
     /// whether the assignment was successful or was definitively rejected,
     /// and populate the optionally specified `status` with a human readable
-    /// error code and string in case of failure.  Also invoke the specified
-    /// `queueAssigningCb` on success.  Use the specified `allocator` for
-    /// memory allocations.  This method is called only on the leader node.
+    /// error code and string in case of failure.  Use the specified
+    /// `allocator` for memory allocations.  This method is called only on the
+    /// leader node.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
     static QueueAssignmentResult::Enum
-    assignQueue(ClusterState*           clusterState,
-                ClusterData*            clusterData,
-                ClusterStateLedger*     ledger,
-                const mqbi::Cluster*    cluster,
-                const bmqt::Uri&        uri,
-                const QueueAssigningCb& queueAssigningCb,
-                bslma::Allocator*       allocator,
-                bmqp_ctrlmsg::Status*   status = 0);
+    assignQueue(ClusterState*         clusterState,
+                ClusterData*          clusterData,
+                ClusterStateLedger*   ledger,
+                const mqbi::Cluster*  cluster,
+                const bmqt::Uri&      uri,
+                bslma::Allocator*     allocator,
+                bmqp_ctrlmsg::Status* status = 0);
 
     /// Register a queue info for the queue with the specified `uri`,
     /// `partitionId`, `queueKey` and the optionally specified `appIdInfos`
-    /// to the specified `clusterState` of the specified `cluster`.  Also
-    /// invoke the specified `queueAssigningCb` on success.  If no
+    /// to the specified `clusterState` of the specified `cluster`.  If no
     /// `appIdInfos` is specified, use the appId infos from the domain
     /// config instead.  If the specified `forceUpdate` flag is true, update
     /// queue info even if it is valid but different from the specified
@@ -266,17 +263,14 @@ struct ClusterUtil {
                                   const bmqt::Uri&        uri,
                                   int                     partitionId,
                                   const mqbu::StorageKey& queueKey,
-                                  const AppIdInfos&       appIdInfos,
-                                  const QueueAssigningCb& queueAssigningCb,
+                                  const AppInfos&         appIdInfos,
                                   bool                    forceUpdate);
 
     /// Generate appKeys based on the appIds in the specified `domainConfig`
     /// and populate them into the specified `appIdInfos`.
-    static void populateAppIdInfos(AppIdInfos*                appIdInfos,
-                                   const mqbconfm::QueueMode& domainConfig);
     static void
-    populateAppIdInfos(bsl::vector<bmqp_ctrlmsg::AppIdInfo>* appIdInfos,
-                       const mqbconfm::QueueMode&            domainConfig);
+    populateAppInfos(bsl::vector<bmqp_ctrlmsg::AppIdInfo>* appIdInfos,
+                     const mqbconfm::QueueMode&            domainConfig);
 
     /// Register the specified `appId` for all queues in the specified
     /// `domain`, using the specified `clusterData` and `clusterState`.
@@ -287,7 +281,7 @@ struct ClusterUtil {
     ///         dispatcher thread.
     static void registerAppId(ClusterData*        clusterData,
                               ClusterStateLedger* ledger,
-                              const ClusterState& clusterState,
+                              ClusterState&       clusterState,
                               const bsl::string&  appId,
                               const mqbi::Domain* domain,
                               bslma::Allocator*   allocator);
@@ -301,7 +295,7 @@ struct ClusterUtil {
     ///         dispatcher thread.
     static void unregisterAppId(ClusterData*        clusterData,
                                 ClusterStateLedger* ledger,
-                                const ClusterState& clusterState,
+                                ClusterState&       clusterState,
                                 const bsl::string&  appId,
                                 const mqbi::Domain* domain,
                                 bslma::Allocator*   allocator);
@@ -314,7 +308,7 @@ struct ClusterUtil {
     /// cluster state to that `node` only.  Otherwise, broadcast to all
     /// followers.  Behavior is undefined unless this node is the leader,
     /// and at least one of `sendPartitionPrimaryInfo` or `sendQueuesInfo`
-    /// is true. TODO
+    /// is true.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
@@ -362,7 +356,7 @@ struct ClusterUtil {
     /// THREAD: This method is invoked in the associated cluster's
     /// dispatcher thread.
     ///
-    /// TBD: This is mostly temporary, used during the integrating of CSL.
+    /// @todo This is mostly temporary, used during the integrating of CSL.
     static void validateClusterStateLedger(mqbi::Cluster*            cluster,
                                            const ClusterStateLedger& ledger,
                                            const ClusterState& clusterState,
@@ -388,20 +382,33 @@ struct ClusterUtil {
     /// `state`.  If the specified `includeAppIds` is true, then the appId
     /// info for the queues will be loaded as well.
     static void loadQueuesInfo(bsl::vector<bmqp_ctrlmsg::QueueInfo>* out,
-                               const ClusterState&                   state,
-                               bool includeAppIds);
+                               const ClusterState&                   state);
 
     /// Load into the specified `out` the list of peer nodes using the
     /// specified `clusterData`.
+    ///
+    /// THREAD: Executed by the cluster *DISPATCHER* thread or the
+    //          *QUEUE_DISPATCHER* thread.
     static void loadPeerNodes(bsl::vector<mqbnet::ClusterNode*>* out,
                               const ClusterData&                 clusterData);
 
     /// Load into the specified `out` the latest LSN stored in the specified
     /// `ledger`, using the specified `clusterData`.  Return 0 on success,
-    /// and a non-zero error code on failure.
+    /// and a non-zero error code on failure.  Note that this involves
+    /// iteration over the entire ledger which can be an expensive operation.
     static int latestLedgerLSN(bmqp_ctrlmsg::LeaderMessageSequence* out,
                                const ClusterStateLedger&            ledger,
                                const ClusterData& clusterData);
+
+    /// Load into the specified `out` all `AppInfo` data from the specified
+    /// `queueInfo` using the specified `allocator`.
+    static void parseQueueInfo(mqbi::ClusterStateManager::AppInfos* out,
+                               const bmqp_ctrlmsg::QueueInfo&       queueInfo,
+                               bslma::Allocator*                    allocator);
+    static void
+    parseQueueInfo(mqbi::ClusterStateManager::AppInfos*        out,
+                   const bsl::vector<bmqp_ctrlmsg::AppIdInfo>& apps,
+                   bslma::Allocator*                           allocator);
 };
 
 // ============================================================================

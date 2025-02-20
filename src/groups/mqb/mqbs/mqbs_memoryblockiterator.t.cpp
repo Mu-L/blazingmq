@@ -23,7 +23,7 @@
 #include <bsls_types.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -40,15 +40,15 @@ static void test1_breathingTest()
 //   Basic functionality of protocol structs.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("breathingTest");
+    bmqtst::TestHelper::printTestName("breathingTest");
 
     mqbs::MemoryBlockIterator obj;
 
     // Default iterator
-    ASSERT_EQ(obj.atEnd(), true);
-    ASSERT_EQ(obj.position(), 0U);
-    ASSERT_EQ(obj.remaining(), 0U);
-    ASSERT_EQ(obj.block(), static_cast<const mqbs::MemoryBlock*>(0));
+    BMQTST_ASSERT_EQ(obj.atEnd(), true);
+    BMQTST_ASSERT_EQ(obj.position(), 0U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 0U);
+    BMQTST_ASSERT_EQ(obj.block(), static_cast<const mqbs::MemoryBlock*>(0));
 
     char                dummy = 1;
     bsls::Types::Uint64 size  = 10000;  // 1MB
@@ -56,41 +56,41 @@ static void test1_breathingTest()
 
     // Reset iterator
     obj.reset(&block, 0, size, true);
-    ASSERT_EQ(obj.isForwardIterator(), true);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.position(), 0U);
-    ASSERT_EQ(obj.remaining(), size);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.isForwardIterator(), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.position(), 0U);
+    BMQTST_ASSERT_EQ(obj.remaining(), size);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
     // Advance
-    ASSERT_EQ(obj.advance(1000), true);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.position(), 1000U);
-    ASSERT_EQ(obj.remaining(), size - 1000);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.advance(1000), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.position(), 1000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), size - 1000);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
-    ASSERT_EQ(obj.advance(2000), true);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.position(), 3000U);
-    ASSERT_EQ(obj.remaining(), size - 3000);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.advance(2000), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.position(), 3000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), size - 3000);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
-    ASSERT_EQ(obj.advance(9000), false);  // exceed
-    ASSERT_EQ(obj.atEnd(), true);
-    ASSERT_EQ(obj.position(), 3000U);  // old position
-    ASSERT_EQ(obj.remaining(), 0U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.advance(9000), false);  // exceed
+    BMQTST_ASSERT_EQ(obj.atEnd(), true);
+    BMQTST_ASSERT_EQ(obj.position(), 3000U);  // old position
+    BMQTST_ASSERT_EQ(obj.remaining(), 0U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
     obj.clear();
-    ASSERT_EQ(obj.atEnd(), true);
-    ASSERT_EQ(obj.position(), 0U);
-    ASSERT_EQ(obj.remaining(), 0U);
-    ASSERT_EQ(obj.block(), static_cast<const mqbs::MemoryBlock*>(0));
+    BMQTST_ASSERT_EQ(obj.atEnd(), true);
+    BMQTST_ASSERT_EQ(obj.position(), 0U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 0U);
+    BMQTST_ASSERT_EQ(obj.block(), static_cast<const mqbs::MemoryBlock*>(0));
 }
 
 static void test2_reverseIteration()
 {
-    mwctst::TestHelper::printTestName("reverseIteration");
+    bmqtst::TestHelper::printTestName("reverseIteration");
 
     char                dummy = 1;
     bsls::Types::Uint64 size  = 10000;
@@ -99,35 +99,35 @@ static void test2_reverseIteration()
     // Create iterator
     mqbs::MemoryBlockIterator obj(&block, size, size - 1000, false);
 
-    ASSERT_EQ(obj.isForwardIterator(), false);
-    ASSERT_EQ(obj.advance(2000), true);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.position(), 8000U);
-    ASSERT_EQ(obj.remaining(), 7000U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.isForwardIterator(), false);
+    BMQTST_ASSERT_EQ(obj.advance(2000), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.position(), 8000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 7000U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
-    ASSERT_EQ(obj.advance(5000), true);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.position(), 3000U);
-    ASSERT_EQ(obj.remaining(), 2000U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.advance(5000), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.position(), 3000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 2000U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
-    ASSERT_EQ(obj.advance(2000), true);  // success
-    ASSERT_EQ(obj.atEnd(), true);
-    ASSERT_EQ(obj.position(), 1000U);
-    ASSERT_EQ(obj.remaining(), 0U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.advance(2000), true);  // success
+    BMQTST_ASSERT_EQ(obj.atEnd(), true);
+    BMQTST_ASSERT_EQ(obj.position(), 1000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 0U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
-    ASSERT_EQ(obj.advance(1), false);
-    ASSERT_EQ(obj.atEnd(), true);
-    ASSERT_EQ(obj.position(), 1000U);
-    ASSERT_EQ(obj.remaining(), 0U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.advance(1), false);
+    BMQTST_ASSERT_EQ(obj.atEnd(), true);
+    BMQTST_ASSERT_EQ(obj.position(), 1000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 0U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 }
 
 static void test3_bidirectionalIteration()
 {
-    mwctst::TestHelper::printTestName("bi-directional Iteration");
+    bmqtst::TestHelper::printTestName("bi-directional Iteration");
 
     char                dummy = 1;
     bsls::Types::Uint64 size  = 10000;  // 1MB
@@ -139,54 +139,54 @@ static void test3_bidirectionalIteration()
                                   8000,  // remaining
                                   true);
 
-    ASSERT_EQ(obj.isForwardIterator(), true);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.remaining(), 8000U);
-    ASSERT_EQ(obj.position(), 0U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.isForwardIterator(), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.remaining(), 8000U);
+    BMQTST_ASSERT_EQ(obj.position(), 0U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
     obj.flipDirection();
 
-    ASSERT_EQ(obj.isForwardIterator(), false);
-    ASSERT_EQ(obj.atEnd(), true);
-    ASSERT_EQ(obj.remaining(), 0U);
-    ASSERT_EQ(obj.position(), 0U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.isForwardIterator(), false);
+    BMQTST_ASSERT_EQ(obj.atEnd(), true);
+    BMQTST_ASSERT_EQ(obj.remaining(), 0U);
+    BMQTST_ASSERT_EQ(obj.position(), 0U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
     obj.flipDirection();
 
-    ASSERT_EQ(obj.isForwardIterator(), true);
-    ASSERT_EQ(obj.advance(1000), true);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.position(), 1000U);
-    ASSERT_EQ(obj.remaining(), 7000U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.isForwardIterator(), true);
+    BMQTST_ASSERT_EQ(obj.advance(1000), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.position(), 1000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 7000U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
     obj.flipDirection();
 
-    ASSERT_EQ(obj.isForwardIterator(), false);
-    ASSERT_EQ(obj.advance(500), true);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.position(), 500U);
-    ASSERT_EQ(obj.remaining(), 500U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.isForwardIterator(), false);
+    BMQTST_ASSERT_EQ(obj.advance(500), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.position(), 500U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 500U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
     obj.flipDirection();
 
-    ASSERT_EQ(obj.isForwardIterator(), true);
-    ASSERT_EQ(obj.advance(7500), true);
-    ASSERT_EQ(obj.atEnd(), true);
-    ASSERT_EQ(obj.position(), 8000U);
-    ASSERT_EQ(obj.remaining(), 0U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.isForwardIterator(), true);
+    BMQTST_ASSERT_EQ(obj.advance(7500), true);
+    BMQTST_ASSERT_EQ(obj.atEnd(), true);
+    BMQTST_ASSERT_EQ(obj.position(), 8000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 0U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 
     obj.flipDirection();
 
-    ASSERT_EQ(obj.isForwardIterator(), false);
-    ASSERT_EQ(obj.atEnd(), false);
-    ASSERT_EQ(obj.position(), 8000U);
-    ASSERT_EQ(obj.remaining(), 8000U);
-    ASSERT_EQ(obj.block(), &block);
+    BMQTST_ASSERT_EQ(obj.isForwardIterator(), false);
+    BMQTST_ASSERT_EQ(obj.atEnd(), false);
+    BMQTST_ASSERT_EQ(obj.position(), 8000U);
+    BMQTST_ASSERT_EQ(obj.remaining(), 8000U);
+    BMQTST_ASSERT_EQ(obj.block(), &block);
 }
 
 // ============================================================================
@@ -195,7 +195,7 @@ static void test3_bidirectionalIteration()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -204,9 +204,9 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

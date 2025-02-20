@@ -49,11 +49,11 @@
 #include <mqbmock_dispatcher.h>
 #include <mqbnet_channel.h>
 #include <mqbnet_cluster.h>
+#include <mqbnet_transportmanager.h>
 
-// MWC
-#include <mwcio_status.h>
-#include <mwcio_testchannel.h>
-#include <mwcst_statcontext.h>
+#include <bmqio_status.h>
+#include <bmqio_testchannel.h>
+#include <bmqst_statcontext.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -97,6 +97,9 @@ class ClusterResult;
 namespace mqbi {
 class Domain;
 }
+namespace mqbnet {
+class Negotiator;
+}
 
 namespace mqbmock {
 
@@ -104,14 +107,17 @@ namespace mqbmock {
 // class Cluster
 // =============
 
-/// Mock cluster implementation of the `mqbi::Cluster` inteface.
+/// Mock cluster implementation of the `mqbi::Cluster` interface.
 class Cluster : public mqbi::Cluster {
   private:
     // PRIVATE TYPES
-    typedef Cluster::RequestManagerType RequestManagerType;
+    typedef Cluster::RequestManagerType      RequestManagerType;
+    typedef Cluster::MultiRequestManagerType MultiRequestManagerType;
 
     typedef bsl::function<void(const mqbi::DispatcherEvent& event)>
         EventProcessor;
+
+    typedef bslma::ManagedPtr<mqbnet::Negotiator> NegotiatorMp;
 
     typedef bslma::ManagedPtr<mqbnet::Cluster> NetClusterMp;
 
@@ -120,20 +126,16 @@ class Cluster : public mqbi::Cluster {
     typedef mqbnet::Cluster::NodesList NodesList;
     typedef NodesList::iterator        NodesListIter;
 
-    typedef bsl::shared_ptr<mwcst::StatContext> StatContextSp;
+    typedef bsl::shared_ptr<bmqst::StatContext> StatContextSp;
     typedef mqbc::ClusterData::StatContextsMap  StatContextsMap;
-
-    typedef bdlcc::SharedObjectPool<
-        bdlbb::Blob,
-        bdlcc::ObjectPoolFunctors::DefaultCreator,
-        bdlcc::ObjectPoolFunctors::RemoveAll<bdlbb::Blob> >
-        BlobSpPool;
 
   public:
     // TYPES
+    typedef bmqp::BlobPoolUtil::BlobSpPool BlobSpPool;
+
     typedef bsl::vector<mqbcfg::ClusterNode> ClusterNodeDefs;
 
-    typedef bsl::shared_ptr<mwcio::TestChannel> TestChannelSp;
+    typedef bsl::shared_ptr<bmqio::TestChannel> TestChannelSp;
     typedef bsl::unordered_map<mqbnet::ClusterNode*, TestChannelSp>
                                            TestChannelMap;
     typedef TestChannelMap::iterator       TestChannelMapIter;
@@ -169,20 +171,17 @@ class Cluster : public mqbi::Cluster {
     // Flag to indicate start/stop status This
     // flag is used only inside this component
 
-    bsl::string d_name;
-    // Name of this cluster
-
-    bsl::string d_description;
-    // Description of this object
-
     mqbcfg::ClusterDefinition d_clusterDefinition;
     // Cluster definition
 
-    mqbnet::Channel::ItemPool d_itemPool;
-    // Item pool
-
     TestChannelMap d_channels;
     // Test channels
+
+    NegotiatorMp d_negotiator_mp;
+    // Session negotiator
+
+    mqbnet::TransportManager d_transportManager;
+    // Transport manager
 
     NetClusterMp d_netCluster_mp;
     // Net cluster used by this cluster
@@ -212,6 +211,8 @@ class Cluster : public mqbi::Cluster {
     // Dispatcher client data
 
     EventProcessor d_processor;
+
+    mqbi::ClusterResources d_resources;
 
   private:
     // NOT IMPLEMENTED
@@ -292,11 +293,16 @@ class Cluster : public mqbi::Cluster {
     /// error.
     int start(bsl::ostream& errorDescription) BSLS_KEYWORD_OVERRIDE;
 
-    /// Initiate the shutdown of the cluster.  It is expected that `stop()`
-    /// will be called soon after this routine is invoked.  Invoke the
-    /// specified `callback` upon completion of (asynchronous) shutdown
-    /// sequence.
-    void initiateShutdown(const VoidFunctor& callback) BSLS_KEYWORD_OVERRIDE;
+    /// Initiate the shutdown of the cluster and invoke the specified
+    /// `callback` upon completion of (asynchronous) shutdown sequence. It
+    /// is expected that `stop()` will be called soon after this routine is
+    /// invoked.  If the optional (temporary) specified 'supportShutdownV2' is
+    /// 'true' execute shutdown logic V2 where upstream (not downstream) nodes
+    /// deconfigure  queues and the shutting down node (not downstream) wait
+    /// for CONFIRMS.
+    void
+    initiateShutdown(const VoidFunctor& callback,
+                     bool supportShutdownV2 = false) BSLS_KEYWORD_OVERRIDE;
 
     /// Stop the `Cluster`.
     void stop() BSLS_KEYWORD_OVERRIDE;
@@ -318,6 +324,10 @@ class Cluster : public mqbi::Cluster {
     /// Return a reference offering modifiable access to the request manager
     /// used by this cluster.
     RequestManagerType& requestManager() BSLS_KEYWORD_OVERRIDE;
+
+    /// Return a reference offering modifiable access to the multi request
+    /// manager used by this cluster.
+    MultiRequestManagerType& multiRequestManager() BSLS_KEYWORD_OVERRIDE;
 
     /// Send the specified `request` with the specified `timeout` to the
     /// specified `target` node.  If `target` is 0, it is the Cluster's
@@ -392,6 +402,11 @@ class Cluster : public mqbi::Cluster {
     /// Load the cluster state to the specified `out` object.
     void loadClusterStatus(mqbcmd::ClusterResult* out) BSLS_KEYWORD_OVERRIDE;
 
+    /// Purge and force GC queues in this cluster on a given domain.
+    void purgeAndGCQueueOnDomain(mqbcmd::ClusterResult* result,
+                                 const bsl::string&     domainName)
+        BSLS_KEYWORD_OVERRIDE;
+
     // MANIPULATORS
     //   (specific to mqbmock::Cluster)
 
@@ -406,14 +421,14 @@ class Cluster : public mqbi::Cluster {
     /// Get a modifiable reference to this object's buffer factory.
     bdlbb::BlobBufferFactory* _bufferFactory();
 
+    /// Get a modifiable reference to this object's blob shared pointer pool.
+    BlobSpPool* _blobSpPool();
+
     /// Get a modifiable reference to this object's _scheduler.
     bdlmt::EventScheduler& _scheduler();
 
     /// Get a modifiable reference to this object's time source.
     bdlmt::EventSchedulerTestTimeSource& _timeSource();
-
-    /// Get a modifiable reference to this object's item pool.
-    mqbnet::Channel::ItemPool& _itemPool();
 
     /// Get a modifiable reference to this object's cluster data.
     mqbc::ClusterData* _clusterData();
@@ -424,8 +439,22 @@ class Cluster : public mqbi::Cluster {
     /// Move the test timer forward the specified `seconds`.
     void advanceTime(int seconds);
 
+    /// Move the test timer forward the specified `milliseconds`.
+    void advanceTime(const bsls::TimeInterval& interval);
+
     /// Block until scheduler executes all the scheduled callbacks.
     void waitForScheduler();
+
+    void getPrimaryNodes(int*                               rc,
+                         bsl::ostream&                      errorDescription,
+                         bsl::vector<mqbnet::ClusterNode*>* nodes,
+                         bool* isSelfPrimary) const BSLS_KEYWORD_OVERRIDE;
+
+    void getPartitionPrimaryNode(int*                  rc,
+                                 bsl::ostream&         errorDescription,
+                                 mqbnet::ClusterNode** node,
+                                 bool*                 isSelfPrimary,
+                                 int partitionId) const BSLS_KEYWORD_OVERRIDE;
 
     // ACCESSORS
     //   (virtual: mqbi::DispatcherClient)
@@ -499,6 +528,7 @@ class Cluster : public mqbi::Cluster {
     const bdlmt::EventSchedulerTestTimeSource& _timeSource() const;
     const TestChannelMap&                      _channels() const;
     const mqbc::ClusterData*                   _clusterData() const;
+    const mqbi::ClusterResources&              _resources() const;
 
     /// Return the value of the corresponding member of this object.
     const mqbc::ClusterState& _state() const;
@@ -543,6 +573,11 @@ inline bdlbb::BlobBufferFactory* Cluster::_bufferFactory()
     return d_bufferFactory_p;
 }
 
+inline Cluster::BlobSpPool* Cluster::_blobSpPool()
+{
+    return &d_blobSpPool;
+}
+
 inline bdlmt::EventScheduler& Cluster::_scheduler()
 {
     return d_scheduler;
@@ -551,11 +586,6 @@ inline bdlmt::EventScheduler& Cluster::_scheduler()
 inline bdlmt::EventSchedulerTestTimeSource& Cluster::_timeSource()
 {
     return d_timeSource;
-}
-
-inline mqbnet::Channel::ItemPool& Cluster::_itemPool()
-{
-    return d_itemPool;
 }
 
 inline mqbc::ClusterData* Cluster::_clusterData()
@@ -571,6 +601,30 @@ inline mqbc::ClusterState& Cluster::_state()
 inline void Cluster::advanceTime(int seconds)
 {
     d_timeSource.advanceTime(bsls::TimeInterval(seconds));
+}
+
+inline void Cluster::advanceTime(const bsls::TimeInterval& interval)
+{
+    d_timeSource.advanceTime(interval);
+}
+
+inline void Cluster::getPrimaryNodes(int*,
+                                     bsl::ostream&,
+                                     bsl::vector<mqbnet::ClusterNode*>*,
+                                     bool*) const
+{
+    // no implementation -- this should never run.
+    BSLS_ASSERT_SAFE(false);
+}
+
+inline void Cluster::getPartitionPrimaryNode(int*,
+                                             bsl::ostream&,
+                                             mqbnet::ClusterNode**,
+                                             bool*,
+                                             int) const
+{
+    // no implementation -- this should never run.
+    BSLS_ASSERT_SAFE(false);
 }
 
 // ACCESSORS
@@ -609,6 +663,11 @@ inline const mqbc::ClusterData* Cluster::_clusterData() const
 inline const mqbc::ClusterState& Cluster::_state() const
 {
     return d_state;
+}
+
+inline const mqbi::ClusterResources& Cluster::_resources() const
+{
+    return d_resources;
 }
 
 inline bsls::TimeInterval Cluster::getTime() const

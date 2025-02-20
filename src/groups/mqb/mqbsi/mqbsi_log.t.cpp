@@ -25,7 +25,7 @@
 #include <bsls_types.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -68,7 +68,7 @@ struct LogTestImp : bsls::ProtocolTestImp<mqbsi::Log> {
   public:
     // CREATORS
     LogTestImp()
-    : d_config(0, mqbu::StorageKey(), s_allocator_p)
+    : d_config(0, mqbu::StorageKey(), bmqtst::TestHelperUtil::allocator())
     {
         // NOTHING
     }
@@ -101,14 +101,14 @@ struct LogTestImp : bsls::ProtocolTestImp<mqbsi::Log> {
     }
 
     Offset write(const bdlbb::Blob&        entry,
-                 const mwcu::BlobPosition& offset,
+                 const bmqu::BlobPosition& offset,
                  int                       length) BSLS_KEYWORD_OVERRIDE
     {
         return markDone();
     }
 
     Offset write(const bdlbb::Blob&       entry,
-                 const mwcu::BlobSection& section) BSLS_KEYWORD_OVERRIDE
+                 const bmqu::BlobSection& section) BSLS_KEYWORD_OVERRIDE
     {
         return markDone();
     }
@@ -202,19 +202,20 @@ static void test1_log_protocol()
 //   PROTOCOL TEST
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("LOG");
+    bmqtst::TestHelper::printTestName("LOG");
 
     PV("Creating a test object");
-    bsls::ProtocolTest<LogTestImp> testObj(s_verbosityLevel > 2);
+    bsls::ProtocolTest<LogTestImp> testObj(
+        bmqtst::TestHelperUtil::verbosityLevel() > 2);
 
     PV("Verify that the protocol is abstract");
-    ASSERT(testObj.testAbstract());
+    BMQTST_ASSERT(testObj.testAbstract());
 
     PV("Verify that there are no data members");
-    ASSERT(testObj.testNoDataMembers());
+    BMQTST_ASSERT(testObj.testNoDataMembers());
 
     PV("Verify that the destructor is virtual");
-    ASSERT(testObj.testVirtualDestructor());
+    BMQTST_ASSERT(testObj.testVirtualDestructor());
 }
 
 // ============================================================================
@@ -223,18 +224,18 @@ static void test1_log_protocol()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
     case 1: test1_log_protocol(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }
 
 #if defined(BSLS_PLATFORM_CMP_CLANG)

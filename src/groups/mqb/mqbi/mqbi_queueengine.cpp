@@ -17,8 +17,12 @@
 #include <mqbi_queueengine.h>
 
 #include <mqbscm_version.h>
+
 // BMQ
 #include <bmqp_queueid.h>
+
+// BDE
+#include <bsla_annotations.h>
 
 namespace BloombergLP {
 namespace mqbi {
@@ -36,16 +40,39 @@ QueueEngine::~QueueEngine()
 }
 
 void QueueEngine::afterAppIdRegistered(
-    BSLS_ANNOTATION_UNUSED const mqbi::Storage::AppIdKeyPair& appIdKeyPair)
+    BSLS_ANNOTATION_UNUSED const mqbi::Storage::AppInfos& addedAppIds)
 {
     // NOTHING
 }
 
 void QueueEngine::afterAppIdUnregistered(
-    BSLS_ANNOTATION_UNUSED const mqbi::Storage::AppIdKeyPair& appIdKeyPair)
+    BSLS_ANNOTATION_UNUSED const mqbi::Storage::AppInfos& removedAppIds)
 {
     // NOTHING
 }
+
+void QueueEngine::registerStorage(
+    BSLS_ANNOTATION_UNUSED const bsl::string& appId,
+    BSLS_ANNOTATION_UNUSED const mqbu::StorageKey& appKey,
+    BSLS_ANNOTATION_UNUSED unsigned int            appOrdinal)
+{
+    // NOTHING
+}
+
+void QueueEngine::unregisterStorage(
+    BSLS_ANNOTATION_UNUSED const bsl::string& appId,
+    BSLS_ANNOTATION_UNUSED const mqbu::StorageKey& appKey,
+    BSLS_ANNOTATION_UNUSED unsigned int            appOrdinal)
+{
+    // NOTHING
+}
+
+bsl::ostream& QueueEngine::logAppSubscriptionInfo(
+    bsl::ostream&           stream,
+    BSLA_MAYBE_UNUSED const bsl::string& appId) const
+{
+    return stream;
+};
 
 }  // close package namespace
 }  // close enterprise namespace

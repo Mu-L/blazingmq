@@ -17,35 +17,32 @@
 #ifndef INCLUDED_MQBBLP_REMOTEQUEUE
 #define INCLUDED_MQBBLP_REMOTEQUEUE
 
-//@PURPOSE: Provide a queue implementation for a remotely managed queue.
-//
-//@CLASSES:
-//  mqbblp::RemoteQueue:
-//
-//@DESCRIPTION:
-//
-/// Thread Safety
-///-------------
-//
+/// @file mqbblp_remotequeue.h
+///
+/// @brief Provide a queue implementation for a remotely managed queue.
+///
+/// @todo Document component.
+///
+/// Thread Safety                                  {#mqbblp_remotequeue_thread}
+/// =============
+///
 
 // MQB
-#include <mqbcfg_messages.h>
-
 #include <mqbblp_queuehandlecatalog.h>
 #include <mqbblp_queuestate.h>
 #include <mqbblp_relayqueueengine.h>
+#include <mqbcfg_messages.h>
 #include <mqbi_dispatcher.h>
 #include <mqbi_queue.h>
 #include <mqbs_virtualstoragecatalog.h>
 
-#include <mwcu_atomicstate.h>
 // BMQ
+#include <bmqc_orderedhashmap.h>
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_optionsview.h>
 #include <bmqp_protocol.h>
-
-// MWC
-#include <mwcc_orderedhashmap.h>
+#include <bmqu_atomicstate.h>
+#include <bmqu_sharedresource.h>
 
 // BDE
 #include <ball_log.h>
@@ -80,6 +77,7 @@ namespace mqbblp {
 // class RemoteQueue
 // =================
 
+/// @todo Document class.
 class RemoteQueue {
   public:
     // PUBLIC TYPES
@@ -95,9 +93,9 @@ class RemoteQueue {
         ConfirmsVisitor;
 
     typedef bdlcc::SharedObjectPool<
-        mwcu::AtomicState,
+        bmqu::AtomicState,
         bdlcc::ObjectPoolFunctors::DefaultCreator,
-        bdlcc::ObjectPoolFunctors::Reset<mwcu::AtomicState> >
+        bdlcc::ObjectPoolFunctors::Reset<bmqu::AtomicState> >
         StateSpPool;
 
   private:
@@ -111,18 +109,16 @@ class RemoteQueue {
         const bmqp::PutHeader        d_header;
         bsl::shared_ptr<bdlbb::Blob> d_appData;
         bsl::shared_ptr<bdlbb::Blob> d_options;
-        const bsls::Types::Int64     d_timeReceived;
-        // Insertion time.  Do not
-        // retransmit past 'deduplication'
-        // timeout.
-        bsl::shared_ptr<mwcu::AtomicState> d_state_sp;
+        /// Insertion time.  Do not retransmit past `deduplication` timeout.
+        const bsls::Types::Int64           d_timeReceived;
+        bsl::shared_ptr<bmqu::AtomicState> d_state_sp;
 
         PutMessage(mqbi::QueueHandle*                  handle,
                    const bmqp::PutHeader&              header,
                    const bsl::shared_ptr<bdlbb::Blob>& appData,
                    const bsl::shared_ptr<bdlbb::Blob>& options,
                    bsls::Types::Int64                  time,
-                   bsl::shared_ptr<mwcu::AtomicState>& state);
+                   bsl::shared_ptr<bmqu::AtomicState>& state);
 
         ~PutMessage();
     };
@@ -139,19 +135,20 @@ class RemoteQueue {
 
     struct SubStreamContext {
         enum Enum {
-            e_NONE = 0  // Unknown
-            ,
-            e_CLOSED = 1  // Drop
-            ,
-            e_STOPPED = 2  // Buffer PUTs and CONFIRMs
-            ,
-            e_OPENED = 3  // Send
+            /// Unknown.
+            e_NONE = 0,
+            /// Drop.
+            e_CLOSED = 1,
+            /// Buffer PUTs and CONFIRMs.
+            e_STOPPED = 2,
+            /// Send.
+            e_OPENED = 3,
         };
+        /// Last seen genCount
         bsls::Types::Uint64 d_genCount;
-        // Last seen genCount
 
+        /// Traffic control
         Enum d_state;
-        // Traffic control
 
         SubStreamContext();
 
@@ -160,7 +157,7 @@ class RemoteQueue {
 
     /// Must be a container in which iteration order is same as insertion
     /// order.
-    typedef mwcc::OrderedHashMap<bmqt::MessageGUID,
+    typedef bmqc::OrderedHashMap<bmqt::MessageGUID,
                                  PutMessage,
                                  bslh::Hash<bmqt::MessageGUIDHashAlgo> >
         Puts;
@@ -173,7 +170,7 @@ class RemoteQueue {
     ///  1.  Opened and with an available upstream.  Send.
     ///  2.  Opened and without an available upstream.  Buffer.
     ///  3.  Not opened.  Drop.
-    typedef mwcc::Array<SubStreamContext,
+    typedef bmqc::Array<SubStreamContext,
                         bmqp::Protocol::k_SUBID_ARRAY_STATIC_LEN>
         SubQueueIds;
 
@@ -185,78 +182,68 @@ class RemoteQueue {
 
   private:
     // DATA
+    bmqu::SharedResource<RemoteQueue> d_self;
+
     QueueState* d_state_p;
 
     bslma::ManagedPtr<RelayQueueEngine> d_queueEngine_mp;
 
+    /// Map of GUID->Item, to use for ACKs/NACKs and retransmissions.
     Puts d_pendingMessages;
-    // Map of GUID->Item, to use for
-    // ACKs/NACKs and retransmissions
 
     Confirms d_pendingConfirms;
 
+    /// List of messages that need to be delivered to sub-streams, as indicated
+    /// by the upstream node.
     SubStreamMessagesMp d_subStreamMessages_mp;
-    // List of messages that need to be
-    // delivered to sub-streams, as
-    // indicated by the upstream node.
 
+    /// Used to parse options in a message received from upstream.
     bmqp::OptionsView d_optionsView;
-    // Used to parse options in a
-    // message received from upstream.
 
+    /// ThrottledAction parameters for failed puts
     bdlmt::Throttle d_throttledFailedPutMessages;
-    // ThrottledAction parameters for
-    // failed puts
 
+    /// ThrottledAction parameters for failed pushes
     bdlmt::Throttle d_throttledFailedPushMessages;
-    // ThrottledAction parameters for
-    // failed pushes
 
+    /// ThrottledAction parameters for failed acks
     bdlmt::Throttle d_throttledFailedAckMessages;
-    // ThrottledAction parameters for
-    // failed acks
 
+    /// ThrottledAction parameters for failed confirms
     bdlmt::Throttle d_throttledFailedConfirmMessages;
-    // ThrottledAction parameters for
-    // failed confirms
 
+    /// Configured timeout in ns upon which retransmission attempts stop. Must
+    /// be Less or equal to the deduplication timeout.
     bsls::Types::Int64 d_pendingPutsTimeoutNs;
-    // Configured timeout in ns upon
-    // which retransmission attempts
-    // stop. Must be Less or equal to
-    // the deduplication timeout.
 
-    bdlmt::EventScheduler* d_scheduler_p;
-    // Pointer, held not owned, to the
-    // scheduler to use for pending
-    // expiration and message
-    // throttling.
-
+    /// Broadcast PUT can be retransmitted if it is guaranteed that the PUT did
+    /// not make it to the primary.  That condition is indicated by
+    /// `e_NOT_READY` NACK. To preserve order when retransmitting, broadcast
+    /// PUTs are cached in d_pendingMessages (GUIDs only).  Since there is no
+    /// e_SUCCESS ACK in the broadcast mode, erasing pending PUTs is done in
+    /// batches.  For every `d_ackWindowSize` broadcast, artificially set
+    /// `e_ACK_REQUESTED` flag and once (N)ACK is received, erase the PUT and
+    /// all prior PUTs.
     bdlmt::EventScheduler::EventHandle d_pendingMessagesTimerEventHandle;
 
-    // Broadcast PUT can be retransmitted if it is guaranteed that the PUT did
-    // not make it to the primary.  That condition is indicated by e_NOT_READY
-    // NACK. To preserve order when retransmitting, broadcast PUTs are cached
-    // in d_pendingMessages (GUIDs only).  Since there is no e_SUCCESS ACK in
-    // the broadcast mode, erasing pending PUTs is done in batches.  For every
-    // 'd_ackWindowSize' broadcast, artificially set 'e_ACK_REQUESTED' flag and
-    // once (N)ACK is received, erase the PUT and all prior PUTs.
+    /// Request ACK after `d_ackWindowSize` unacked broadcast PUTs.
     int d_ackWindowSize;
-    // Request ACK after
-    // 'd_ackWindowSize' unacked
-    // broadcast PUTs.
 
+    /// Counter of unacked broadcast PUTs in the current window.
     int d_unackedPutCounter;
-    // Counter of unacked broadcast
-    // PUTs in the current window.
 
+    /// SubStream states.
     SubQueueIds d_subStreams;
-    // SubStream states.
 
     StateSpPool* d_statePool_p;
 
+    /// To discern consumer and producer which share the same
+    /// `k_DEFAULT_SUBQUEUE_ID` in the priority mode.
+    SubStreamContext d_producerState;
+
+    /// Allocator to use.
     bslma::Allocator* d_allocator_p;
-    // Allocator to use
+
   private:
     // PRIVATE MANIPULATORS
     int configureAsProxy(bsl::ostream& errorDescription, bool isReconfigure);
@@ -304,7 +291,7 @@ class RemoteQueue {
     void sendPutMessage(const bmqp::PutHeader&                    putHeader,
                         const bsl::shared_ptr<bdlbb::Blob>&       appData,
                         const bsl::shared_ptr<bdlbb::Blob>&       options,
-                        const bsl::shared_ptr<mwcu::AtomicState>& state,
+                        const bsl::shared_ptr<bmqu::AtomicState>& state,
                         bsls::Types::Uint64                       genCount);
 
     void sendConfirmMessage(const bmqt::MessageGUID& msgGUID,
@@ -318,7 +305,8 @@ class RemoteQueue {
                 const bsl::shared_ptr<bdlbb::Blob>&  appData,
                 const bsl::shared_ptr<bdlbb::Blob>&  options,
                 const bmqp::MessagePropertiesInfo&   messagePropertiesInfo,
-                bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType);
+                bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType,
+                bool                                 isOutOfOrder);
 
     SubStreamContext& subStreamContext(unsigned int upstreamSubQueueId);
 
@@ -453,10 +441,13 @@ class RemoteQueue {
     /// and current upstream `genCount`, then the PUT message gets dropped
     /// to avoid out of order PUTs.  If the `upstreamSubQueueId` is
     /// `k_ANY_SUBQUEUE_ID`, all SubQueues are reopen.
+    /// If the optionally specified isWriterOnly is true, ignore CONFIRMs. This
+    /// should be specified if the upstream is stopping.
     ///
     /// THREAD: This method is called from the Queue's dispatcher thread.
     void onOpenUpstream(bsls::Types::Uint64 genCount,
-                        unsigned int        upstreamSubQueueId);
+                        unsigned int        upstreamSubQueueId,
+                        bool                isWriterOnly = false);
 
     /// Notify the (remote) queue about reopen failure.  The queue NACKs all
     /// pending and incoming PUTs and drops CONFIRMs related to to the
@@ -466,17 +457,15 @@ class RemoteQueue {
     /// THREAD: This method is called from the Queue's dispatcher thread.
     void onOpenFailure(unsigned int upstreamSubQueueId);
 
+    /// Return the event scheduler associated with this remote queue.
+    bdlmt::EventScheduler* scheduler();
+
     // ACCESSORS
 
     /// Load into the specified `out` object the internal details about this
     /// queue.
-    void loadInternals(mqbcmd::RemoteQueue* out) const;
-
-    /// Return the event scheduler associated with this remote queue.
-    bdlmt::EventScheduler* scheduler();
-
-    /// Set this remote queue's event scheduler.
-    void setEventScheduler(bdlmt::EventScheduler* scheduler);
+    void                     loadInternals(mqbcmd::RemoteQueue* out) const;
+    const bmqt::MessageGUID& resumePoint() const;
 };
 
 // ============================================================================
@@ -519,7 +508,7 @@ inline RemoteQueue::PutMessage::PutMessage(
     const bsl::shared_ptr<bdlbb::Blob>& appData,
     const bsl::shared_ptr<bdlbb::Blob>& options,
     bsls::Types::Int64                  time,
-    bsl::shared_ptr<mwcu::AtomicState>& state)
+    bsl::shared_ptr<bmqu::AtomicState>& state)
 : d_handle(handle)
 , d_header(header)
 , d_appData(appData)
@@ -568,12 +557,7 @@ RemoteQueue::subStreamContext(unsigned int upstreamSubQueueId)
 
 inline bdlmt::EventScheduler* RemoteQueue::scheduler()
 {
-    return d_scheduler_p;
-}
-
-inline void RemoteQueue::setEventScheduler(bdlmt::EventScheduler* scheduler)
-{
-    d_scheduler_p = scheduler;
+    return d_state_p->scheduler();
 }
 
 }  // close package namespace

@@ -28,7 +28,7 @@
 //@DESCRIPTION: 'mqbnet::TCPSessionFactory' is a mechanism allowing to listen
 // to, or establish connection with a remote peer over a TCP connection.  This
 // component allows to establish TCP channels with remote peers, and uses the
-// provided 'mqbnet::Negotiator' to convert a 'mwcio::Channel' to an
+// provided 'mqbnet::Negotiator' to convert a 'bmqio::Channel' to an
 // 'mqbnet::Session': a session is a negotiated channel decorated inside an
 // associated session object.  The 'TCPSessionFactory' owns the sessions having
 // been created.  'mqbnet::TCPSessionFactoryIterator' provides thread safe
@@ -83,16 +83,16 @@
 #include <mqbnet_negotiator.h>
 #include <mqbstat_statcontroller.h>
 
-// MWC
-#include <mwcex_sequentialcontext.h>
-#include <mwcio_channel.h>
-#include <mwcio_channelfactory.h>
-#include <mwcio_reconnectingchannelfactory.h>
-#include <mwcio_resolvingchannelfactory.h>
-#include <mwcio_statchannelfactory.h>
-#include <mwcio_status.h>
-#include <mwcst_statcontext.h>
-#include <mwcu_sharedresource.h>
+#include <bmqex_sequentialcontext.h>
+#include <bmqio_channel.h>
+#include <bmqio_channelfactory.h>
+#include <bmqio_reconnectingchannelfactory.h>
+#include <bmqio_resolvingchannelfactory.h>
+#include <bmqio_statchannelfactory.h>
+#include <bmqio_status.h>
+#include <bmqp_heartbeatmonitor.h>
+#include <bmqst_statcontext.h>
+#include <bmqu_sharedresource.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -137,6 +137,9 @@ class TCPSessionFactory {
     /// Name of a property set on the channel representing the peer's IP.
     static const char* k_CHANNEL_PROPERTY_PEER_IP;
 
+    /// Name of a property set on the channel representing the local port.
+    static const char* k_CHANNEL_PROPERTY_LOCAL_PORT;
+
     /// Name of a property set on the channel representing the BTE channel
     /// id.
     static const char* k_CHANNEL_PROPERTY_CHANNEL_ID;
@@ -161,12 +164,12 @@ class TCPSessionFactory {
     /// specified cluster name (as in the case of Client connection), the
     /// `cluster` is 0.  The callback returns `true` upon successful
     /// registration / read enabling; `false` otherwise.
-    typedef bsl::function<bool(mwcio::ChannelFactoryEvent::Enum    event,
-                               const mwcio::Status&                status,
+    typedef bsl::function<bool(bmqio::ChannelFactoryEvent::Enum    event,
+                               const bmqio::Status&                status,
                                const bsl::shared_ptr<Session>&     session,
                                Cluster*                            cluster,
                                void*                               resultState,
-                               const mwcio::Channel::ReadCallback& readCb)>
+                               const bmqio::Channel::ReadCallback& readCb)>
         ResultCallback;
 
   private:
@@ -174,7 +177,7 @@ class TCPSessionFactory {
 
     /// Struct holding internal data associated to an active channel
     struct ChannelInfo {
-        mwcio::Channel* d_channel_p;
+        bmqio::Channel* d_channel_p;
         // The channel
 
         bsl::shared_ptr<Session> d_session_sp;
@@ -184,60 +187,80 @@ class TCPSessionFactory {
         // The event processor of Events received on
         // this channel.
 
-        bsls::AtomicInt d_packetReceived;
-        // Used by smart-heartbeat to detect whether
-        // a heartbeat needs to be sent and if
-        // channel is stale.  Written (to 1) by the
-        // IO thread when receiving a packet, read
-        // and reset (to 0) from the heartbeat event
-        // in scheduler thread, hence an atomic
-        // (however, using the 'relaxed' memory
-        // model because we dont need strong
-        // ordering guarantees).
+        bmqp::HeartbeatMonitor d_monitor;
 
-        char d_maxMissedHeartbeat;
-        // If non-zero, enable smart-heartbeat and
-        // specify that this channel should be
-        // proactively resetted if no data has been
-        // received from this channel for the
-        // 'maxMissedHeartbeat' number of heartbeat
-        // intervals.  When enabled, heartbeat
-        // requests will be sent if no 'regular'
-        // data is being received.
+        explicit ChannelInfo(const bsl::shared_ptr<bmqio::Channel>& channel,
+                             const NegotiatorContext&               context,
+                             int initialMissedHeartbeatCounter,
+                             const bsl::shared_ptr<Session>& monitoredSession);
+    };
 
-        char d_missedHeartbeatCounter;
-        // Counter of how many of the last
-        // consecutive 'heartbeat' check events
-        // fired with no data received on the
-        // channel.  This variable is entirely and
-        // solely managed from within the event
-        // scheduler thread.
+    /// This class provides mechanism to store a map of port stat contexts.
+    class PortManager {
+      public:
+        // PUBLIC TYPES
+        struct PortContext {
+            bsl::shared_ptr<bmqst::StatContext> d_portContext;
+            bsl::size_t                         d_numChannels;
+        };
+        typedef bsl::unordered_map<bsl::uint16_t, PortContext> PortMap;
+
+      private:
+        // PRIVATE DATA
+
+        /// A map of all ports
+        PortMap d_portMap;
+
+        /// Allocator to use
+        bslma::Allocator* d_allocator_p;
+
+      public:
+        // CREATORS
+        explicit PortManager(bslma::Allocator* allocator = 0);
+
+        // PUBLIC METHODS
+        /// Create a sub context of the specified 'parent' with the specified
+        /// 'endpoint' as the StatContext's name. Increases the number of
+        /// channels on the specified 'port'.
+        bslma::ManagedPtr<bmqst::StatContext>
+        addChannelContext(bmqst::StatContext* parent,
+                          const bsl::string&  endpoint,
+                          bsl::uint16_t       port);
+
+        /// Handle the deletion of a StatContext associated with a channel
+        /// connected to the specified 'port'.
+        void onDeleteChannelContext(bsl::uint16_t port);
     };
 
     typedef bsl::shared_ptr<ChannelInfo> ChannelInfoSp;
 
     /// Map associating a `Channel` to its corresponding `ChannelInfo` (as
     /// shared_ptr because of the atomicInt which has no copy constructor).
-    typedef bsl::unordered_map<mwcio::Channel*, ChannelInfoSp> ChannelMap;
+    typedef bsl::unordered_map<bmqio::Channel*, ChannelInfoSp> ChannelMap;
 
-    /// Shortcut for a managedPtr to the `mwcio::TCPChannelFactory`
-    typedef bslma::ManagedPtr<mwcio::ChannelFactory> TCPChannelFactoryMp;
+    /// Shortcut for a managedPtr to the `bmqio::TCPChannelFactory`
+    typedef bslma::ManagedPtr<bmqio::ChannelFactory> TCPChannelFactoryMp;
 
-    typedef bslma::ManagedPtr<mwcio::ResolvingChannelFactory>
+    typedef bslma::ManagedPtr<bmqio::ResolvingChannelFactory>
         ResolvingChannelFactoryMp;
 
-    typedef bslma::ManagedPtr<mwcio::ReconnectingChannelFactory>
+    typedef bslma::ManagedPtr<bmqio::ReconnectingChannelFactory>
         ReconnectingChannelFactoryMp;
 
-    typedef bslma::ManagedPtr<mwcio::StatChannelFactory> StatChannelFactoryMp;
+    typedef bslma::ManagedPtr<bmqio::StatChannelFactory> StatChannelFactoryMp;
 
     typedef TCPSessionFactory_OperationContext OperationContext;
 
-    typedef bslma::ManagedPtr<mwcio::ChannelFactory::OpHandle> OpHandleMp;
+    typedef bsl::shared_ptr<bmqio::ChannelFactory::OpHandle> OpHandleSp;
+
+    typedef bsl::unordered_map<bmqio::Channel*, bsls::Types::Int64>
+        TimestampMap;
+
+    typedef bsl::unordered_map<int, OpHandleSp> ListeningHandleMap;
 
   private:
     // DATA
-    mwcu::SharedResource<TCPSessionFactory> d_self;
+    bmqu::SharedResource<TCPSessionFactory> d_self;
     // Used to make sure no callback
     // is invoked on a destroyed
     // object.
@@ -246,9 +269,8 @@ class TCPSessionFactory {
     // Has this component been
     // started ?
 
+    /// Config to use for setting up this SessionFactory
     mqbcfg::TcpInterfaceConfig d_config;
-    // Config to use for setting up
-    // this SessionFactory
 
     bdlmt::EventScheduler* d_scheduler_p;
     // Event scheduler held not owned
@@ -269,7 +291,7 @@ class TCPSessionFactory {
     TCPChannelFactoryMp d_tcpChannelFactory_mp;
     // ChannelFactory
 
-    mwcex::SequentialContext d_resolutionContext;
+    bmqex::SequentialContext d_resolutionContext;
     // Executor context used for
     // performing DNS resolution
 
@@ -319,6 +341,9 @@ class TCPSessionFactory {
     ChannelMap d_channels;
     // Map of all active channels
 
+    PortManager d_ports;
+    // Manager of all open ports
+
     bool d_heartbeatSchedulerActive;
     // True if the recurring
     // heartbeat check event is
@@ -330,22 +355,20 @@ class TCPSessionFactory {
     // heartbeat monitor the
     // channels.
 
-    bsl::unordered_map<mwcio::Channel*, ChannelInfo*> d_heartbeatChannels;
+    bsl::unordered_map<bmqio::Channel*, ChannelInfo*> d_heartbeatChannels;
     // Map of all channels which are
     // heartbeat enabled; only
     // manipulated from the event
     // scheduler thread.
 
-    const char d_initialMissedHeartbeatCounter;
+    const int d_initialMissedHeartbeatCounter;
     // Value for initializing
     // 'ChannelInfo.d_missedHeartbeatCounter'.
     // See comments in
     // 'calculateInitialMissedHbCounter'.
 
-    OpHandleMp d_listeningHandle_mp;
-    // Handle which can be used to
-    // stop listening.  Empty unless
-    // listening.
+    /// Handles that can be used to stop listening. Empty unless listening.
+    ListeningHandleMap d_listeningHandles;
 
     bsls::AtomicBool d_isListening;
     // Set to 'true' before calling
@@ -356,15 +379,15 @@ class TCPSessionFactory {
     // Mutex for thread safety of
     // this component.
 
-    bslma::ManagedPtr<void> d_listenContext_mp;
-    // Maintain ownership of
-    // 'OperationContext' instead of
-    //  passing it to
-    // 'ChannelFactory::listen'
-    // because it may delete the
-    // context (on stopListening)
-    // while operation (readCallback/
-    // negotiation) is in progress.
+    // Maintain ownership of 'OperationContext' instead of passing it to
+    // 'ChannelFactory::listen' because it may delete the context (on
+    // stopListening) while operation (readCallback/ negotiation) is in
+    // progress.
+    bsl::unordered_map<int, bsl::shared_ptr<OperationContext> >
+        d_listenContexts;
+
+    TimestampMap d_timestampMap;
+    // Map of HiRes timestamp of the session beginning per channel.
 
     bslma::Allocator* d_allocator_p;
     // Allocator to use
@@ -374,13 +397,13 @@ class TCPSessionFactory {
 
     /// Create and return the statContext to be used for tracking stats of
     /// the specified `channel` obtained from the specified `handle`.
-    bslma::ManagedPtr<mwcst::StatContext> channelStatContextCreator(
-        const bsl::shared_ptr<mwcio::Channel>&                  channel,
-        const bsl::shared_ptr<mwcio::StatChannelFactoryHandle>& handle);
+    bslma::ManagedPtr<bmqst::StatContext> channelStatContextCreator(
+        const bsl::shared_ptr<bmqio::Channel>&                  channel,
+        const bsl::shared_ptr<bmqio::StatChannelFactoryHandle>& handle);
 
     /// Asynchronously negotiate on the specified `channel` using the
     /// specified `context`.
-    void negotiate(const bsl::shared_ptr<mwcio::Channel>&   channel,
+    void negotiate(const bsl::shared_ptr<bmqio::Channel>&   channel,
                    const bsl::shared_ptr<OperationContext>& context);
 
     // PRIVATE MANIPULATORS
@@ -394,7 +417,7 @@ class TCPSessionFactory {
     /// member of `channelInfo` with the event.  Note that once the channel
     /// onClose event has been fired, `channelInfo` will be dangling and
     /// should not be accessed.
-    void readCallback(const mwcio::Status& status,
+    void readCallback(const bmqio::Status& status,
                       int*                 numNeeded,
                       bdlbb::Blob*         blob,
                       ChannelInfo*         channelInfo);
@@ -417,7 +440,7 @@ class TCPSessionFactory {
         int                                       statusCode,
         const bsl::string&                        errorDescription,
         const bsl::shared_ptr<Session>&           session,
-        const bsl::shared_ptr<mwcio::Channel>&    channel,
+        const bsl::shared_ptr<bmqio::Channel>&    channel,
         const bsl::shared_ptr<OperationContext>&  context,
         const bsl::shared_ptr<NegotiatorContext>& negotiatorContext);
 
@@ -437,9 +460,9 @@ class TCPSessionFactory {
     /// associated with the `listen` or `connect` associated with the
     /// invocation.  The specified `channel` is provided on `e_CHANNEL_UP`.
     void
-    channelStateCallback(mwcio::ChannelFactoryEvent::Enum         event,
-                         const mwcio::Status&                     status,
-                         const bsl::shared_ptr<mwcio::Channel>&   channel,
+    channelStateCallback(bmqio::ChannelFactoryEvent::Enum         event,
+                         const bmqio::Status&                     status,
+                         const bsl::shared_ptr<bmqio::Channel>&   channel,
                          const bsl::shared_ptr<OperationContext>& context);
 
     // PRIVATE MANIPULATORS
@@ -449,8 +472,8 @@ class TCPSessionFactory {
     /// the channel's status, `userData` corresponding to the one provided
     /// when calling `addObserver` to register this object as observer of
     /// the channel.
-    virtual void onClose(const bsl::shared_ptr<mwcio::Channel>& channel,
-                         const mwcio::Status&                   status);
+    virtual void onClose(const bsl::shared_ptr<bmqio::Channel>& channel,
+                         const bmqio::Status&                   status);
 
     /// Reccuring scheduler event to check for all `heartbeat-enabled`
     /// channels : this will send a heartbeat if no data has been received
@@ -467,6 +490,24 @@ class TCPSessionFactory {
     /// guarantee thread safety and that the object is still alive until the
     /// event scheduler processes it.
     void disableHeartbeat(const bsl::shared_ptr<ChannelInfo>& channelInfo);
+
+    /// Log open session time for the specified `sessionDescription` and
+    /// `channel`, using the stored begin
+    /// timestamp. After logging, begin timestamp is removed from
+    /// timestamps map.
+    void logOpenSessionTime(const bsl::string& sessionDescription,
+                            const bsl::shared_ptr<bmqio::Channel>& channel);
+    /// @brief Check that the TCP interfaces are valid.
+    ///
+    /// We require the following:
+    /// - The name of each listener interface is unique
+    /// - The port of each listener interface is unqiue
+    ///
+    /// @returns 0 on success, nonzero on failure.
+    int validateTcpInterfaces() const;
+
+    /// Cancel any open listener operations and clear them out.
+    void cancelListeners();
 
   private:
     // NOT IMPLEMENTED
@@ -525,10 +566,11 @@ class TCPSessionFactory {
     /// deleted.
     void closeClients();
 
-    /// Listen to the specified `port` for incoming connection and invoke
-    /// the specified `resultCallback` when a connection has been
-    /// negotiated.  Return 0 on success, or non-zero on error.
-    int listen(int port, const ResultCallback& resultCallback);
+    /// Create a new listener interface specified by  `listener` for incoming
+    /// connections and invoke the specified `resultCallback` when a connection
+    /// has been negotiated. Return 0 on success, or non-zero on error.
+    int listen(const mqbcfg::TcpInterfaceListener& listener,
+               const ResultCallback&               resultCallback);
 
     /// Initiate a connection to the specified `endpoint` and return 0 if
     /// the connection has successfully been started; with the result being

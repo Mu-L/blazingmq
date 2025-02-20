@@ -38,9 +38,8 @@
 #include <bmqp_storagemessageiterator.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcu_blob.h>
-#include <mwcu_blobobjectproxy.h>
+#include <bmqu_blob.h>
+#include <bmqu_blobobjectproxy.h>
 
 // BDE
 #include <ball_log.h>
@@ -51,6 +50,7 @@
 #include <bsl_unordered_map.h>
 #include <bsl_unordered_set.h>
 #include <bsl_utility.h>
+#include <bsl_vector.h>
 #include <bsls_types.h>
 
 namespace BloombergLP {
@@ -136,8 +136,8 @@ struct StorageUtil {
     /// the specified `stroageEvent`.  Return 0 on success and non-zero code
     /// on error.  Use the specified `partitionDesc` for logging.
     static int loadRecordHeaderAndPos(
-        mwcu::BlobObjectProxy<mqbs::RecordHeader>* recordHeader,
-        mwcu::BlobPosition*                        recordPosition,
+        bmqu::BlobObjectProxy<mqbs::RecordHeader>* recordHeader,
+        bmqu::BlobPosition*                        recordPosition,
         const bmqp::StorageMessageIterator&        storageIter,
         const bsl::shared_ptr<bdlbb::Blob>&        stroageEvent,
         const bslstl::StringRef&                   partitionDesc);

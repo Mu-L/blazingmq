@@ -17,105 +17,110 @@
 #ifndef INCLUDED_BMQT_SESSIONOPTIONS
 #define INCLUDED_BMQT_SESSIONOPTIONS
 
-//@PURPOSE: Provide a value-semantic type to configure session with the broker.
-//
-//@CLASSES: bmqt::SessionOptions: options to configure a session with a
-//  BlazingMQ broker.
-//
-//@DESCRIPTION: 'bmqt::SessionOptions' provides a value-semantic type,
-// 'SessionOptions', which is used to specify session-level configuration
-// parameters.
-//
-// Most applications should not need to change the parameters for creating a
-// 'Session'; the default parameters are fine.
-//
-// The following parameters are supported:
-//: o !brokerUri!:
-//:      Address of the broker to connect to. Default is to connect to the
-//:      broker on the local host on the default port (30114).  The format is
-//:      'tcp://<host>:port'.  Host can be:
-//:      o an explicit hostname or 'localhost'
-//:      o an ip, example 10.11.12.13
-//:      o a DNS entry.  In this case, the client will resolve the list of
-//:        addresses from that entry, and try to connect to one of them.
-//:        When the connection with the host goes down, it will automatically
-//:        immediately failover and reconnects to another entry from the
-//:        address list.
-//:      If the environment variable 'BMQ_BROKER_URI' is set, then instances of
-//:      'bmqa::Session' will ignore the 'brokerUri' field from the provided
-//:      'SessionOptions' and use the value from this environment variable
-//:      instead.
-//:
-//: o !processNameOverride!:
-//:      If not empty, use this value for the processName in the identity
-//:      message (useful for scripted language bindings).  This field is used
-//:      in the broker's logs to more easily identify the client's process.
-//:
-//: o !numProcessingThreads!:
-//:      Number of threads to use for processing events. Default is 1. Note
-//:      that this setting has an effect only if providing a
-//:      'SessionEventHandler' to the session.
-//:
-//: o !blobBufferSize!:
-//:      Size (in bytes) of the blob buffers to use. Default value is 4k.
-//:
-//: o !channelHighWatermark!:
-//:      Size (in bytes) to use for write cache high watermark on the
-//:      channel. Default value is 128MB. This value is set on the
-//:      'writeCacheHiWatermark' of the 'btemt_ChannelPoolConfiguration' object
-//:      used by the session with the broker. Note that BlazingMQ reserves 4MB
-//:      of this value for control message, so the actual watermark for data
-//:      published is 'channelHighWatermark - 4MB'.
-//:
-//: o !statsDumpInterval!:
-//:      Interval (in seconds) at which to dump stats in the logs. Set to 0 to
-//:      disable recurring dump of stats (final stats are always dumped at end
-//:      of session). Default is 5min. The value must be a multiple of 30s, in
-//:      the range [0s - 60min].
-//:
-//: o !connectTimeout!,
-//: o !disconnetTimeout!,
-//: o !openQueueTimeout!,
-//: o !configureQueueTimeout!,
-//: o !closeQueueTimeout!,
-//:      Default timeout to use for various operations.
-//:
-//: o !eventQueueLowWatermark!,
-//: o !eventQueueHighWatermark!,
-//:      Parameters to configure the EventQueue notification watermarks
-//:      thresholds. The EventQueue is the buffer of all incoming events from
-//:      the broker (PUSH and ACK messages as well as session and queue
-//:      operations result) pending being processed by the application code.  A
-//:      warning ('bmqt::SessionEventType::e_SLOWCONSUMER_HIGHWATERMARK') is
-//:      emitted when the buffer reaches the 'highWatermark' value, and a
-//:      notification ('bmqt::SessionEventType::e_SLOWCONSUMER_NORMAL') is
-//:      sent when the buffer is back to the 'lowWatermark'. The
-//:      'highWatermark' typically would be reached in case of either a very
-//:      slow consumer, causing events to accumulate in the buffer, or a huge
-//:      burst of data. Setting the 'highWatermark' to a high value should be
-//:      done cautiously because it will potentially hide slowness of the
-//:      consumer because of the enqueuing of PUSH events for a consumer, ACK
-//:      events for a producer as well as all system events to the buffer
-//:      (meaning that the messages may have a huge latency). Note, it is also
-//:      recommended to have a reasonable distance between 'highWatermark' and
-//:      'lowWatermark' values to avoid a constant back and forth toggling of
-//:      state resulting from push pop of events.
-//:
-//: o !hostHealthMonitor!:
-//:      Optional instance of a class derived from 'bmqpi::HostHealthMonitor',
-//:      responsible for notifying the 'Session' when the health of the host
-//:      machine has changed. A 'hostHealthMonitor' must be specified, in order
-//:      for queues opened through the session to suspend on unhealthy hosts.
-//:
-//: o !traceOptions!:
-//:      Provides the `bmqpi::DTContext` and `bmqpi::DTTracer` objects required
-//:      for integration with a Distributed Trace framework. If these objects
-//:      are provided, then the session will use them to create "spans" to
-//:      represent requests made to the BlazingMQ broker on behalf of
-//:      operations initiated by the client. This includes session-level
-//:      operations (e.g., Session-Start, Session-Stop) as well as queue-level
-//:      operations (e.g., Queue-Open, Queue-Configure, Queue-Close).
-//
+/// @file bmqt_sessionoptions.h
+///
+/// @brief Provide a value-semantic type to configure session with the broker.
+///
+///
+/// @bbref{bmqt::SessionOptions} provides a value-semantic type,
+/// `SessionOptions`, which is used to specify session-level configuration
+/// parameters.
+///
+/// Most applications should not need to change the parameters for creating a
+/// @bbref{bmqa::Session}; the default parameters are fine.
+///
+/// The following parameters are supported:
+///
+///   - *brokerUri*:
+///     Address of the broker to connect to. Default is to connect to the
+///     broker on the local host on the default port (30114).  The format is
+///     `tcp://<host>:port`.  Host can be:
+///
+///       * an explicit hostname or `localhost`,
+///
+///       * an IP, example 10.11.12.13, or
+///
+///       * a DNS entry.  In this case, the client will resolve the list of
+///         addresses from that entry, and try to connect to one of them.  When
+///         the connection with the host goes down, it will automatically
+///         immediately failover and reconnects to another entry from the
+///         address list.
+///
+///     If the environment variable `BMQ_BROKER_URI` is set, then instances of
+///     @bbref{bmqa::Session} will ignore the `brokerUri` field from the
+///     provided @bbref{bmqt::SessionOptions} and use the value from this
+///     environment variable instead.
+///
+///   - *processNameOverride*:
+///     If not empty, use this value for the processName in the identity
+///     message (useful for scripted language bindings).  This field is used in
+///     the broker's logs to more easily identify the client's process.
+///
+///   - *numProcessingThreads*:
+///     Number of threads to use for processing events. Default is 1. Note that
+///     this setting has an effect only if providing a
+///     @bbref{bmqa::SessionEventHandler} to the session.
+///
+///   - *blobBufferSize*:
+///      Size (in bytes) of the blob buffers to use. Default value is 4k.
+///
+///   - *channelHighWatermark*:
+///      Size (in bytes) to use for write cache high watermark on the
+///      channel. Default value is 128MB. This value is set on the
+///      `writeCacheHiWatermark` of the `btemt_ChannelPoolConfiguration` object
+///      used by the session with the broker. Note that BlazingMQ reserves 4MB
+///      of this value for control message, so the actual watermark for data
+///      published is `channelHighWatermark - 4MB`.
+///
+///   - *statsDumpInterval*:
+///     Interval (in seconds) at which to dump stats in the logs. Set to 0 to
+///     disable recurring dump of stats (final stats are always dumped at end
+///     of session). Default is 5min. The value must be a multiple of 30s, in
+///     the range [0s - 60min].
+///
+///   - *connectTimeout*,
+///     *disconnectTimeout*,
+///     *openQueueTimeout*,
+///     *configureQueueTimeout*,
+///     *closeQueueTimeout*:
+///     Default timeout to use for various operations.
+///
+///   - *eventQueueLowWatermark*,
+///     *eventQueueHighWatermark*:
+///     Parameters to configure the EventQueue notification watermarks
+///     thresholds. The EventQueue is the buffer of all incoming events from
+///     the broker (PUSH and ACK messages as well as session and queue
+///     operations result) pending being processed by the application code.  A
+///     warning (@bbref{bmqt::SessionEventType::e_SLOWCONSUMER_HIGHWATERMARK})
+///     is emitted when the buffer reaches the `highWatermark` value, and a
+///     notification (@bbref{bmqt::SessionEventType::e_SLOWCONSUMER_NORMAL}) is
+///     sent when the buffer is back to the `lowWatermark`. The `highWatermark`
+///     typically would be reached in case of either a very slow consumer,
+///     causing events to accumulate in the buffer, or a huge burst of
+///     data. Setting the `highWatermark` to a high value should be done
+///     cautiously because it will potentially hide slowness of the consumer
+///     because of the enqueuing of PUSH events for a consumer, ACK events for
+///     a producer as well as all system events to the buffer (meaning that the
+///     messages may have a huge latency). Note, it is also recommended to have
+///     a reasonable distance between `highWatermark` and `lowWatermark` values
+///     to avoid a constant back and forth toggling of state resulting from
+///     push pop of events.
+///
+///   - *hostHealthMonitor*:
+///     Optional instance of a class derived from
+///     @bbref{bmqpi::HostHealthMonitor}, responsible for notifying the
+///     @bbref{bmqa::Session} when the health of the host machine has
+///     changed. A `hostHealthMonitor` must be specified, in order for queues
+///     opened through the session to suspend on unhealthy hosts.
+///
+///   - *traceOptions*:
+///     Provides the @bbref{bmqpi::DTContext} and @bbref{bmqpi::DTTracer}
+///     objects required for integration with a Distributed Trace framework. If
+///     these objects are provided, then the session will use them to create
+///     "spans" to represent requests made to the BlazingMQ broker on behalf of
+///     operations initiated by the client. This includes session-level
+///     operations (e.g., Session-Start, Session-Stop) as well as queue-level
+///     operations (e.g., Queue-Open, Queue-Configure, Queue-Close).
 
 // BMQ
 
@@ -156,45 +161,40 @@ namespace bmqt {
 class SessionOptions {
   public:
     // CONSTANTS
+
+    /// Default URI of the `bmqbrkr` to connect to.
     static const char k_BROKER_DEFAULT_URI[];
-    // Default URI of the 'bmqbrkr' to connect to.
 
+    /// Default port the `bmqbrkr` is listening to for client to connect.
     static const int k_BROKER_DEFAULT_PORT = 30114;
-    // Default port the 'bmqbrkr' is listening to for client
-    // to connect.
 
+    /// The default, and minimum recommended, value for queue operations (open,
+    /// configure, close).
     static const int k_QUEUE_OPERATION_DEFAULT_TIMEOUT =
         5 * bdlt::TimeUnitRatio::k_SECONDS_PER_MINUTE;
-    // The default, and minimum recommended, value for queue
-    // operations (open, configure, close).
 
   private:
     // DATA
+
+    /// URI of the broker to connect to (ex: `tcp://localhost:30114`). Default
+    /// is to connect to the local broker.
     bsl::string d_brokerUri;
-    // URI of the broker to connect to (ex:
-    // 'tcp://localhost:30114').  Default
-    // is to connect to the local broker.
 
+    /// If not empty, use this value for the processName in the identity
+    /// message (useful for scripted language bindings).
     bsl::string d_processNameOverride;
-    // If not empty, use this value for the
-    // processName in the identity message
-    // (useful for scripted language
-    // bindings).
 
+    /// Number of processing threads. Default is 1 thread.
     int d_numProcessingThreads;
-    // Number of processing threads.
-    // Default is 1 thread.
 
+    /// Size of the blobs buffer.
     int d_blobBufferSize;
-    // Size of the blobs buffer.
 
+    /// Write cache high watermark to use on the channel
     bsls::Types::Int64 d_channelHighWatermark;
-    // Write cache high watermark to use on
-    // the channel
 
+    /// Interval at which to dump stats to log file (0 to disable dump)
     bsls::TimeInterval d_statsDumpInterval;
-    // Interval at which to dump stats to
-    // log file (0 to disable dump)
 
     bsls::TimeInterval d_connectTimeout;
 
@@ -204,20 +204,17 @@ class SessionOptions {
 
     bsls::TimeInterval d_configureQueueTimeout;
 
+    /// Timeout for operations of the corresponding type.
     bsls::TimeInterval d_closeQueueTimeout;
-    // Timeout for operations of the
-    // corresponding type.
 
     int d_eventQueueLowWatermark;
 
+    /// Parameters to configure the EventQueue.
     int d_eventQueueHighWatermark;
-    // Parameters to configure the
-    // EventQueue.
 
+    /// DEPRECATED: This parameter is no longer relevant and will be removed in
+    /// future release of libbmq.
     int d_eventQueueSize;
-    // DEPRECATED: This parameter is no
-    // longer relevant and will be removed
-    // in future release of libbmq.
 
     bsl::shared_ptr<bmqpi::HostHealthMonitor> d_hostHealthMonitor_sp;
 
@@ -263,13 +260,21 @@ class SessionOptions {
     /// minutes.
     SessionOptions& setStatsDumpInterval(const bsls::TimeInterval& value);
 
+    /// Set the timeout for connecting to the broker to the specified `value`.
     SessionOptions& setConnectTimeout(const bsls::TimeInterval& value);
+
+    /// Set the timeout for disconnecting from the broker to the specified
+    /// `value`.
     SessionOptions& setDisconnectTimeout(const bsls::TimeInterval& value);
+
+    /// Set the timeout for opening a queue to the specified `value`.
     SessionOptions& setOpenQueueTimeout(const bsls::TimeInterval& value);
+
+    /// Set the timeout for configuring or deconfiguring a queue to the
+    /// specified `value`.
     SessionOptions& setConfigureQueueTimeout(const bsls::TimeInterval& value);
 
-    /// Set the timeout for operations of the corresponding type to the
-    /// specified `value`.
+    /// Set the timeout for closing a queue to the specified `value`.
     SessionOptions& setCloseQueueTimeout(const bsls::TimeInterval& value);
 
     /// Set a `HostHealthMonitor` object that will notify the session when
@@ -319,12 +324,19 @@ class SessionOptions {
     /// Get the stats dump interval.
     const bsls::TimeInterval& statsDumpInterval() const;
 
+    /// Get the timeout for connecting to the broker.
     const bsls::TimeInterval& connectTimeout() const;
+
+    /// Get the timeout for disconnecting from the broker.
     const bsls::TimeInterval& disconnectTimeout() const;
+
+    /// Get the timeout for opening a queue.
     const bsls::TimeInterval& openQueueTimeout() const;
+
+    /// Get the timeout for configuring or disconfiguring a queue.
     const bsls::TimeInterval& configureQueueTimeout() const;
 
-    /// Get the timeout for the operations of the corresponding type.
+    /// Get the timeout for closing a queue.
     const bsls::TimeInterval& closeQueueTimeout() const;
 
     const bsl::shared_ptr<bmqpi::HostHealthMonitor>& hostHealthMonitor() const;

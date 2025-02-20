@@ -16,9 +16,8 @@
 // mqbu_capacitymeter.t.cpp                                           -*-C++-*-
 #include <mqbu_capacitymeter.h>
 
-// MWC
-#include <mwctst_scopedlogobserver.h>
-#include <mwcu_memoutstream.h>
+#include <bmqtst_scopedlogobserver.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <ball_log.h>
@@ -27,11 +26,21 @@
 #include <bsls_types.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
 using namespace bsl;
+
+// ============================================================================
+//                                    HELPERS
+// ----------------------------------------------------------------------------
+
+bsl::ostream& logEnhancedStorageInfoCb(bsl::ostream& stream)
+{
+    stream << "Test enhanced storage Info";
+    return stream;
+}
 
 // ============================================================================
 //                                    TESTS
@@ -50,16 +59,18 @@ static void test1_breathingTest()
 // Testing:
 //   Basic functionality
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     const char* k_NAME = "dummy";
 
-    mqbu::CapacityMeter capacityMeter(k_NAME, s_allocator_p);
+    mqbu::CapacityMeter capacityMeter(k_NAME,
+                                      bmqtst::TestHelperUtil::allocator());
 
-    ASSERT_EQ(capacityMeter.name(), k_NAME);
-    ASSERT_EQ(capacityMeter.messages(), 0);
-    ASSERT_EQ(capacityMeter.bytes(), 0);
-    ASSERT_EQ(capacityMeter.parent(), static_cast<mqbu::CapacityMeter*>(0));
+    BMQTST_ASSERT_EQ(capacityMeter.name(), k_NAME);
+    BMQTST_ASSERT_EQ(capacityMeter.messages(), 0);
+    BMQTST_ASSERT_EQ(capacityMeter.bytes(), 0);
+    BMQTST_ASSERT_EQ(capacityMeter.parent(),
+                     static_cast<mqbu::CapacityMeter*>(0));
 }
 
 static void test2_logStateChange()
@@ -84,9 +95,9 @@ static void test2_logStateChange()
 //   logging
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("LOG STATE CHANGE");
+    bmqtst::TestHelper::printTestName("LOG STATE CHANGE");
 
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // Logging infrastructure allocates using the default allocator, and
     // that logging is beyond the control of this function.
 
@@ -103,9 +114,11 @@ static void test2_logStateChange()
     {
         PV("STATE - NORMAL");
 
-        mwctst::ScopedLogObserver observer(ball::Severity::WARN,
-                                           s_allocator_p);
-        mqbu::CapacityMeter       capacityMeter("dummy", s_allocator_p);
+        bmqtst::ScopedLogObserver observer(
+            ball::Severity::WARN,
+            bmqtst::TestHelperUtil::allocator());
+        mqbu::CapacityMeter capacityMeter("dummy",
+                                          bmqtst::TestHelperUtil::allocator());
         capacityMeter.setLimits(k_MSGS_LIMIT, k_BYTES_LIMIT);
         capacityMeter.setWatermarkThresholds(k_MSGS_THRESHOLD,
                                              k_BYTES_THRESHOLD);
@@ -113,16 +126,18 @@ static void test2_logStateChange()
         capacityMeter.commitUnreserved(k_MSGS_HIGH_WATERMARK_VALUE - 1,
                                        k_BYTES_HIGH_WATERMARK_VALUE - 1);
 
-        ASSERT_EQ(observer.records().empty(), true);
+        BMQTST_ASSERT_EQ(observer.records().empty(), true);
     }
 
     // Set resource to the high watermark, it should log one
     {
         PV("STATE - HIGH WATERMARK");
 
-        mwctst::ScopedLogObserver observer(ball::Severity::WARN,
-                                           s_allocator_p);
-        mqbu::CapacityMeter       capacityMeter("dummy", s_allocator_p);
+        bmqtst::ScopedLogObserver observer(
+            ball::Severity::WARN,
+            bmqtst::TestHelperUtil::allocator());
+        mqbu::CapacityMeter capacityMeter("dummy",
+                                          bmqtst::TestHelperUtil::allocator());
         capacityMeter.setLimits(k_MSGS_LIMIT, k_BYTES_LIMIT);
         capacityMeter.setWatermarkThresholds(k_MSGS_THRESHOLD,
                                              k_BYTES_THRESHOLD);
@@ -136,52 +151,55 @@ static void test2_logStateChange()
         BSLS_ASSERT_OPT(nbMessagesAvailable == k_MSGS_HIGH_WATERMARK_VALUE);
         BSLS_ASSERT_OPT(nbBytesAvailable == 10);
 
-        ASSERT(observer.records().empty());
+        BMQTST_ASSERT(observer.records().empty());
 
         capacityMeter.commit(k_MSGS_HIGH_WATERMARK_VALUE, 10);
 
-        ASSERT_EQ(observer.records().size(), 1U);
+        BMQTST_ASSERT_EQ(observer.records().size(), 1U);
 
         const ball::Record& record = observer.records()[0];
-        ASSERT_EQ(record.fixedFields().severity(), ball::Severity::ERROR);
+        BMQTST_ASSERT_EQ(record.fixedFields().severity(),
+                         ball::Severity::ERROR);
 
-        ASSERT(mwctst::ScopedLogObserverUtil::recordMessageMatch(
+        BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
             record,
             "ALARM \\[CAPACITY_STATE_HIGH_WATERMARK\\]",
-            s_allocator_p));
+            bmqtst::TestHelperUtil::allocator()));
         // This pattern is looked for to generate an alarm
-        ASSERT(mwctst::ScopedLogObserverUtil::recordMessageMatch(
+        BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
             record,
             "dummy.*Messages.*HIGH_WATERMARK",
-            s_allocator_p));
+            bmqtst::TestHelperUtil::allocator()));
     }
 
     // Set resource to 100%, the full capacity, it should log one
     {
         PV("STATE - FULL");
 
-        mwctst::ScopedLogObserver observer(ball::Severity::WARN,
-                                           s_allocator_p);
-        mqbu::CapacityMeter       capacityMeter("dummy", s_allocator_p);
+        bmqtst::ScopedLogObserver observer(
+            ball::Severity::WARN,
+            bmqtst::TestHelperUtil::allocator());
+        mqbu::CapacityMeter capacityMeter("dummy",
+                                          bmqtst::TestHelperUtil::allocator());
         capacityMeter.setLimits(k_MSGS_LIMIT, k_BYTES_LIMIT);
         capacityMeter.setWatermarkThresholds(k_MSGS_THRESHOLD,
                                              k_BYTES_THRESHOLD);
 
         capacityMeter.commitUnreserved(k_MSGS_LIMIT, k_BYTES_LIMIT);
 
-        ASSERT_EQ(observer.records().size(), 1U);
+        BMQTST_ASSERT_EQ(observer.records().size(), 1U);
 
-        ASSERT_EQ(observer.records()[0].fixedFields().severity(),
-                  ball::Severity::ERROR);
-        ASSERT(mwctst::ScopedLogObserverUtil::recordMessageMatch(
+        BMQTST_ASSERT_EQ(observer.records()[0].fixedFields().severity(),
+                         ball::Severity::ERROR);
+        BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
             observer.records()[0],
             "ALARM \\[CAPACITY_STATE_FULL\\]",
-            s_allocator_p));
+            bmqtst::TestHelperUtil::allocator()));
         // This pattern is looked for to generate an alarm
-        ASSERT(mwctst::ScopedLogObserverUtil::recordMessageMatch(
+        BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
             observer.records()[0],
             "dummy.*Messages.*FULL",
-            s_allocator_p));
+            bmqtst::TestHelperUtil::allocator()));
     }
 
     // Set resource to the high watermark, and then to 100%, the full capacity,
@@ -189,9 +207,11 @@ static void test2_logStateChange()
     {
         PV("STATE - HIGH WATERMARK TO FULL");
 
-        mwctst::ScopedLogObserver observer(ball::Severity::WARN,
-                                           s_allocator_p);
-        mqbu::CapacityMeter       capacityMeter("dummy", s_allocator_p);
+        bmqtst::ScopedLogObserver observer(
+            ball::Severity::WARN,
+            bmqtst::TestHelperUtil::allocator());
+        mqbu::CapacityMeter capacityMeter("dummy",
+                                          bmqtst::TestHelperUtil::allocator());
         capacityMeter.setLimits(k_MSGS_LIMIT, k_BYTES_LIMIT);
         capacityMeter.setWatermarkThresholds(k_MSGS_THRESHOLD,
                                              k_BYTES_THRESHOLD);
@@ -199,35 +219,109 @@ static void test2_logStateChange()
         PVV("Commit resources -> High Watermark");
         capacityMeter.commitUnreserved(k_MSGS_HIGH_WATERMARK_VALUE, 10);
 
-        ASSERT_EQ(observer.records().size(), 1U);
+        BMQTST_ASSERT_EQ(observer.records().size(), 1U);
 
-        ASSERT(mwctst::ScopedLogObserverUtil::recordMessageMatch(
+        BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
             observer.records()[0],
             "ALARM \\[CAPACITY_STATE_HIGH_WATERMARK\\]",
-            s_allocator_p));
+            bmqtst::TestHelperUtil::allocator()));
         // This pattern is looked for to generate an alarm
-        ASSERT(mwctst::ScopedLogObserverUtil::recordMessageMatch(
+        BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
             observer.records()[0],
             "dummy.*Messages.*HIGH_WATERMARK",
-            s_allocator_p));
-        ASSERT_EQ(observer.records()[0].fixedFields().severity(),
-                  ball::Severity::ERROR);
+            bmqtst::TestHelperUtil::allocator()));
+        BMQTST_ASSERT_EQ(observer.records()[0].fixedFields().severity(),
+                         ball::Severity::ERROR);
 
         PVV("Commit resources -> Full");
         capacityMeter.commitUnreserved(k_MSGS_LIMIT -
                                            k_MSGS_HIGH_WATERMARK_VALUE,
                                        10);
-        ASSERT_EQ(observer.records().size(), 2U);
-        ASSERT(mwctst::ScopedLogObserverUtil::recordMessageMatch(
+        BMQTST_ASSERT_EQ(observer.records().size(), 2U);
+        BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
             observer.records()[1],
             "ALARM \\[CAPACITY_STATE_FULL\\]",
-            s_allocator_p));
+            bmqtst::TestHelperUtil::allocator()));
         // This pattern is looked for to generate an alarm
-        ASSERT(mwctst::ScopedLogObserverUtil::recordMessageMatch(
+        BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
             observer.records()[1],
             "dummy.*Messages.*FULL",
-            s_allocator_p));
+            bmqtst::TestHelperUtil::allocator()));
     }
+}
+
+static void test3_enhancedLog()
+// ------------------------------------------------------------------------
+// ENHANCED ALARM LOG
+//
+// Concerns:
+//   Ensure that enhanced alarm log is printed if callback is passed.
+//
+// Plan:
+//   1. Pass LogEnhancedStorageInfoCb callback during initialization
+//   2. Set resources to the high watermark and ensure the enhanced
+//      error message was logged.
+//
+// Testing:
+//   logging
+// ------------------------------------------------------------------------
+{
+    bmqtst::TestHelper::printTestName("ENHANCED ALARM LOG");
+
+    // Set resource to the high watermark, it should log one
+    PV("STATE - HIGH WATERMARK");
+
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
+    // Logging infrastructure allocates using the default allocator, and
+    // that logging is beyond the control of this function.
+
+    const bsls::Types::Int64 k_MSGS_LIMIT                = 10;
+    const double             k_MSGS_THRESHOLD            = 0.5;
+    const bsls::Types::Int64 k_MSGS_HIGH_WATERMARK_VALUE = k_MSGS_LIMIT *
+                                                           k_MSGS_THRESHOLD;
+    const bsls::Types::Int64 k_BYTES_LIMIT                = 1024;
+    const double             k_BYTES_THRESHOLD            = 0.8;
+    const bsls::Types::Int64 k_BYTES_HIGH_WATERMARK_VALUE = k_BYTES_LIMIT *
+                                                            k_BYTES_THRESHOLD;
+
+    bmqtst::ScopedLogObserver observer(ball::Severity::WARN,
+                                       bmqtst::TestHelperUtil::allocator());
+    mqbu::CapacityMeter       capacityMeter(
+        "dummy",
+        bmqtst::TestHelperUtil::allocator(),
+        bdlf::BindUtil::bind(&logEnhancedStorageInfoCb,
+                             bdlf::PlaceHolders::_1)  // stream
+    );
+    capacityMeter.setLimits(k_MSGS_LIMIT, k_BYTES_LIMIT);
+    capacityMeter.setWatermarkThresholds(k_MSGS_THRESHOLD, k_BYTES_THRESHOLD);
+
+    bsls::Types::Int64 nbMessagesAvailable;
+    bsls::Types::Int64 nbBytesAvailable;
+    capacityMeter.reserve(&nbMessagesAvailable,
+                          &nbBytesAvailable,
+                          k_MSGS_HIGH_WATERMARK_VALUE,
+                          10);
+    BSLS_ASSERT_OPT(nbMessagesAvailable == k_MSGS_HIGH_WATERMARK_VALUE);
+    BSLS_ASSERT_OPT(nbBytesAvailable == 10);
+
+    BMQTST_ASSERT(observer.records().empty());
+
+    capacityMeter.commit(k_MSGS_HIGH_WATERMARK_VALUE, 10);
+
+    BMQTST_ASSERT_EQ(observer.records().size(), 1U);
+
+    const ball::Record& record = observer.records()[0];
+    BMQTST_ASSERT_EQ(record.fixedFields().severity(), ball::Severity::ERROR);
+
+    BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
+        record,
+        "ALARM \\[CAPACITY_STATE_HIGH_WATERMARK\\]",
+        bmqtst::TestHelperUtil::allocator()));
+    // Check log from callback
+    BMQTST_ASSERT(bmqtst::ScopedLogObserverUtil::recordMessageMatch(
+        record,
+        "Test enhanced storage Info",
+        bmqtst::TestHelperUtil::allocator()));
 }
 
 // ============================================================================
@@ -236,17 +330,18 @@ static void test2_logStateChange()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
     case 2: test2_logStateChange(); break;
     case 1: test1_breathingTest(); break;
+    case 3: test3_enhancedLog(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

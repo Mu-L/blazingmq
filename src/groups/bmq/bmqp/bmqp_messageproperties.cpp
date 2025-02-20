@@ -20,12 +20,11 @@
 // BMQ
 #include <bmqp_protocolutil.h>
 
-// MWC
-#include <mwcu_blob.h>
-#include <mwcu_blobiterator.h>
-#include <mwcu_blobobjectproxy.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
+#include <bmqu_blob.h>
+#include <bmqu_blobiterator.h>
+#include <bmqu_blobobjectproxy.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
 
 // BDE
 #include <bdlb_bigendian.h>
@@ -105,12 +104,16 @@ class PropertyValueStreamOutVisitor {
 
     void operator()(const bsl::string& value)
     {
-        bdlbb::BlobUtil::append(d_blob_p, value.c_str(), value.length());
+        bdlbb::BlobUtil::append(d_blob_p,
+                                value.c_str(),
+                                static_cast<int>(value.length()));
     }
 
     void operator()(const bsl::vector<char>& value)
     {
-        bdlbb::BlobUtil::append(d_blob_p, value.data(), value.size());
+        bdlbb::BlobUtil::append(d_blob_p,
+                                value.data(),
+                                static_cast<int>(value.size()));
     }
 };
 
@@ -232,8 +235,8 @@ bool MessageProperties::streamInPropertyValue(const Property& p) const
     BSLS_ASSERT_SAFE(p.d_value.isUnset());
     BSLS_ASSERT_SAFE(p.d_offset);
 
-    mwcu::BlobPosition position;
-    int                rc = mwcu::BlobUtil::findOffsetSafe(&position,
+    bmqu::BlobPosition position;
+    int                rc = bmqu::BlobUtil::findOffsetSafe(&position,
                                             d_blob.object(),
                                             p.d_offset);
     BSLS_ASSERT_SAFE(rc == 0);
@@ -241,7 +244,7 @@ bool MessageProperties::streamInPropertyValue(const Property& p) const
     switch (p.d_type) {
     case bmqt::PropertyType::e_BOOL: {
         char value;
-        rc = mwcu::BlobUtil::readNBytes(&value,
+        rc = bmqu::BlobUtil::readNBytes(&value,
                                         d_blob.object(),
                                         position,
                                         sizeof(value));
@@ -251,7 +254,7 @@ bool MessageProperties::streamInPropertyValue(const Property& p) const
     }
     case bmqt::PropertyType::e_CHAR: {
         char value;
-        rc = mwcu::BlobUtil::readNBytes(&value,
+        rc = bmqu::BlobUtil::readNBytes(&value,
                                         d_blob.object(),
                                         position,
                                         sizeof(value));
@@ -261,7 +264,7 @@ bool MessageProperties::streamInPropertyValue(const Property& p) const
     }
     case bmqt::PropertyType::e_SHORT: {
         bdlb::BigEndianInt16 nboValue;
-        rc = mwcu::BlobUtil::readNBytes(reinterpret_cast<char*>(&nboValue),
+        rc = bmqu::BlobUtil::readNBytes(reinterpret_cast<char*>(&nboValue),
                                         d_blob.object(),
                                         position,
                                         sizeof(nboValue));
@@ -271,7 +274,7 @@ bool MessageProperties::streamInPropertyValue(const Property& p) const
     }
     case bmqt::PropertyType::e_INT32: {
         bdlb::BigEndianInt32 nboValue;
-        rc = mwcu::BlobUtil::readNBytes(reinterpret_cast<char*>(&nboValue),
+        rc = bmqu::BlobUtil::readNBytes(reinterpret_cast<char*>(&nboValue),
                                         d_blob.object(),
                                         position,
                                         sizeof(nboValue));
@@ -281,7 +284,7 @@ bool MessageProperties::streamInPropertyValue(const Property& p) const
     }
     case bmqt::PropertyType::e_INT64: {
         bdlb::BigEndianInt64 nboValue;
-        rc = mwcu::BlobUtil::readNBytes(reinterpret_cast<char*>(&nboValue),
+        rc = bmqu::BlobUtil::readNBytes(reinterpret_cast<char*>(&nboValue),
                                         d_blob.object(),
                                         position,
                                         sizeof(nboValue));
@@ -292,7 +295,7 @@ bool MessageProperties::streamInPropertyValue(const Property& p) const
 
     case bmqt::PropertyType::e_STRING: {
         bsl::string value(p.d_length, ' ');
-        rc = mwcu::BlobUtil::readNBytes(&value[0],
+        rc = bmqu::BlobUtil::readNBytes(&value[0],
                                         d_blob.object(),
                                         position,
                                         p.d_length);
@@ -302,7 +305,7 @@ bool MessageProperties::streamInPropertyValue(const Property& p) const
     }
     case bmqt::PropertyType::e_BINARY: {
         bsl::vector<char> value(p.d_length);
-        rc = mwcu::BlobUtil::readNBytes(&value[0],
+        rc = bmqu::BlobUtil::readNBytes(&value[0],
                                         d_blob.object(),
                                         position,
                                         p.d_length);
@@ -450,8 +453,8 @@ bool MessageProperties::remove(const bsl::string&        name,
     // Decrement 'd_totalSize' by property name's length and length of struct
     // 'MessagePropertyHeader'.
 
-    d_totalSize -= it->first.length();
-    d_totalSize -= sizeof(MessagePropertyHeader);
+    d_totalSize -= static_cast<int>(it->first.length());
+    d_totalSize -= static_cast<int>(sizeof(MessagePropertyHeader));
 
     if (p.d_offset) {
         // Cannot remove the property since reading other properties needs
@@ -500,7 +503,7 @@ int MessageProperties::streamInHeader(const bdlbb::Blob& blob)
     // end with padding for word alignment.
 
     // Read 'MessagePropertiesHeader'.
-    mwcu::BlobObjectProxy<MessagePropertiesHeader> msgPropsHeader(
+    bmqu::BlobObjectProxy<MessagePropertiesHeader> msgPropsHeader(
         &blob,
         -MessagePropertiesHeader::k_MIN_HEADER_SIZE,
         true,    // read flag
@@ -565,14 +568,14 @@ int MessageProperties::streamInPropertyHeader(Property*    property,
     BSLS_ASSERT_SAFE(d_dataOffset && start);
     BSLS_ASSERT_SAFE(d_isBlobConstructed);
 
-    mwcu::BlobPosition position;
+    bmqu::BlobPosition position;
 
-    if (mwcu::BlobUtil::findOffsetSafe(&position, d_blob.object(), start)) {
+    if (bmqu::BlobUtil::findOffsetSafe(&position, d_blob.object(), start)) {
         // Failed to advance blob to next 'MessagePropertyHeader' location.
         return rc_NO_MSG_PROPERTY_HEADER;  // RETURN
     }
 
-    mwcu::BlobObjectProxy<MessagePropertyHeader> mpHeader(
+    bmqu::BlobObjectProxy<MessagePropertyHeader> mpHeader(
         &d_blob.object(),
         position,
         d_mphSize,
@@ -687,15 +690,15 @@ int MessageProperties::streamInPropertyHeader(Property*    property,
         // Future reads will assert on error.
 
         name->assign(nameLen, ' ');
-        mwcu::BlobPosition namePosition;
-        int                rc = mwcu::BlobUtil::findOffsetSafe(&namePosition,
+        bmqu::BlobPosition namePosition;
+        int                rc = bmqu::BlobUtil::findOffsetSafe(&namePosition,
                                                 d_blob.object(),
                                                 offset);
         if (rc) {
             return rc_MISSING_PROPERTY_AREA;  // RETURN
         }
 
-        rc = mwcu::BlobUtil::readNBytes(name->begin(),
+        rc = bmqu::BlobUtil::readNBytes(name->begin(),
                                         d_blob.object(),
                                         namePosition,
                                         nameLen);
@@ -758,7 +761,7 @@ int MessageProperties::streamIn(const bdlbb::Blob& blob,
     int rc = streamInHeader(blob);
 
     if (rc != rc_SUCCESS) {
-        return rc;
+        return rc;  // RETURN
     }
 
     if (blob.length() < d_dataOffset) {
@@ -767,7 +770,7 @@ int MessageProperties::streamIn(const bdlbb::Blob& blob,
 
     rc = loadProperties(true, isNewStyleProperties);
     if (rc != rc_SUCCESS) {
-        return rc;
+        return rc;  // RETURN
     }
 
     cleaner.release();
@@ -906,8 +909,8 @@ MessageProperties::streamOut(bdlbb::BlobBufferFactory*          bufferFactory,
     // invoked 'setLength' on the blob and reinterpret_casted first few bytes
     // of the first buffer to 'bmqp::MessagePropertiesHeader'.
 
-    mwcu::BlobUtil::reserve(blob, sizeof(MessagePropertiesHeader));
-    mwcu::BlobObjectProxy<MessagePropertiesHeader> msgPropsHeader(
+    bmqu::BlobUtil::reserve(blob, sizeof(MessagePropertiesHeader));
+    bmqu::BlobObjectProxy<MessagePropertiesHeader> msgPropsHeader(
         blob,
         false,  // read flag
         true);  // write flag
@@ -933,16 +936,17 @@ MessageProperties::streamOut(bdlbb::BlobBufferFactory*          bufferFactory,
 
         BSLS_ASSERT(!p.d_value.isUnset());
 
-        mwcu::BlobPosition pos;
-        mwcu::BlobUtil::reserve(&pos, blob, sizeof(MessagePropertyHeader));
-        mwcu::BlobObjectProxy<MessagePropertyHeader> msgPropHeader(
+        bmqu::BlobPosition pos;
+        bmqu::BlobUtil::reserve(&pos, blob, sizeof(MessagePropertyHeader));
+        bmqu::BlobObjectProxy<MessagePropertyHeader> msgPropHeader(
             blob,
             pos,
             false,  // read flag
             true);  // write flag
         new (msgPropHeader.object()) MessagePropertyHeader();
         msgPropHeader->setPropertyType(p.d_type);
-        msgPropHeader->setPropertyNameLength(cit->first.length());
+        msgPropHeader->setPropertyNameLength(
+            static_cast<int>(cit->first.length()));
         if (info.isExtended()) {
             msgPropHeader->setPropertyValueLength(offset);
         }
@@ -952,7 +956,7 @@ MessageProperties::streamOut(bdlbb::BlobBufferFactory*          bufferFactory,
 
         msgPropHeader.reset();  // write out the header
         totalSize += sizeof(MessagePropertyHeader);
-        offset += cit->first.length();
+        offset += static_cast<int>(cit->first.length());
         offset += p.d_length;
     }
 
@@ -970,8 +974,10 @@ MessageProperties::streamOut(bdlbb::BlobBufferFactory*          bufferFactory,
         }
         // Append property name.
 
-        bdlbb::BlobUtil::append(blob, cit->first.c_str(), cit->first.length());
-        totalSize += cit->first.length();
+        bdlbb::BlobUtil::append(blob,
+                                cit->first.c_str(),
+                                static_cast<int>(cit->first.length()));
+        totalSize += static_cast<int>(cit->first.length());
 
         // Append property value.
 
@@ -992,7 +998,7 @@ MessageProperties::streamOut(bdlbb::BlobBufferFactory*          bufferFactory,
     // Update the 'total message properties area words' field in the top-level
     // struct 'MessagePropertiesHeader'.
 
-    mwcu::BlobObjectProxy<MessagePropertiesHeader> msgPropsHdr(
+    bmqu::BlobObjectProxy<MessagePropertiesHeader> msgPropsHdr(
         blob,
         false,  // read flag
         true);  // write flag
@@ -1025,7 +1031,7 @@ bsl::ostream& MessageProperties::print(bsl::ostream& stream,
 
     while (msgPropIter.hasNext()) {
         bdlma::LocalSequentialAllocator<64> nameLsa(0);
-        mwcu::MemOutStream                  nameOs(&nameLsa);
+        bmqu::MemOutStream                  nameOs(&nameLsa);
 
         nameOs << msgPropIter.name() << " (" << msgPropIter.type() << ")"
                << bsl::ends;
@@ -1036,7 +1042,7 @@ bsl::ostream& MessageProperties::print(bsl::ostream& stream,
                                    msgPropIter.getAsBool());
         } break;
         case bmqt::PropertyType::e_CHAR: {
-            mwcu::OutStreamFormatSaver fmtSaver(stream);
+            bmqu::OutStreamFormatSaver fmtSaver(stream);
             stream << bsl::hex;
             printer.printAttribute(nameOs.str().data(),
                                    static_cast<int>(msgPropIter.getAsChar()));
@@ -1063,8 +1069,9 @@ bsl::ostream& MessageProperties::print(bsl::ostream& stream,
 
             bdlma::LocalSequentialAllocator<k_MAX_BYTES_DUMP> lsa(0);
 
-            mwcu::MemOutStream os(k_MAX_BYTES_DUMP, &lsa);
-            os << bdlb::PrintStringHexDumper(&binaryVec[0], printSize);
+            bmqu::MemOutStream os(k_MAX_BYTES_DUMP, &lsa);
+            os << bdlb::PrintStringHexDumper(&binaryVec[0],
+                                             static_cast<int>(printSize));
 
             printer.printAttribute(nameOs.str().data(), os.str());
         } break;

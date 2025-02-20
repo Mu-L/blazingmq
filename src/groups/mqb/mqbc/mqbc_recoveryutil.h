@@ -17,16 +17,13 @@
 #ifndef INCLUDED_MQBC_RECOVERYUTIL
 #define INCLUDED_MQBC_RECOVERYUTIL
 
-//@PURPOSE: Provide generic utilities used for recovery operations.
-//
-//@CLASSES:
-//  mqbc::StorageUtil: Generic utilities for recovery related operations.
-//
-//@DESCRIPTION: 'mqbc::RecoveryUtil' provides generic utilities.
+/// @file mqbc_recoveryutil.h
+///
+/// @brief Provide generic utilities used for recovery operations.
+///
+/// @bbref{mqbc::RecoveryUtil} provides generic utilities.
 
 // MQB
-
-#include <mqbc_clusterdata.h>
 #include <mqbi_storage.h>
 #include <mqbnet_cluster.h>
 #include <mqbs_filestore.h>
@@ -42,11 +39,10 @@
 // BDE
 #include <ball_log.h>
 #include <bdlbb_blob.h>
+#include <bsl_string.h>
 #include <bslma_allocator.h>
 #include <bslma_default.h>
 #include <bsls_types.h>
-#include <bslstl_string.h>
-#include <bslstl_vector.h>
 
 namespace BloombergLP {
 
@@ -114,8 +110,9 @@ struct RecoveryUtil {
     /// The function makes sure that the incremented sequence number is less
     /// than or equal to the specified `endSeqNum` or else it returns
     /// appropriate non-zero return code.
+    ///
     /// This operation is performed for the specified `partitionId`, the
-    /// specified `destination` node and the specified `clusterData` is
+    /// specified `destination` node and the specified `clusterDescription` is
     /// used for logging purposes. The specified `journalIt` is used.
     /// The function return 0 if successful, 1 if end of journal file is
     /// reached, and non-zero for failure scenarios.
@@ -126,11 +123,11 @@ struct RecoveryUtil {
         const bmqp_ctrlmsg::PartitionSequenceNumber& endSeqNum,
         int                                          partitionId,
         const mqbnet::ClusterNode&                   destination,
-        const mqbc::ClusterData&                     clusterData,
+        const bsl::string&                           clusterDescription,
         mqbs::JournalFileIterator&                   journalIt);
 
     /// This function operates on the record currently being pointed by the
-    /// the specified `journalIt`. It uses the specified `dataFd` if the
+    /// specified `journalIt`. It uses the specified `dataFd` if the
     /// record is a data record, the specified `qlistFd` if the record is
     /// a qlist record and the specified `fsmWorkflow` value is false. It
     /// populates the specified `storageMsgType`, `payloadRecordBase` and

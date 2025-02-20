@@ -89,7 +89,7 @@ class Storage;
 namespace mqbstat {
 class QueueStatsDomain;
 }
-namespace mwcst {
+namespace bmqst {
 class StatContext;
 }
 
@@ -99,7 +99,7 @@ namespace mqbmock {
 // Class Queue
 // ===========
 
-/// Mock queue implementation of the `mqbi::Queue` inteface
+/// Mock queue implementation of the `mqbi::Queue` interface
 class Queue : public mqbi::Queue {
   private:
     // CLASS-SCOPE CATEGORY
@@ -136,7 +136,7 @@ class Queue : public mqbi::Queue {
     // Configuration values for message
     // throttling intervals and thresholds.
 
-    mqbstat::QueueStatsDomain d_stats;
+    bsl::shared_ptr<mqbstat::QueueStatsDomain> d_stats_sp;
     // Statistics of the queue
 
     mqbi::Domain* d_domain_p;
@@ -241,13 +241,18 @@ class Queue : public mqbi::Queue {
     /// Return the queue engine used by this queue.
     mqbi::QueueEngine* queueEngine() BSLS_KEYWORD_OVERRIDE;
 
-    /// Return the stats associated with this queue.
-    mqbstat::QueueStatsDomain* stats() BSLS_KEYWORD_OVERRIDE;
+    /// Set the stats associated with this queue.
+    void setStats(const bsl::shared_ptr<mqbstat::QueueStatsDomain>& stats)
+        BSLS_KEYWORD_OVERRIDE;
 
     /// Return number of unconfirmed messages across all handles with the
     /// `specified `subId'.
     bsls::Types::Int64
     countUnconfirmed(unsigned int subId) BSLS_KEYWORD_OVERRIDE;
+
+    /// Stop sending PUSHes but continue receiving CONFIRMs, receiving and
+    /// sending PUTs and ACKs.
+    void stopPushing() BSLS_KEYWORD_OVERRIDE;
 
     /// Called when a message with the specified `msgGUID`, `appData`,
     /// `options` and compressionAlgorithmType payload is pushed to this
@@ -258,8 +263,8 @@ class Queue : public mqbi::Queue {
         const bsl::shared_ptr<bdlbb::Blob>&  appData,
         const bsl::shared_ptr<bdlbb::Blob>&  options,
         const bmqp::MessagePropertiesInfo&   messagePropertiesInfo,
-        bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType)
-        BSLS_KEYWORD_OVERRIDE;
+        bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType,
+        bool isOutOfOrder) BSLS_KEYWORD_OVERRIDE;
 
     /// Confirm the message with the specified `msgGUID` for the specified
     /// `upstreamSubQueueId` stream of the queue on behalf of the client
@@ -299,10 +304,13 @@ class Queue : public mqbi::Queue {
     /// and current upstream `genCount`, then the PUT message gets dropped
     /// to avoid out of order PUTs.  If the `upstreamSubQueueId` is
     /// `k_ANY_SUBQUEUE_ID`, all SubQueues are reopen.
+    /// If the optionally specified isWriterOnly is true, ignore CONFIRMs. This
+    /// should be specified if the upstream is stopping.
     ///
     /// THREAD: This method is called from the Queue's dispatcher thread.
     void onOpenUpstream(bsls::Types::Uint64 genCount,
-                        unsigned int upstreamSubQueueId) BSLS_KEYWORD_OVERRIDE;
+                        unsigned int        upstreamSubQueueId,
+                        bool isWriterOnly = false) BSLS_KEYWORD_OVERRIDE;
 
     /// Notify the (remote) queue about reopen failure.  The queue NACKs all
     /// pending and incoming PUTs and drops CONFIRMs related to to the
@@ -343,12 +351,6 @@ class Queue : public mqbi::Queue {
     processCommand(mqbcmd::QueueResult*        result,
                    const mqbcmd::QueueCommand& command) BSLS_KEYWORD_OVERRIDE;
 
-    /// Remove all outstanding messages from that queue and load the details
-    /// of the purged queue into the specified `result`' object.  Empty
-    /// `appId` means to purge from ALL appIds.
-    void purge(mqbcmd::PurgeQueueResult* result,
-               const bsl::string&        appId = "") BSLS_KEYWORD_OVERRIDE;
-
     // MANIPULATORS
     //   (specific to mqbmock::Queue)
     Queue& _setDispatcher(mqbi::Dispatcher* value);
@@ -382,6 +384,10 @@ class Queue : public mqbi::Queue {
 
     /// Return the storage used by this queue.
     mqbi::Storage* storage() const BSLS_KEYWORD_OVERRIDE;
+
+    /// Return the stats associated with this queue.
+    const bsl::shared_ptr<mqbstat::QueueStatsDomain>&
+    stats() const BSLS_KEYWORD_OVERRIDE;
 
     /// Return the partitionId assigned to this queue.
     int partitionId() const BSLS_KEYWORD_OVERRIDE;

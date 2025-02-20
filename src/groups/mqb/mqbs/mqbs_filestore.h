@@ -51,10 +51,9 @@
 #include <bmqt_messageguid.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcc_orderedhashmap.h>
-#include <mwcma_countingallocatorstore.h>
-#include <mwcu_blob.h>
+#include <bmqc_orderedhashmap.h>
+#include <bmqma_countingallocatorstore.h>
+#include <bmqu_blob.h>
 
 // BDE
 #include <ball_log.h>
@@ -77,6 +76,7 @@
 #include <bslma_usesbslmaallocator.h>
 #include <bslmf_nestedtraitdeclaration.h>
 #include <bsls_assert.h>
+#include <bsls_atomic.h>
 #include <bsls_cpp11.h>
 #include <bsls_types.h>
 
@@ -85,6 +85,7 @@ namespace BloombergLP {
 // FORWARD DECLARATIONS
 namespace mqbcmd {
 class FileStore;
+class PurgeQueueResult;
 }
 namespace mqbi {
 class Dispatcher;
@@ -129,7 +130,7 @@ struct FileStore_AliasedBufferDeleter {
 
 /// Mechanism to store BlazingMQ messages in file. This component is
 /// *const-thread* safe.
-class FileStore : public DataStore {
+class FileStore BSLS_KEYWORD_FINAL : public DataStore {
   private:
     // CLASS-SCOPE CATEGORY
     BALL_LOG_SET_CLASS_CATEGORY("MQBS.FILESTORE");
@@ -141,17 +142,13 @@ class FileStore : public DataStore {
   public:
     // TYPES
 
-    /// Pool of shared pointers to Blobs
-    typedef bdlcc::SharedObjectPool<
-        bdlbb::Blob,
-        bdlcc::ObjectPoolFunctors::DefaultCreator,
-        bdlcc::ObjectPoolFunctors::RemoveAll<bdlbb::Blob> >
-        BlobSpPool;
+    typedef bmqp::BlobPoolUtil::BlobSpPool BlobSpPool;
 
+    /// Pool of shared pointers to AtomicStates
     typedef bdlcc::SharedObjectPool<
-        mwcu::AtomicState,
+        bmqu::AtomicState,
         bdlcc::ObjectPoolFunctors::DefaultCreator,
-        bdlcc::ObjectPoolFunctors::Reset<mwcu::AtomicState> >
+        bdlcc::ObjectPoolFunctors::Reset<bmqu::AtomicState> >
         StateSpPool;
 
     /// It is important for this to be a deque instead of a vector, because
@@ -212,8 +209,7 @@ class FileStore : public DataStore {
     typedef DataStoreConfig::QueueKeyInfoMapConstIter QueueKeyInfoMapConstIter;
     typedef DataStoreConfig::QueueKeyInfoMapInsertRc  QueueKeyInfoMapInsertRc;
 
-    typedef mqbi::Storage::AppIdKeyPair  AppIdKeyPair;
-    typedef mqbi::Storage::AppIdKeyPairs AppIdKeyPairs;
+    typedef mqbi::Storage::AppInfos AppInfos;
 
     typedef StorageCollectionUtil::StoragesMap         StoragesMap;
     typedef StorageCollectionUtil::StorageMapIter      StorageMapIter;
@@ -240,18 +236,17 @@ class FileStore : public DataStore {
     };
 
     struct NodeContext {
+        /// Last Receipt from/to this node (Replica/Primary).
         DataStoreRecordKey d_key;
-        // last Receipt from/to this
-        // node (Replica/Primary).
-        bdlbb::Blob d_blob;
-        // Receipt to this node.
-        bsl::shared_ptr<mwcu::AtomicState> d_state;
 
-        NodeContext(bdlbb::BlobBufferFactory* factory,
-                    const DataStoreRecordKey& key,
-                    bslma::Allocator*         basicAllocator = 0);
+        /// Receipt to this node.
+        bsl::shared_ptr<bdlbb::Blob> d_blob_sp;
+
+        bsl::shared_ptr<bmqu::AtomicState> d_state;
+
+        NodeContext(BlobSpPool* blobSpPool_p, const DataStoreRecordKey& key);
     };
-    typedef mwcc::OrderedHashMap<DataStoreRecordKey,
+    typedef bmqc::OrderedHashMap<DataStoreRecordKey,
                                  ReceiptContext,
                                  DataStoreRecordKeyHashAlgo>
         Unreceipted;
@@ -263,11 +258,11 @@ class FileStore : public DataStore {
     // DATA
     bslma::Allocator* d_allocator_p;
 
-    mwcma::CountingAllocatorStore d_allocators;
+    bmqma::CountingAllocatorStore d_allocators;
     // Allocator store to spawn new
     // allocators for sub-components
 
-    mwcma::CountingAllocatorStore d_storageAllocatorStore;
+    bmqma::CountingAllocatorStore d_storageAllocatorStore;
     // Allocator store to pass to all the
     // queue storages (file-backed or
     // in-memory) assigned to this
@@ -303,13 +298,17 @@ class FileStore : public DataStore {
 
     mutable AliasedBufferDeleterSpPool d_aliasedBufferDeleterSpPool;
 
-    volatile bool d_isOpen;
+    bsls::AtomicBool d_isOpen;
     // Flag to indicate open/close status
-    // of this instance
+    // of this instance.
 
     bool d_isStopping;
     // Flag to indicate if self node is
     // stopping.
+
+    bool d_flushWhenClosing;
+    // Flag to indicate if flush when this
+    // instance is closing.
 
     bool d_lastSyncPtReceived;
     // Flag to indicate if self is
@@ -325,11 +324,17 @@ class FileStore : public DataStore {
     // Ordered list of records pending
     // Receipt.
 
+    /// For weak consistency only.
+    /// The container that holds keys to storages where we put messages since
+    /// the last storage event builder flush.  Used to notify these queues on
+    /// replication complete, so they change from processing PUTs to PUSHes.
+    bsl::unordered_set<mqbu::StorageKey> d_replicationNotifications;
+
     int d_replicationFactor;
 
     NodeReceiptContexts d_nodes;
 
-    DataStoreRecordKey d_lastRecoveredMessage;
+    DataStoreRecordKey d_lastRecoveredStrongConsistency;
 
     FileSets d_fileSets;
     // List of file sets.  File set at
@@ -348,9 +353,6 @@ class FileStore : public DataStore {
     // Thread pool used for any standalone
     // work that can be offloaded to
     // non-partition-dispatcher threads.
-
-    bmqp::StorageEventBuilder d_storageEventBuilder;
-    // Storage event builder to use.
 
     RecurringEventHandle d_syncPointEventHandle;
 
@@ -395,6 +397,9 @@ class FileStore : public DataStore {
     // flushing the builder.  Depending
     // the cluster channels load, it can
     // grow or shrink.
+
+    bmqp::StorageEventBuilder d_storageEventBuilder;
+    // Storage event builder to use.
 
   private:
     // NOT IMPLEMENTED
@@ -506,12 +511,17 @@ class FileStore : public DataStore {
 
     /// Write a QUEUE_OP record to the journal with the specified
     /// `queueKey`, optional `appKey`, `timestamp`, `opValue` and `subValue`
-    /// to the journal.  Return zero on success, non-zero value otherwise.
+    /// to the journal.  If the specified `startPrimaryLeaseId` and
+    /// `startSequenceNum` are set, they specify the beginning of the range for
+    /// which this QUEUE_OP applies; otherwise, the range includes all records.
+    /// Return zero on success, non-zero value otherwise.
     int writeQueueOpRecord(DataStoreRecordHandle*  handle,
                            const mqbu::StorageKey& queueKey,
                            const mqbu::StorageKey& appKey,
                            QueueOpType::Enum       queueOpFlag,
-                           bsls::Types::Uint64     timestamp);
+                           bsls::Types::Uint64     timestamp,
+                           unsigned int            startPrimaryLeaseId,
+                           bsls::Types::Uint64     startSequenceNum);
 
     /// Rollover over the specified `record` from `oldFileSet` to the
     /// `newFileSet`, and if it is a message record, update the counter of
@@ -552,17 +562,17 @@ class FileStore : public DataStore {
     int writeMessageRecord(const bmqp::StorageHeader&          header,
                            const mqbs::RecordHeader&           recHeader,
                            const bsl::shared_ptr<bdlbb::Blob>& event,
-                           const mwcu::BlobPosition&           recordPosition);
+                           const bmqu::BlobPosition&           recordPosition);
 
     int writeQueueCreationRecord(const bmqp::StorageHeader&          header,
                                  const mqbs::RecordHeader&           recHeader,
                                  const bsl::shared_ptr<bdlbb::Blob>& event,
-                                 const mwcu::BlobPosition& recordPosition);
+                                 const bmqu::BlobPosition& recordPosition);
 
     int writeJournalRecord(const bmqp::StorageHeader&          header,
                            const mqbs::RecordHeader&           recHeader,
                            const bsl::shared_ptr<bdlbb::Blob>& event,
-                           const mwcu::BlobPosition&           recordPosition,
+                           const bmqu::BlobPosition&           recordPosition,
                            bmqp::StorageMessageType::Enum      messageType);
 
     /// Replicate the record of specified `type` starting at specified
@@ -603,12 +613,18 @@ class FileStore : public DataStore {
     /// still pending receipt of quorum Receipts.
     void cancelUnreceipted(const DataStoreRecordKey& recordKey);
 
-    /// Send Replication Receipt to the specified `node` confirming the
+    /// Generate Replication Receipt for the specified `node` confirming the
     /// receipt of message with the specified `primaryLeaseId` and
-    /// `sequenceNumber`.
-    void issueReceipt(mqbnet::ClusterNode* node,
-                      unsigned int         primaryLeaseId,
-                      bsls::Types::Uint64  sequenceNumber);
+    /// `sequenceNumber`.  Store cumulative receipt in the specified
+    /// `nodeContext`.
+    NodeContext* generateReceipt(NodeContext*         nodeContext,
+                                 mqbnet::ClusterNode* node,
+                                 unsigned int         primaryLeaseId,
+                                 bsls::Types::Uint64  sequenceNumber);
+
+    /// Send previously generated Replication Receipt to the specified `node`
+    /// using the specified `nodeContext`.
+    void sendReceipt(mqbnet::ClusterNode* node, NodeContext* nodeContext);
 
     /// Insert the specified `record` value by the specified `key` into the
     /// list of outstanding records, and assign to the specified `handle` an
@@ -762,15 +778,16 @@ class FileStore : public DataStore {
     int writeQueueCreationRecord(DataStoreRecordHandle*  handle,
                                  const bmqt::Uri&        queueUri,
                                  const mqbu::StorageKey& queueKey,
-                                 const AppIdKeyPairs&    appIdKeyPairs,
+                                 const AppInfos&         appIdKeyPairs,
                                  bsls::Types::Uint64     timestamp,
                                  bool isNewQueue) BSLS_KEYWORD_OVERRIDE;
 
-    int
-    writeQueuePurgeRecord(DataStoreRecordHandle*  handle,
-                          const mqbu::StorageKey& queueKey,
-                          const mqbu::StorageKey& appKey,
-                          bsls::Types::Uint64 timestamp) BSLS_KEYWORD_OVERRIDE;
+    int writeQueuePurgeRecord(DataStoreRecordHandle*       handle,
+                              const mqbu::StorageKey&      queueKey,
+                              const mqbu::StorageKey&      appKey,
+                              bsls::Types::Uint64          timestamp,
+                              const DataStoreRecordHandle& start)
+        BSLS_KEYWORD_OVERRIDE;
 
     int writeQueueDeletionRecord(DataStoreRecordHandle*  handle,
                                  const mqbu::StorageKey& queueKey,
@@ -782,14 +799,14 @@ class FileStore : public DataStore {
     /// ---------------
 
     /// Write a CONFIRM record to the journal with the specified `queueKey`,
-    /// optional `appKey`, `guid`, `timestamp` and `onReject` to the
+    /// optional `appKey`, `guid`, `timestamp` and `reason` to the
     /// journal.  Return zero on success, non-zero value otherwise.
     int writeConfirmRecord(DataStoreRecordHandle*   handle,
                            const bmqt::MessageGUID& guid,
                            const mqbu::StorageKey&  queueKey,
                            const mqbu::StorageKey&  appKey,
                            bsls::Types::Uint64      timestamp,
-                           bool onReject) BSLS_KEYWORD_OVERRIDE;
+                           ConfirmReason::Enum reason) BSLS_KEYWORD_OVERRIDE;
 
     /// Write a DELETION record to the journal with the specified
     /// `queueKey`, `flag`, `guid` and `timestamp` to the journal.  Return
@@ -847,19 +864,23 @@ class FileStore : public DataStore {
     int issueSyncPoint() BSLS_KEYWORD_OVERRIDE;
 
     /// Set the specified `primaryNode` with the specified `primaryLeaseId`
-    /// as the primary for this data store partition.  Note that
+    /// as the active primary for this data store partition.  Note that
     /// `primaryNode` could refer to the node which owns this data store.
-    void setPrimary(mqbnet::ClusterNode* primaryNode,
-                    unsigned int         primaryLeaseId) BSLS_KEYWORD_OVERRIDE;
+    void setActivePrimary(mqbnet::ClusterNode* primaryNode,
+                          unsigned int primaryLeaseId) BSLS_KEYWORD_OVERRIDE;
 
     /// Clear the current primary associated with this partition.
     void clearPrimary() BSLS_KEYWORD_OVERRIDE;
 
-    /// If the specified `storage` is `true`, flush any buffered replication
-    /// messages to the peers.  If the specified `queues` is `true`, `flush`
-    /// all associated queues.  Behavior is undefined unless this node is
-    /// the primary for this partition.
-    void dispatcherFlush(bool storage, bool queues) BSLS_KEYWORD_OVERRIDE;
+    /// Flush any buffered replication messages to the peers.  Behaviour is
+    /// undefined unless this cluster node is the primary for this partition.
+    void flushStorage() BSLS_KEYWORD_OVERRIDE;
+
+    /// Flush weak consistency queues that have replicated messages since the
+    /// last call.  This method has no effect if `d_storageEventBuilder` is not
+    /// empty, and must only be called after `flushStorage`.  Behaviour is
+    /// undefined unless this cluster node is the primary for this partition.
+    void notifyQueuesOnReplicatedBatch();
 
     /// Invoke the specified `functor` with each queue associated to the
     /// partition represented by this FileStore if the partition was
@@ -898,6 +919,10 @@ class FileStore : public DataStore {
     /// set this to true during testing.
     void setIgnoreCrc32c(bool value);
 
+    // This will be used as Implicit Receipt
+    void setLastStrongConsistency(unsigned int        primaryLeaseId,
+                                  bsls::Types::Uint64 sequenceNum);
+
     /// Load into the specified `storages` the list of queue storages for
     /// which all filters from the specified `filters` are returning true.
     void getStorages(StorageList*          storages,
@@ -905,6 +930,9 @@ class FileStore : public DataStore {
 
     /// Load the summary of this partition to the specified `fileStore`
     /// object.
+    ///
+    /// THREAD: Executed by the queue dispatcher thread associated with the
+    ///         specified `fileStore`'s partitionId.
     void loadSummary(mqbcmd::FileStore* fileStore) const;
 
     // ACCESSORS
@@ -1088,11 +1116,10 @@ inline FileStore::ReceiptContext::ReceiptContext(
 // class FileStore::NodeContext
 // ----------------------------
 
-inline FileStore::NodeContext::NodeContext(bdlbb::BlobBufferFactory* factory,
-                                           const DataStoreRecordKey& key,
-                                           bslma::Allocator* basicAllocator)
+inline FileStore::NodeContext::NodeContext(BlobSpPool* blobSpPool_p,
+                                           const DataStoreRecordKey& key)
 : d_key(key)
-, d_blob(factory, basicAllocator)
+, d_blob_sp(blobSpPool_p->getObject())
 {
     // NOTHING
 }
@@ -1174,6 +1201,14 @@ inline void FileStore::setIgnoreCrc32c(bool value)
     d_ignoreCrc32c = value;
 }
 
+inline void
+FileStore::setLastStrongConsistency(unsigned int        primaryLeaseId,
+                                    bsls::Types::Uint64 sequenceNum)
+{
+    d_lastRecoveredStrongConsistency.d_primaryLeaseId = primaryLeaseId;
+    d_lastRecoveredStrongConsistency.d_sequenceNum    = sequenceNum;
+}
+
 // ACCESSORS
 inline const mqbi::DispatcherClientData&
 FileStore::dispatcherClientData() const
@@ -1213,7 +1248,7 @@ inline const DataStoreConfig& FileStore::config() const
 
 inline unsigned int FileStore::clusterSize() const
 {
-    return d_cluster_p->nodes().size();
+    return static_cast<unsigned int>(d_cluster_p->nodes().size());
 }
 
 inline bsls::Types::Uint64 FileStore::numRecords() const

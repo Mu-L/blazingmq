@@ -16,11 +16,10 @@
 // bmqt_compressionalgorithmtype.t.cpp                                -*-C++-*-
 #include <bmqt_compressionalgorithmtype.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // BDE
 #include <bslmf_assert.h>
@@ -54,8 +53,8 @@ static void printEnumHelper(ARRAY (&data)[SIZE])
 
         PVVV("Line [" << test.d_line << "]");
 
-        mwcu::MemOutStream out(s_allocator_p);
-        mwcu::MemOutStream expected(s_allocator_p);
+        bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+        bmqu::MemOutStream expected(bmqtst::TestHelperUtil::allocator());
 
         typedef typename ENUM_TYPE::Enum T;
 
@@ -66,17 +65,17 @@ static void printEnumHelper(ARRAY (&data)[SIZE])
         out.setstate(bsl::ios_base::badbit);
         ENUM_TYPE::print(out, obj, 0, -1);
 
-        ASSERT_EQ(out.str(), "");
+        BMQTST_ASSERT_EQ(out.str(), "");
 
         out.clear();
         ENUM_TYPE::print(out, obj, 0, -1);
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
 
         out.reset();
         out << obj;
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
     }
 }
 
@@ -100,7 +99,7 @@ static void test1_enumPrint()
 //   operator<<(bsl::ostream&, CompressionAlgorithmType::Enum)
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("ENUM LAYOUT");
+    bmqtst::TestHelper::printTestName("ENUM LAYOUT");
 
     PV("Test bmqt::CompressionAlgorithmType printing");
     {
@@ -129,16 +128,16 @@ static void test1_enumPrint()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
     case 1: test1_enumPrint(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

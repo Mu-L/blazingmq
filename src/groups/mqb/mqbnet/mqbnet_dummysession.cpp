@@ -30,7 +30,7 @@ namespace mqbnet {
 // ------------------
 
 DummySession::DummySession(
-    const bsl::shared_ptr<mwcio::Channel>&  channel,
+    const bsl::shared_ptr<bmqio::Channel>&  channel,
     const bmqp_ctrlmsg::NegotiationMessage& negotiationMessage,
     ClusterNode*                            clusterNode,
     const bsl::string&                      description,
@@ -58,7 +58,8 @@ void DummySession::tearDown(
 
 void DummySession::initiateShutdown(
     BSLS_ANNOTATION_UNUSED const ShutdownCb& callback,
-    BSLS_ANNOTATION_UNUSED const bsls::TimeInterval& timeout)
+    BSLS_ANNOTATION_UNUSED const bsls::TimeInterval& timeout,
+    BSLS_ANNOTATION_UNUSED bool                      supportShutdownV2)
 {
     // NOTHING
 }

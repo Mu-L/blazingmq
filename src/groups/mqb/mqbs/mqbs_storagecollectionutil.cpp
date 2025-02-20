@@ -14,6 +14,7 @@
 // limitations under the License.
 
 // mqbs_storagecollectionutil.cpp                                     -*-C++-*-
+#include <ball_log.h>
 #include <mqbs_storagecollectionutil.h>
 
 // BDE
@@ -70,9 +71,8 @@ createStorageComparator(StorageCollectionUtilSortMetric::Enum metricType)
 bool byDomainFilter(const ReplicatedStorage* storage,
                     const bsl::string&       domainName)
 {
-    return strncmp(storage->queueUri().qualifiedDomain().data(),
-                   domainName.c_str(),
-                   storage->queueUri().qualifiedDomain().length()) == 0;
+    return storage->queueUri().qualifiedDomain().compare(
+               bslstl::StringRef(domainName)) == 0;
 }
 
 bool byMessageCountFilter(const ReplicatedStorage* storage,
@@ -156,6 +156,31 @@ void StorageCollectionUtil::loadStorages(StorageList*       storages,
     }
 }
 
+namespace {
+
+template <class Predicate>
+struct Not1 {
+    Not1(const Predicate& predicate)
+    : d_predicate(predicate)
+    {
+    }
+
+    template <class Value>
+    bool operator()(const Value& value) const
+    {
+        return !d_predicate(value);
+    }
+    Predicate d_predicate;
+};
+
+template <class Predicate>
+Not1<Predicate> not_pred(const Predicate& predicate)
+{
+    return Not1<Predicate>(predicate);
+}
+
+}  // close anonymous namespace
+
 void StorageCollectionUtil::filterStorages(StorageList*         storages,
                                            const StorageFilter& filter)
 {
@@ -164,7 +189,7 @@ void StorageCollectionUtil::filterStorages(StorageList*         storages,
 
     StorageListIter iter = bsl::remove_if(storages->begin(),
                                           storages->end(),
-                                          bsl::not1(filter));
+                                          not_pred(filter));
     storages->erase(iter, storages->end());
 }
 

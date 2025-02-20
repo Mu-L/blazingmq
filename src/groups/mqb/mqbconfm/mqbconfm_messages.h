@@ -1,4 +1,4 @@
-// Copyright 2014-2023 Bloomberg Finance L.P.
+// Copyright 2014-2024 Bloomberg Finance L.P.
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,6 +23,8 @@
 
 #include <bdlat_attributeinfo.h>
 
+#include <bdlat_enumeratorinfo.h>
+
 #include <bdlat_selectioninfo.h>
 
 #include <bdlat_typetraits.h>
@@ -44,6 +46,9 @@
 
 #include <bsl_iosfwd.h>
 #include <bsl_limits.h>
+
+#include <bsl_ostream.h>
+#include <bsl_string.h>
 
 namespace BloombergLP {
 
@@ -97,6 +102,9 @@ namespace mqbconfm {
 class DomainConfigRequest;
 }
 namespace mqbconfm {
+class Expression;
+}
+namespace mqbconfm {
 class QueueMode;
 }
 namespace mqbconfm {
@@ -110,6 +118,9 @@ class Request;
 }
 namespace mqbconfm {
 class StorageDefinition;
+}
+namespace mqbconfm {
+class Subscription;
 }
 namespace mqbconfm {
 class Domain;
@@ -126,14 +137,19 @@ namespace mqbconfm {
 // class BrokerIdentity
 // ====================
 
-/// Generic type to hold identification of a broker.
-/// hostName......: machine name hostTags......: machine tags
-/// brokerVersion.: version of the broker
 class BrokerIdentity {
+    // Generic type to hold identification of a broker.
+    // hostName......: machine name hostTags......: machine tags
+    // brokerVersion.: version of the broker
+
     // INSTANCE DATA
     bsl::string d_hostName;
     bsl::string d_hostTags;
     bsl::string d_brokerVersion;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
 
   public:
     // TYPES
@@ -158,190 +174,200 @@ class BrokerIdentity {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `BrokerIdentity` having the default value.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit BrokerIdentity(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'BrokerIdentity' having the default value.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `BrokerIdentity` having the value of the
-    /// specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     BrokerIdentity(const BrokerIdentity& original,
                    bslma::Allocator*     basicAllocator = 0);
+    // Create an object of type 'BrokerIdentity' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `BrokerIdentity` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     BrokerIdentity(BrokerIdentity&& original) noexcept;
+    // Create an object of type 'BrokerIdentity' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `BrokerIdentity` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     BrokerIdentity(BrokerIdentity&&  original,
                    bslma::Allocator* basicAllocator);
+    // Create an object of type 'BrokerIdentity' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~BrokerIdentity();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     BrokerIdentity& operator=(const BrokerIdentity& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     BrokerIdentity& operator=(BrokerIdentity&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "HostName" attribute of this
-    /// object.
     bsl::string& hostName();
+    // Return a reference to the modifiable "HostName" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "HostTags" attribute of this
-    /// object.
     bsl::string& hostTags();
+    // Return a reference to the modifiable "HostTags" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "BrokerVersion" attribute of
-    /// this object.
     bsl::string& brokerVersion();
+    // Return a reference to the modifiable "BrokerVersion" attribute of
+    // this object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return a reference offering non-modifiable access to the "HostName"
-    /// attribute of this object.
     const bsl::string& hostName() const;
+    // Return a reference offering non-modifiable access to the "HostName"
+    // attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the "HostTags"
-    /// attribute of this object.
     const bsl::string& hostTags() const;
+    // Return a reference offering non-modifiable access to the "HostTags"
+    // attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "BrokerVersion" attribute of this object.
     const bsl::string& brokerVersion() const;
+    // Return a reference offering non-modifiable access to the
+    // "BrokerVersion" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const BrokerIdentity& lhs,
+                           const BrokerIdentity& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.hostName() == rhs.hostName() &&
+               lhs.hostTags() == rhs.hostTags() &&
+               lhs.brokerVersion() == rhs.brokerVersion();
+    }
+
+    friend bool operator!=(const BrokerIdentity& lhs,
+                           const BrokerIdentity& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&         stream,
+                                    const BrokerIdentity& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&     hashAlg,
+                           const BrokerIdentity& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'BrokerIdentity'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const BrokerIdentity& lhs, const BrokerIdentity& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const BrokerIdentity& lhs, const BrokerIdentity& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&         stream,
-                                const BrokerIdentity& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `BrokerIdentity`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const BrokerIdentity& object);
 
 }  // close package namespace
 
@@ -356,8 +382,9 @@ namespace mqbconfm {
 // class DomainConfigRaw
 // =====================
 
-/// Response of a get domain config request.
 class DomainConfigRaw {
+    // Response of a get domain config request.
+
     // INSTANCE DATA
     bsl::string d_domainName;
     bsl::string d_config;
@@ -377,182 +404,193 @@ class DomainConfigRaw {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `DomainConfigRaw` having the default value.
-    ///  Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit DomainConfigRaw(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'DomainConfigRaw' having the default value.
+    //  Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `DomainConfigRaw` having the value of the
-    /// specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     DomainConfigRaw(const DomainConfigRaw& original,
                     bslma::Allocator*      basicAllocator = 0);
+    // Create an object of type 'DomainConfigRaw' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `DomainConfigRaw` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     DomainConfigRaw(DomainConfigRaw&& original) noexcept;
+    // Create an object of type 'DomainConfigRaw' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `DomainConfigRaw` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     DomainConfigRaw(DomainConfigRaw&& original,
                     bslma::Allocator* basicAllocator);
+    // Create an object of type 'DomainConfigRaw' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~DomainConfigRaw();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     DomainConfigRaw& operator=(const DomainConfigRaw& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     DomainConfigRaw& operator=(DomainConfigRaw&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "DomainName" attribute of this
-    /// object.
     bsl::string& domainName();
+    // Return a reference to the modifiable "DomainName" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "Config" attribute of this
-    /// object.
     bsl::string& config();
+    // Return a reference to the modifiable "Config" attribute of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "DomainName" attribute of this object.
     const bsl::string& domainName() const;
+    // Return a reference offering non-modifiable access to the
+    // "DomainName" attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the "Config"
-    /// attribute of this object.
     const bsl::string& config() const;
+    // Return a reference offering non-modifiable access to the "Config"
+    // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const DomainConfigRaw& lhs,
+                           const DomainConfigRaw& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.domainName() == rhs.domainName() &&
+               lhs.config() == rhs.config();
+    }
+
+    friend bool operator!=(const DomainConfigRaw& lhs,
+                           const DomainConfigRaw& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&          stream,
+                                    const DomainConfigRaw& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&      hashAlg,
+                           const DomainConfigRaw& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'DomainConfigRaw'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.domainName());
+        hashAppend(hashAlg, object.config());
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const DomainConfigRaw& lhs, const DomainConfigRaw& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const DomainConfigRaw& lhs, const DomainConfigRaw& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&          stream,
-                                const DomainConfigRaw& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `DomainConfigRaw`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const DomainConfigRaw& object);
 
 }  // close package namespace
 
@@ -567,10 +605,11 @@ namespace mqbconfm {
 // class DomainResolver
 // ====================
 
-/// Top level type representing the information retrieved when resolving a
-/// domain.  Review: Keep this? Why not just store the cluster name?
-/// name....: Domain name cluster.: Cluster name
 class DomainResolver {
+    // Top level type representing the information retrieved when resolving a
+    // domain.  Review: Keep this? Why not just store the cluster name?
+    // name....: Domain name cluster.: Cluster name
+
     // INSTANCE DATA
     bsl::string d_name;
     bsl::string d_cluster;
@@ -590,182 +629,192 @@ class DomainResolver {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `DomainResolver` having the default value.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit DomainResolver(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'DomainResolver' having the default value.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `DomainResolver` having the value of the
-    /// specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     DomainResolver(const DomainResolver& original,
                    bslma::Allocator*     basicAllocator = 0);
+    // Create an object of type 'DomainResolver' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `DomainResolver` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     DomainResolver(DomainResolver&& original) noexcept;
+    // Create an object of type 'DomainResolver' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `DomainResolver` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     DomainResolver(DomainResolver&&  original,
                    bslma::Allocator* basicAllocator);
+    // Create an object of type 'DomainResolver' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~DomainResolver();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     DomainResolver& operator=(const DomainResolver& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     DomainResolver& operator=(DomainResolver&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "Name" attribute of this
-    /// object.
     bsl::string& name();
+    // Return a reference to the modifiable "Name" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "Cluster" attribute of this
-    /// object.
     bsl::string& cluster();
+    // Return a reference to the modifiable "Cluster" attribute of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return a reference offering non-modifiable access to the "Name"
-    /// attribute of this object.
     const bsl::string& name() const;
+    // Return a reference offering non-modifiable access to the "Name"
+    // attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the "Cluster"
-    /// attribute of this object.
     const bsl::string& cluster() const;
+    // Return a reference offering non-modifiable access to the "Cluster"
+    // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const DomainResolver& lhs,
+                           const DomainResolver& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.name() == rhs.name() && lhs.cluster() == rhs.cluster();
+    }
+
+    friend bool operator!=(const DomainResolver& lhs,
+                           const DomainResolver& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&         stream,
+                                    const DomainResolver& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&     hashAlg,
+                           const DomainResolver& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'DomainResolver'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.name());
+        hashAppend(hashAlg, object.cluster());
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const DomainResolver& lhs, const DomainResolver& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const DomainResolver& lhs, const DomainResolver& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&         stream,
-                                const DomainResolver& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `DomainResolver`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const DomainResolver& object);
 
 }  // close package namespace
 
@@ -776,14 +825,78 @@ BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
 
 namespace mqbconfm {
 
+// =======================
+// class ExpressionVersion
+// =======================
+
+struct ExpressionVersion {
+    // Enumeration of the various expression versions.
+
+  public:
+    // TYPES
+    enum Value { E_UNDEFINED = 0, E_VERSION_1 = 1 };
+
+    enum { NUM_ENUMERATORS = 2 };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const bdlat_EnumeratorInfo ENUMERATOR_INFO_ARRAY[];
+
+    // CLASS METHODS
+    static const char* toString(Value value);
+    // Return the string representation exactly matching the enumerator
+    // name corresponding to the specified enumeration 'value'.
+
+    static int fromString(Value* result, const char* string, int stringLength);
+    // Load into the specified 'result' the enumerator matching the
+    // specified 'string' of the specified 'stringLength'.  Return 0 on
+    // success, and a non-zero value with no effect on 'result' otherwise
+    // (i.e., 'string' does not match any enumerator).
+
+    static int fromString(Value* result, const bsl::string& string);
+    // Load into the specified 'result' the enumerator matching the
+    // specified 'string'.  Return 0 on success, and a non-zero value with
+    // no effect on 'result' otherwise (i.e., 'string' does not match any
+    // enumerator).
+
+    static int fromInt(Value* result, int number);
+    // Load into the specified 'result' the enumerator matching the
+    // specified 'number'.  Return 0 on success, and a non-zero value with
+    // no effect on 'result' otherwise (i.e., 'number' does not match any
+    // enumerator).
+
+    static bsl::ostream& print(bsl::ostream& stream, Value value);
+    // Write to the specified 'stream' the string representation of
+    // the specified enumeration 'value'.  Return a reference to
+    // the modifiable 'stream'.
+
+    // HIDDEN FRIENDS
+    friend bsl::ostream& operator<<(bsl::ostream& stream, Value rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return ExpressionVersion::print(stream, rhs);
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_ENUMERATION_TRAITS(mqbconfm::ExpressionVersion)
+
+namespace mqbconfm {
+
 // =============
 // class Failure
 // =============
 
-/// Generic type to represent an error.
-/// code.....: an integer value representing the error message..: an
-/// optional string describing the error
 class Failure {
+    // Generic type to represent an error.
+    // code.....: an integer value representing the error message..: an
+    // optional string describing the error
+
     // INSTANCE DATA
     bsl::string d_message;
     int         d_code;
@@ -805,178 +918,184 @@ class Failure {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `Failure` having the default value.  Use
-    /// the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit Failure(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Failure' having the default value.  Use
+    // the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `Failure` having the value of the specified
-    /// `original` object.  Use the optionally specified `basicAllocator` to
-    /// supply memory.  If `basicAllocator` is 0, the currently installed
-    /// default allocator is used.
     Failure(const Failure& original, bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Failure' having the value of the specified
+    // 'original' object.  Use the optionally specified 'basicAllocator' to
+    // supply memory.  If 'basicAllocator' is 0, the currently installed
+    // default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `Failure` having the value of the specified
-    /// `original` object.  After performing this action, the `original`
-    /// object will be left in a valid, but unspecified state.
     Failure(Failure&& original) noexcept;
+    // Create an object of type 'Failure' having the value of the specified
+    // 'original' object.  After performing this action, the 'original'
+    // object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `Failure` having the value of the specified
-    /// `original` object.  After performing this action, the `original`
-    /// object will be left in a valid, but unspecified state.  Use the
-    /// optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     Failure(Failure&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'Failure' having the value of the specified
+    // 'original' object.  After performing this action, the 'original'
+    // object will be left in a valid, but unspecified state.  Use the
+    // optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~Failure();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     Failure& operator=(const Failure& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     Failure& operator=(Failure&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "Code" attribute of this
-    /// object.
     int& code();
+    // Return a reference to the modifiable "Code" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "Message" attribute of this
-    /// object.
     bsl::string& message();
+    // Return a reference to the modifiable "Message" attribute of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return the value of the "Code" attribute of this object.
     int code() const;
+    // Return the value of the "Code" attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the "Message"
-    /// attribute of this object.
     const bsl::string& message() const;
+    // Return a reference offering non-modifiable access to the "Message"
+    // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Failure& lhs, const Failure& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.code() == rhs.code() && lhs.message() == rhs.message();
+    }
+
+    friend bool operator!=(const Failure& lhs, const Failure& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const Failure& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Failure& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Failure'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.code());
+        hashAppend(hashAlg, object.message());
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const Failure& lhs, const Failure& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const Failure& lhs, const Failure& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Failure& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `Failure`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Failure& object);
 
 }  // close package namespace
 
@@ -990,8 +1109,9 @@ namespace mqbconfm {
 // class FileBackedStorage
 // =======================
 
-/// Configuration for storage using a file on disk.
 class FileBackedStorage {
+    // Configuration for storage using a file on disk.
+
     // INSTANCE DATA
 
   public:
@@ -1003,154 +1123,127 @@ class FileBackedStorage {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
 
-    /// Create an object of type `FileBackedStorage` having the default
-    /// value.
-    FileBackedStorage();
-
-    /// Create an object of type `FileBackedStorage` having the value of the
-    /// specified `original` object.
-    FileBackedStorage(const FileBackedStorage& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `FileBackedStorage` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    FileBackedStorage(FileBackedStorage&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~FileBackedStorage();
-
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    FileBackedStorage& operator=(const FileBackedStorage& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    FileBackedStorage& operator=(FileBackedStorage&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const FileBackedStorage&, const FileBackedStorage&)
+    // Returns 'true' as this type has no attributes and so all objects of
+    // this type are considered equal.
+    {
+        return true;
+    }
+
+    friend bool operator!=(const FileBackedStorage& lhs,
+                           const FileBackedStorage& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&            stream,
+                                    const FileBackedStorage& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&, const FileBackedStorage&)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'FileBackedStorage'.
+    {
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const FileBackedStorage& lhs,
-                       const FileBackedStorage& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const FileBackedStorage& lhs,
-                       const FileBackedStorage& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&            stream,
-                                const FileBackedStorage& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `FileBackedStorage`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const FileBackedStorage& object);
 
 }  // close package namespace
 
@@ -1164,8 +1257,9 @@ namespace mqbconfm {
 // class InMemoryStorage
 // =====================
 
-/// Configuration for storage using an in-memory map.
 class InMemoryStorage {
+    // Configuration for storage using an in-memory map.
+
     // INSTANCE DATA
 
   public:
@@ -1177,151 +1271,127 @@ class InMemoryStorage {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
 
-    /// Create an object of type `InMemoryStorage` having the default value.
-    InMemoryStorage();
-
-    /// Create an object of type `InMemoryStorage` having the value of the
-    /// specified `original` object.
-    InMemoryStorage(const InMemoryStorage& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `InMemoryStorage` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    InMemoryStorage(InMemoryStorage&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~InMemoryStorage();
-
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    InMemoryStorage& operator=(const InMemoryStorage& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    InMemoryStorage& operator=(InMemoryStorage&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const InMemoryStorage&, const InMemoryStorage&)
+    // Returns 'true' as this type has no attributes and so all objects of
+    // this type are considered equal.
+    {
+        return true;
+    }
+
+    friend bool operator!=(const InMemoryStorage& lhs,
+                           const InMemoryStorage& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&          stream,
+                                    const InMemoryStorage& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&, const InMemoryStorage&)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'InMemoryStorage'.
+    {
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const InMemoryStorage& lhs, const InMemoryStorage& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const InMemoryStorage& lhs, const InMemoryStorage& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&          stream,
-                                const InMemoryStorage& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `InMemoryStorage`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const InMemoryStorage& object);
 
 }  // close package namespace
 
@@ -1335,20 +1405,27 @@ namespace mqbconfm {
 // class Limits
 // ============
 
-/// Represent the various limitations to apply to either a `domain` or an
-/// individual `queue`.
-/// message................: maximum number of messages
-/// messagesWatermarkRatio.: threshold ratio to the maximum number of
-/// messages for which a high watermark alarm will trigger
-/// byte...................: maximum cumulated number of bytes
-/// bytesWatermarkRatio....: threshold ratio to the maximum cumulated number
-/// of bytes for which a high watermark alarm will trigger
 class Limits {
+    // Represent the various limitations to apply to either a 'domain' or an
+    // individual 'queue'.
+    // messages...............: maximum number of messages
+    // messagesWatermarkRatio.: threshold ratio to the maximum number of
+    // messages for which a high watermark alarm will trigger
+    // bytes..................: maximum cumulated number of bytes
+    // bytesWatermarkRatio....: threshold ratio to the maximum cumulated number
+    // of bytes for which a high watermark alarm will trigger
+
     // INSTANCE DATA
     double             d_messagesWatermarkRatio;
     double             d_bytesWatermarkRatio;
     bsls::Types::Int64 d_messages;
     bsls::Types::Int64 d_bytes;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const Limits& rhs) const;
 
   public:
     // TYPES
@@ -1379,180 +1456,158 @@ class Limits {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `Limits` having the default value.
     Limits();
-
-    /// Create an object of type `Limits` having the value of the specified
-    /// `original` object.
-    Limits(const Limits& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `Limits` having the value of the specified
-    /// `original` object.  After performing this action, the `original`
-    /// object will be left in a valid, but unspecified state.
-    Limits(Limits&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~Limits();
+    // Create an object of type 'Limits' having the default value.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    Limits& operator=(const Limits& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    Limits& operator=(Limits&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "Messages" attribute of this
-    /// object.
     bsls::Types::Int64& messages();
+    // Return a reference to the modifiable "Messages" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "MessagesWatermarkRatio"
-    /// attribute of this object.
     double& messagesWatermarkRatio();
+    // Return a reference to the modifiable "MessagesWatermarkRatio"
+    // attribute of this object.
 
-    /// Return a reference to the modifiable "Bytes" attribute of this
-    /// object.
     bsls::Types::Int64& bytes();
+    // Return a reference to the modifiable "Bytes" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "BytesWatermarkRatio" attribute
-    /// of this object.
     double& bytesWatermarkRatio();
+    // Return a reference to the modifiable "BytesWatermarkRatio" attribute
+    // of this object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return the value of the "Messages" attribute of this object.
     bsls::Types::Int64 messages() const;
+    // Return the value of the "Messages" attribute of this object.
 
-    /// Return the value of the "MessagesWatermarkRatio" attribute of this
-    /// object.
     double messagesWatermarkRatio() const;
+    // Return the value of the "MessagesWatermarkRatio" attribute of this
+    // object.
 
-    /// Return the value of the "Bytes" attribute of this object.
     bsls::Types::Int64 bytes() const;
+    // Return the value of the "Bytes" attribute of this object.
 
-    /// Return the value of the "BytesWatermarkRatio" attribute of this
-    /// object.
     double bytesWatermarkRatio() const;
+    // Return the value of the "BytesWatermarkRatio" attribute of this
+    // object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Limits& lhs, const Limits& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const Limits& lhs, const Limits& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const Limits& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Limits& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Limits'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const Limits& lhs, const Limits& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const Limits& lhs, const Limits& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Limits& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `Limits`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Limits& object);
 
 }  // close package namespace
 
@@ -1566,25 +1621,30 @@ namespace mqbconfm {
 // class MsgGroupIdConfig
 // ======================
 
-/// Configuration for the use of Group Ids for routing.  The garbage
-/// collection arguments could be assigned manually or get calculated out of
-/// statistics on the streams.  They are considered internal and our
-/// intentions is <u>not</u> to give customers full control over those numbers.
-/// Their role is to protect BMQ from abuse i.e.  cases of infinite Group
-/// Ids being stored.  Another assumption is that 'maxGroups >> number of
-/// consumers'.
-/// rebalance..: groups will be dynamically rebalanced in way such that all
-/// consumers have equal share of Group Ids assigned to them maxGroups..:
-/// Maximum number of groups.  If the number of groups gets larger than
-/// this, the least recently used one is evicted.  This is a "garbage
-/// collection" parameter ttlSeconds.: minimum time of inactivity (no
-/// messages for a Group Id), in seconds, before a group becomes available
-/// for "garbage collection".  0 (the default) means unlimited
 class MsgGroupIdConfig {
+    // Configuration for the use of Group Ids for routing.  The garbage
+    // collection arguments could be assigned manually or get calculated out of
+    // statistics on the streams.  They are considered internal and our
+    // intentions is _not_ to give customers full control over those numbers.
+    // Their role is to protect BlazingMQ from abuse i.e.  cases of infinite
+    // Group Ids being stored.  Another assumption is that 'maxGroups >> number
+    // of consumers'.
+    // rebalance..: groups will be dynamically rebalanced in way such that all
+    // consumers have equal share of Group Ids assigned to them maxGroups..:
+    // Maximum number of groups.  If the number of groups gets larger than
+    // this, the least recently used one is evicted.  This is a "garbage
+    // collection" parameter ttlSeconds.: minimum time of inactivity (no
+    // messages for a Group Id), in seconds, before a group becomes available
+    // for "garbage collection".  0 (the default) means unlimited
+
     // INSTANCE DATA
     bsls::Types::Int64 d_ttlSeconds;
     int                d_maxGroups;
     bool               d_rebalance;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
 
   public:
     // TYPES
@@ -1615,175 +1675,157 @@ class MsgGroupIdConfig {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `MsgGroupIdConfig` having the default
-    /// value.
     MsgGroupIdConfig();
-
-    /// Create an object of type `MsgGroupIdConfig` having the value of the
-    /// specified `original` object.
-    MsgGroupIdConfig(const MsgGroupIdConfig& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `MsgGroupIdConfig` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    MsgGroupIdConfig(MsgGroupIdConfig&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~MsgGroupIdConfig();
+    // Create an object of type 'MsgGroupIdConfig' having the default
+    // value.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    MsgGroupIdConfig& operator=(const MsgGroupIdConfig& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    MsgGroupIdConfig& operator=(MsgGroupIdConfig&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "Rebalance" attribute of this
-    /// object.
     bool& rebalance();
+    // Return a reference to the modifiable "Rebalance" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "MaxGroups" attribute of this
-    /// object.
     int& maxGroups();
+    // Return a reference to the modifiable "MaxGroups" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "TtlSeconds" attribute of this
-    /// object.
     bsls::Types::Int64& ttlSeconds();
+    // Return a reference to the modifiable "TtlSeconds" attribute of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return the value of the "Rebalance" attribute of this object.
     bool rebalance() const;
+    // Return the value of the "Rebalance" attribute of this object.
 
-    /// Return the value of the "MaxGroups" attribute of this object.
     int maxGroups() const;
+    // Return the value of the "MaxGroups" attribute of this object.
 
-    /// Return the value of the "TtlSeconds" attribute of this object.
     bsls::Types::Int64 ttlSeconds() const;
+    // Return the value of the "TtlSeconds" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const MsgGroupIdConfig& lhs,
+                           const MsgGroupIdConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.rebalance() == rhs.rebalance() &&
+               lhs.maxGroups() == rhs.maxGroups() &&
+               lhs.ttlSeconds() == rhs.ttlSeconds();
+    }
+
+    friend bool operator!=(const MsgGroupIdConfig& lhs,
+                           const MsgGroupIdConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&           stream,
+                                    const MsgGroupIdConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&       hashAlg,
+                           const MsgGroupIdConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'MsgGroupIdConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const MsgGroupIdConfig& lhs,
-                       const MsgGroupIdConfig& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const MsgGroupIdConfig& lhs,
-                       const MsgGroupIdConfig& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&           stream,
-                                const MsgGroupIdConfig& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `MsgGroupIdConfig`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const MsgGroupIdConfig& object);
 
 }  // close package namespace
 
@@ -1797,8 +1839,9 @@ namespace mqbconfm {
 // class QueueConsistencyEventual
 // ==============================
 
-/// Configuration for eventual consistency.
 class QueueConsistencyEventual {
+    // Configuration for eventual consistency.
+
     // INSTANCE DATA
 
   public:
@@ -1810,156 +1853,128 @@ class QueueConsistencyEventual {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
 
-    /// Create an object of type `QueueConsistencyEventual` having the
-    /// default value.
-    QueueConsistencyEventual();
-
-    /// Create an object of type `QueueConsistencyEventual` having the value
-    /// of the specified `original` object.
-    QueueConsistencyEventual(const QueueConsistencyEventual& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `QueueConsistencyEventual` having the value
-    /// of the specified `original` object.  After performing this action,
-    /// the `original` object will be left in a valid, but unspecified
-    /// state.
-    QueueConsistencyEventual(QueueConsistencyEventual&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~QueueConsistencyEventual();
-
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    QueueConsistencyEventual& operator=(const QueueConsistencyEventual& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    QueueConsistencyEventual& operator=(QueueConsistencyEventual&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const QueueConsistencyEventual&,
+                           const QueueConsistencyEventual&)
+    // Returns 'true' as this type has no attributes and so all objects of
+    // this type are considered equal.
+    {
+        return true;
+    }
+
+    friend bool operator!=(const QueueConsistencyEventual& lhs,
+                           const QueueConsistencyEventual& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                   stream,
+                                    const QueueConsistencyEventual& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&, const QueueConsistencyEventual&)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'QueueConsistencyEventual'.
+    {
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const QueueConsistencyEventual& lhs,
-                       const QueueConsistencyEventual& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const QueueConsistencyEventual& lhs,
-                       const QueueConsistencyEventual& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&                   stream,
-                                const QueueConsistencyEventual& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `QueueConsistencyEventual`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&               hashAlg,
-                const QueueConsistencyEventual& object);
 
 }  // close package namespace
 
@@ -1974,8 +1989,9 @@ namespace mqbconfm {
 // class QueueConsistencyStrong
 // ============================
 
-/// Configuration for strong consistency.
 class QueueConsistencyStrong {
+    // Configuration for strong consistency.
+
     // INSTANCE DATA
 
   public:
@@ -1987,156 +2003,128 @@ class QueueConsistencyStrong {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
 
-    /// Create an object of type `QueueConsistencyStrong` having the default
-    /// value.
-    QueueConsistencyStrong();
-
-    /// Create an object of type `QueueConsistencyStrong` having the value
-    /// of the specified `original` object.
-    QueueConsistencyStrong(const QueueConsistencyStrong& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `QueueConsistencyStrong` having the value
-    /// of the specified `original` object.  After performing this action,
-    /// the `original` object will be left in a valid, but unspecified
-    /// state.
-    QueueConsistencyStrong(QueueConsistencyStrong&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~QueueConsistencyStrong();
-
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    QueueConsistencyStrong& operator=(const QueueConsistencyStrong& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    QueueConsistencyStrong& operator=(QueueConsistencyStrong&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const QueueConsistencyStrong&,
+                           const QueueConsistencyStrong&)
+    // Returns 'true' as this type has no attributes and so all objects of
+    // this type are considered equal.
+    {
+        return true;
+    }
+
+    friend bool operator!=(const QueueConsistencyStrong& lhs,
+                           const QueueConsistencyStrong& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                 stream,
+                                    const QueueConsistencyStrong& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&, const QueueConsistencyStrong&)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'QueueConsistencyStrong'.
+    {
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const QueueConsistencyStrong& lhs,
-                       const QueueConsistencyStrong& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const QueueConsistencyStrong& lhs,
-                       const QueueConsistencyStrong& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&                 stream,
-                                const QueueConsistencyStrong& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `QueueConsistencyStrong`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&             hashAlg,
-                const QueueConsistencyStrong& object);
 
 }  // close package namespace
 
@@ -2151,8 +2139,9 @@ namespace mqbconfm {
 // class QueueModeBroadcast
 // ========================
 
-/// Configuration for a broadcast queue.
 class QueueModeBroadcast {
+    // Configuration for a broadcast queue.
+
     // INSTANCE DATA
 
   public:
@@ -2164,154 +2153,128 @@ class QueueModeBroadcast {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
 
-    /// Create an object of type `QueueModeBroadcast` having the default
-    /// value.
-    QueueModeBroadcast();
-
-    /// Create an object of type `QueueModeBroadcast` having the value of
-    /// the specified `original` object.
-    QueueModeBroadcast(const QueueModeBroadcast& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `QueueModeBroadcast` having the value of
-    /// the specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    QueueModeBroadcast(QueueModeBroadcast&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~QueueModeBroadcast();
-
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    QueueModeBroadcast& operator=(const QueueModeBroadcast& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    QueueModeBroadcast& operator=(QueueModeBroadcast&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const QueueModeBroadcast&,
+                           const QueueModeBroadcast&)
+    // Returns 'true' as this type has no attributes and so all objects of
+    // this type are considered equal.
+    {
+        return true;
+    }
+
+    friend bool operator!=(const QueueModeBroadcast& lhs,
+                           const QueueModeBroadcast& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&             stream,
+                                    const QueueModeBroadcast& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&, const QueueModeBroadcast&)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'QueueModeBroadcast'.
+    {
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const QueueModeBroadcast& lhs,
-                       const QueueModeBroadcast& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const QueueModeBroadcast& lhs,
-                       const QueueModeBroadcast& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&             stream,
-                                const QueueModeBroadcast& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `QueueModeBroadcast`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const QueueModeBroadcast& object);
 
 }  // close package namespace
 
@@ -2325,195 +2288,225 @@ namespace mqbconfm {
 // class QueueModeFanout
 // =====================
 
-/// Configuration for a fanout queue.
-/// appIDs.: List of appIDs authorized to consume from the queue.
 class QueueModeFanout {
+    // Configuration for a fanout queue.
+    // appIDs.............: List of appIDs authorized to consume from the
+    // queue.  publishAppIdMetrics: Whether to publish appId metrics.
+
     // INSTANCE DATA
     bsl::vector<bsl::string> d_appIDs;
+    bool                     d_publishAppIdMetrics;
 
   public:
     // TYPES
-    enum { ATTRIBUTE_ID_APP_I_DS = 0 };
+    enum {
+        ATTRIBUTE_ID_APP_I_DS               = 0,
+        ATTRIBUTE_ID_PUBLISH_APP_ID_METRICS = 1
+    };
 
-    enum { NUM_ATTRIBUTES = 1 };
+    enum { NUM_ATTRIBUTES = 2 };
 
-    enum { ATTRIBUTE_INDEX_APP_I_DS = 0 };
+    enum {
+        ATTRIBUTE_INDEX_APP_I_DS               = 0,
+        ATTRIBUTE_INDEX_PUBLISH_APP_ID_METRICS = 1
+    };
 
     // CONSTANTS
     static const char CLASS_NAME[];
+
+    static const bool DEFAULT_INITIALIZER_PUBLISH_APP_ID_METRICS;
 
     static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `QueueModeFanout` having the default value.
-    ///  Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit QueueModeFanout(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'QueueModeFanout' having the default value.
+    //  Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `QueueModeFanout` having the value of the
-    /// specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     QueueModeFanout(const QueueModeFanout& original,
                     bslma::Allocator*      basicAllocator = 0);
+    // Create an object of type 'QueueModeFanout' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `QueueModeFanout` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     QueueModeFanout(QueueModeFanout&& original) noexcept;
+    // Create an object of type 'QueueModeFanout' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `QueueModeFanout` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     QueueModeFanout(QueueModeFanout&& original,
                     bslma::Allocator* basicAllocator);
+    // Create an object of type 'QueueModeFanout' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~QueueModeFanout();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     QueueModeFanout& operator=(const QueueModeFanout& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     QueueModeFanout& operator=(QueueModeFanout&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "AppIDs" attribute of this
-    /// object.
     bsl::vector<bsl::string>& appIDs();
+    // Return a reference to the modifiable "AppIDs" attribute of this
+    // object.
+
+    bool& publishAppIdMetrics();
+    // Return a reference to the modifiable "PublishAppIdMetrics" attribute
+    // of this object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return a reference offering non-modifiable access to the "AppIDs"
-    /// attribute of this object.
     const bsl::vector<bsl::string>& appIDs() const;
+    // Return a reference offering non-modifiable access to the "AppIDs"
+    // attribute of this object.
+
+    bool publishAppIdMetrics() const;
+    // Return the value of the "PublishAppIdMetrics" attribute of this
+    // object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const QueueModeFanout& lhs,
+                           const QueueModeFanout& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.appIDs() == rhs.appIDs() &&
+               lhs.publishAppIdMetrics() == rhs.publishAppIdMetrics();
+    }
+
+    friend bool operator!=(const QueueModeFanout& lhs,
+                           const QueueModeFanout& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&          stream,
+                                    const QueueModeFanout& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&      hashAlg,
+                           const QueueModeFanout& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'QueueModeFanout'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.appIDs());
+        hashAppend(hashAlg, object.publishAppIdMetrics());
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const QueueModeFanout& lhs, const QueueModeFanout& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const QueueModeFanout& lhs, const QueueModeFanout& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&          stream,
-                                const QueueModeFanout& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `QueueModeFanout`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const QueueModeFanout& object);
 
 }  // close package namespace
 
@@ -2528,8 +2521,9 @@ namespace mqbconfm {
 // class QueueModePriority
 // =======================
 
-/// Configuration for a priority queue.
 class QueueModePriority {
+    // Configuration for a priority queue.
+
     // INSTANCE DATA
 
   public:
@@ -2541,154 +2535,127 @@ class QueueModePriority {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
 
-    /// Create an object of type `QueueModePriority` having the default
-    /// value.
-    QueueModePriority();
-
-    /// Create an object of type `QueueModePriority` having the value of the
-    /// specified `original` object.
-    QueueModePriority(const QueueModePriority& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `QueueModePriority` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    QueueModePriority(QueueModePriority&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~QueueModePriority();
-
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    QueueModePriority& operator=(const QueueModePriority& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    QueueModePriority& operator=(QueueModePriority&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const QueueModePriority&, const QueueModePriority&)
+    // Returns 'true' as this type has no attributes and so all objects of
+    // this type are considered equal.
+    {
+        return true;
+    }
+
+    friend bool operator!=(const QueueModePriority& lhs,
+                           const QueueModePriority& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&            stream,
+                                    const QueueModePriority& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&, const QueueModePriority&)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'QueueModePriority'.
+    {
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const QueueModePriority& lhs,
-                       const QueueModePriority& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const QueueModePriority& lhs,
-                       const QueueModePriority& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&            stream,
-                                const QueueModePriority& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `QueueModePriority`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const QueueModePriority& object);
 
 }  // close package namespace
 
@@ -2702,10 +2669,11 @@ namespace mqbconfm {
 // class Consistency
 // =================
 
-/// Consistency choices to configure a queue.
-/// eventual........: no Replication Receipt is required.  strong..........:
-/// require Replication Receipt before ACK/PUSH
 class Consistency {
+    // Consistency choices to configure a queue.
+    // eventual........: no Replication Receipt is required.  strong..........:
+    // require Replication Receipt before ACK/PUSH
+
     // INSTANCE DATA
     union {
         bsls::ObjectBuffer<QueueConsistencyEventual> d_eventual;
@@ -2713,6 +2681,12 @@ class Consistency {
     };
 
     int d_selectionId;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const Consistency& rhs) const;
 
   public:
     // TYPES
@@ -2733,64 +2707,61 @@ class Consistency {
     static const bdlat_SelectionInfo SELECTION_INFO_ARRAY[];
 
     // CLASS METHODS
-
-    /// Return selection information for the selection indicated by the
-    /// specified `id` if the selection exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(int id);
+    // Return selection information for the selection indicated by the
+    // specified 'id' if the selection exists, and 0 otherwise.
 
-    /// Return selection information for the selection indicated by the
-    /// specified `name` of the specified `nameLength` if the selection
-    /// exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(const char* name,
                                                           int nameLength);
+    // Return selection information for the selection indicated by the
+    // specified 'name' of the specified 'nameLength' if the selection
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `Consistency` having the default value.
     Consistency();
+    // Create an object of type 'Consistency' having the default value.
 
-    /// Create an object of type `Consistency` having the value of the
-    /// specified `original` object.
     Consistency(const Consistency& original);
+    // Create an object of type 'Consistency' having the value of the
+    // specified 'original' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `Consistency` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     Consistency(Consistency&& original) noexcept;
+    // Create an object of type 'Consistency' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 #endif
 
-    /// Destroy this object.
     ~Consistency();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     Consistency& operator=(const Consistency& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     Consistency& operator=(Consistency&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon default
-    /// construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon default
+    // construction).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `selectionId`.  Return 0 on success, and
-    /// non-zero value otherwise (i.e., the selection is not found).
     int makeSelection(int selectionId);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'selectionId'.  Return 0 on success, and
+    // non-zero value otherwise (i.e., the selection is not found).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `name` of the specified `nameLength`.
-    /// Return 0 on success, and non-zero value otherwise (i.e., the
-    /// selection is not found).
     int makeSelection(const char* name, int nameLength);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'name' of the specified 'nameLength'.
+    // Return 0 on success, and non-zero value otherwise (i.e., the
+    // selection is not found).
 
     QueueConsistencyEventual& makeEventual();
     QueueConsistencyEventual&
@@ -2813,98 +2784,111 @@ class Consistency {
     // specify the 'value' of the "Strong".  If 'value' is not specified,
     // the default "Strong" value is used.
 
-    /// Invoke the specified `manipulator` on the address of the modifiable
-    /// selection, supplying `manipulator` with the corresponding selection
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if this object has a defined selection,
-    /// and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateSelection(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' on the address of the modifiable
+    // selection, supplying 'manipulator' with the corresponding selection
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if this object has a defined selection,
+    // and -1 otherwise.
 
-    /// Return a reference to the modifiable "Eventual" selection of this
-    /// object if "Eventual" is the current selection.  The behavior is
-    /// undefined unless "Eventual" is the selection of this object.
     QueueConsistencyEventual& eventual();
+    // Return a reference to the modifiable "Eventual" selection of this
+    // object if "Eventual" is the current selection.  The behavior is
+    // undefined unless "Eventual" is the selection of this object.
 
-    /// Return a reference to the modifiable "Strong" selection of this
-    /// object if "Strong" is the current selection.  The behavior is
-    /// undefined unless "Strong" is the selection of this object.
     QueueConsistencyStrong& strong();
+    // Return a reference to the modifiable "Strong" selection of this
+    // object if "Strong" is the current selection.  The behavior is
+    // undefined unless "Strong" is the selection of this object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Return the id of the current selection if the selection is defined,
-    /// and -1 otherwise.
     int selectionId() const;
+    // Return the id of the current selection if the selection is defined,
+    // and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the non-modifiable selection,
-    /// supplying `accessor` with the corresponding selection information
-    /// structure.  Return the value returned from the invocation of
-    /// `accessor` if this object has a defined selection, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessSelection(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' on the non-modifiable selection,
+    // supplying 'accessor' with the corresponding selection information
+    // structure.  Return the value returned from the invocation of
+    // 'accessor' if this object has a defined selection, and -1 otherwise.
 
-    /// Return a reference to the non-modifiable "Eventual" selection of
-    /// this object if "Eventual" is the current selection.  The behavior is
-    /// undefined unless "Eventual" is the selection of this object.
     const QueueConsistencyEventual& eventual() const;
+    // Return a reference to the non-modifiable "Eventual" selection of
+    // this object if "Eventual" is the current selection.  The behavior is
+    // undefined unless "Eventual" is the selection of this object.
 
-    /// Return a reference to the non-modifiable "Strong" selection of this
-    /// object if "Strong" is the current selection.  The behavior is
-    /// undefined unless "Strong" is the selection of this object.
     const QueueConsistencyStrong& strong() const;
+    // Return a reference to the non-modifiable "Strong" selection of this
+    // object if "Strong" is the current selection.  The behavior is
+    // undefined unless "Strong" is the selection of this object.
 
-    /// Return `true` if the value of this object is a "Eventual" value, and
-    /// return `false` otherwise.
     bool isEventualValue() const;
+    // Return 'true' if the value of this object is a "Eventual" value, and
+    // return 'false' otherwise.
 
-    /// Return `true` if the value of this object is a "Strong" value, and
-    /// return `false` otherwise.
     bool isStrongValue() const;
+    // Return 'true' if the value of this object is a "Strong" value, and
+    // return 'false' otherwise.
 
-    /// Return `true` if the value of this object is undefined, and `false`
-    /// otherwise.
     bool isUndefinedValue() const;
+    // Return 'true' if the value of this object is undefined, and 'false'
+    // otherwise.
 
-    /// Return the symbolic name of the current selection of this object.
     const char* selectionName() const;
+    // Return the symbolic name of the current selection of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Consistency& lhs, const Consistency& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects have the same
+    // value, and 'false' otherwise.  Two 'Consistency' objects have the
+    // same value if either the selections in both objects have the same
+    // ids and the same values, or both selections are undefined.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const Consistency& lhs, const Consistency& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects do not have
+    // the same values, as determined by 'operator==', and 'false'
+    // otherwise.
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&      stream,
+                                    const Consistency& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&  hashAlg,
+                           const Consistency& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Consistency'.
+    {
+        return object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` objects have the same
-/// value, and `false` otherwise.  Two `Consistency` objects have the same
-/// value if either the selections in both objects have the same ids and
-/// the same values, or both selections are undefined.
-inline bool operator==(const Consistency& lhs, const Consistency& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` objects do not have the
-/// same values, as determined by `operator==`, and `false` otherwise.
-inline bool operator!=(const Consistency& lhs, const Consistency& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Consistency& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `Consistency`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Consistency& object);
 
 }  // close package namespace
 
@@ -2918,8 +2902,9 @@ namespace mqbconfm {
 // class DomainConfigRequest
 // =========================
 
-/// Request to get a domain config.
 class DomainConfigRequest {
+    // Request to get a domain config.
+
     // INSTANCE DATA
     bsl::string    d_domainName;
     BrokerIdentity d_brokerIdentity;
@@ -2942,184 +2927,193 @@ class DomainConfigRequest {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `DomainConfigRequest` having the default
-    /// value.  Use the optionally specified `basicAllocator` to supply
-    /// memory.  If `basicAllocator` is 0, the currently installed default
-    /// allocator is used.
     explicit DomainConfigRequest(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'DomainConfigRequest' having the default
+    // value.  Use the optionally specified 'basicAllocator' to supply
+    // memory.  If 'basicAllocator' is 0, the currently installed default
+    // allocator is used.
 
-    /// Create an object of type `DomainConfigRequest` having the value of
-    /// the specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     DomainConfigRequest(const DomainConfigRequest& original,
                         bslma::Allocator*          basicAllocator = 0);
+    // Create an object of type 'DomainConfigRequest' having the value of
+    // the specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `DomainConfigRequest` having the value of
-    /// the specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     DomainConfigRequest(DomainConfigRequest&& original) noexcept;
+    // Create an object of type 'DomainConfigRequest' having the value of
+    // the specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `DomainConfigRequest` having the value of
-    /// the specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     DomainConfigRequest(DomainConfigRequest&& original,
                         bslma::Allocator*     basicAllocator);
+    // Create an object of type 'DomainConfigRequest' having the value of
+    // the specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~DomainConfigRequest();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     DomainConfigRequest& operator=(const DomainConfigRequest& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     DomainConfigRequest& operator=(DomainConfigRequest&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "BrokerIdentity" attribute of
-    /// this object.
     BrokerIdentity& brokerIdentity();
+    // Return a reference to the modifiable "BrokerIdentity" attribute of
+    // this object.
 
-    /// Return a reference to the modifiable "DomainName" attribute of this
-    /// object.
     bsl::string& domainName();
+    // Return a reference to the modifiable "DomainName" attribute of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "BrokerIdentity" attribute of this object.
     const BrokerIdentity& brokerIdentity() const;
+    // Return a reference offering non-modifiable access to the
+    // "BrokerIdentity" attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "DomainName" attribute of this object.
     const bsl::string& domainName() const;
+    // Return a reference offering non-modifiable access to the
+    // "DomainName" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const DomainConfigRequest& lhs,
+                           const DomainConfigRequest& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.brokerIdentity() == rhs.brokerIdentity() &&
+               lhs.domainName() == rhs.domainName();
+    }
+
+    friend bool operator!=(const DomainConfigRequest& lhs,
+                           const DomainConfigRequest& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&              stream,
+                                    const DomainConfigRequest& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&          hashAlg,
+                           const DomainConfigRequest& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'DomainConfigRequest'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.brokerIdentity());
+        hashAppend(hashAlg, object.domainName());
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const DomainConfigRequest& lhs,
-                       const DomainConfigRequest& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const DomainConfigRequest& lhs,
-                       const DomainConfigRequest& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&              stream,
-                                const DomainConfigRequest& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `DomainConfigRequest`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const DomainConfigRequest& object);
 
 }  // close package namespace
 
@@ -3130,16 +3124,237 @@ BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
 
 namespace mqbconfm {
 
+// ================
+// class Expression
+// ================
+
+class Expression {
+    // This complex type contains expression to evaluate when selecting
+    // Subscription for delivery.
+    // version................: expression version (default is no expression)
+    // text...................: textual representation of the expression
+
+    // INSTANCE DATA
+    bsl::string              d_text;
+    ExpressionVersion::Value d_version;
+
+  public:
+    // TYPES
+    enum { ATTRIBUTE_ID_VERSION = 0, ATTRIBUTE_ID_TEXT = 1 };
+
+    enum { NUM_ATTRIBUTES = 2 };
+
+    enum { ATTRIBUTE_INDEX_VERSION = 0, ATTRIBUTE_INDEX_TEXT = 1 };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const ExpressionVersion::Value DEFAULT_INITIALIZER_VERSION;
+
+    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
+
+  public:
+    // CLASS METHODS
+    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
+
+    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
+                                                          int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
+
+    // CREATORS
+    explicit Expression(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Expression' having the default value.  Use
+    // the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+
+    Expression(const Expression& original,
+               bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Expression' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    Expression(Expression&& original) noexcept;
+    // Create an object of type 'Expression' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+
+    Expression(Expression&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'Expression' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+#endif
+
+    ~Expression();
+    // Destroy this object.
+
+    // MANIPULATORS
+    Expression& operator=(const Expression& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    Expression& operator=(Expression&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
+#endif
+
+    void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator,
+                            const char*    name,
+                            int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    ExpressionVersion::Value& version();
+    // Return a reference to the modifiable "Version" attribute of this
+    // object.
+
+    bsl::string& text();
+    // Return a reference to the modifiable "Text" attribute of this
+    // object.
+
+    // ACCESSORS
+    bsl::ostream&
+    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
+
+    template <typename t_ACCESSOR>
+    int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor,
+                        const char* name,
+                        int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    ExpressionVersion::Value version() const;
+    // Return the value of the "Version" attribute of this object.
+
+    const bsl::string& text() const;
+    // Return a reference offering non-modifiable access to the "Text"
+    // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Expression& lhs, const Expression& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.version() == rhs.version() && lhs.text() == rhs.text();
+    }
+
+    friend bool operator!=(const Expression& lhs, const Expression& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&     stream,
+                                    const Expression& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Expression& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Expression'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.version());
+        hashAppend(hashAlg, object.text());
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(mqbconfm::Expression)
+
+namespace mqbconfm {
+
 // ===============
 // class QueueMode
 // ===============
 
-/// Choice of all the various mode a queue can be configured in.
-/// fanout.........: multiple consumers are each getting all messages
-/// priority.......: consumers with highest priority are sharing load in
-/// round robin way broadcast......: send to all available consumers on a
-/// best-effort basis
 class QueueMode {
+    // Choice of all the various modes a queue can be configured in.
+    // fanout.........: multiple consumers are each getting all messages
+    // priority.......: consumers with highest priority are sharing load in
+    // round robin way broadcast......: send to all available consumers on a
+    // best-effort basis
+
     // INSTANCE DATA
     union {
         bsls::ObjectBuffer<QueueModeFanout>    d_fanout;
@@ -3149,6 +3364,12 @@ class QueueMode {
 
     int               d_selectionId;
     bslma::Allocator* d_allocator_p;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const QueueMode& rhs) const;
 
   public:
     // TYPES
@@ -3174,77 +3395,74 @@ class QueueMode {
     static const bdlat_SelectionInfo SELECTION_INFO_ARRAY[];
 
     // CLASS METHODS
-
-    /// Return selection information for the selection indicated by the
-    /// specified `id` if the selection exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(int id);
+    // Return selection information for the selection indicated by the
+    // specified 'id' if the selection exists, and 0 otherwise.
 
-    /// Return selection information for the selection indicated by the
-    /// specified `name` of the specified `nameLength` if the selection
-    /// exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(const char* name,
                                                           int nameLength);
+    // Return selection information for the selection indicated by the
+    // specified 'name' of the specified 'nameLength' if the selection
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `QueueMode` having the default value.  Use
-    /// the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit QueueMode(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'QueueMode' having the default value.  Use
+    // the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `QueueMode` having the value of the
-    /// specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     QueueMode(const QueueMode& original, bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'QueueMode' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `QueueMode` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     QueueMode(QueueMode&& original) noexcept;
+    // Create an object of type 'QueueMode' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `QueueMode` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     QueueMode(QueueMode&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'QueueMode' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~QueueMode();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     QueueMode& operator=(const QueueMode& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     QueueMode& operator=(QueueMode&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon default
-    /// construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon default
+    // construction).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `selectionId`.  Return 0 on success, and
-    /// non-zero value otherwise (i.e., the selection is not found).
     int makeSelection(int selectionId);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'selectionId'.  Return 0 on success, and
+    // non-zero value otherwise (i.e., the selection is not found).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `name` of the specified `nameLength`.
-    /// Return 0 on success, and non-zero value otherwise (i.e., the
-    /// selection is not found).
     int makeSelection(const char* name, int nameLength);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'name' of the specified 'nameLength'.
+    // Return 0 on success, and non-zero value otherwise (i.e., the
+    // selection is not found).
 
     QueueModeFanout& makeFanout();
     QueueModeFanout& makeFanout(const QueueModeFanout& value);
@@ -3276,112 +3494,123 @@ class QueueMode {
     // specify the 'value' of the "Broadcast".  If 'value' is not
     // specified, the default "Broadcast" value is used.
 
-    /// Invoke the specified `manipulator` on the address of the modifiable
-    /// selection, supplying `manipulator` with the corresponding selection
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if this object has a defined selection,
-    /// and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateSelection(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' on the address of the modifiable
+    // selection, supplying 'manipulator' with the corresponding selection
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if this object has a defined selection,
+    // and -1 otherwise.
 
-    /// Return a reference to the modifiable "Fanout" selection of this
-    /// object if "Fanout" is the current selection.  The behavior is
-    /// undefined unless "Fanout" is the selection of this object.
     QueueModeFanout& fanout();
+    // Return a reference to the modifiable "Fanout" selection of this
+    // object if "Fanout" is the current selection.  The behavior is
+    // undefined unless "Fanout" is the selection of this object.
 
-    /// Return a reference to the modifiable "Priority" selection of this
-    /// object if "Priority" is the current selection.  The behavior is
-    /// undefined unless "Priority" is the selection of this object.
     QueueModePriority& priority();
+    // Return a reference to the modifiable "Priority" selection of this
+    // object if "Priority" is the current selection.  The behavior is
+    // undefined unless "Priority" is the selection of this object.
 
-    /// Return a reference to the modifiable "Broadcast" selection of this
-    /// object if "Broadcast" is the current selection.  The behavior is
-    /// undefined unless "Broadcast" is the selection of this object.
     QueueModeBroadcast& broadcast();
+    // Return a reference to the modifiable "Broadcast" selection of this
+    // object if "Broadcast" is the current selection.  The behavior is
+    // undefined unless "Broadcast" is the selection of this object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Return the id of the current selection if the selection is defined,
-    /// and -1 otherwise.
     int selectionId() const;
+    // Return the id of the current selection if the selection is defined,
+    // and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the non-modifiable selection,
-    /// supplying `accessor` with the corresponding selection information
-    /// structure.  Return the value returned from the invocation of
-    /// `accessor` if this object has a defined selection, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessSelection(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' on the non-modifiable selection,
+    // supplying 'accessor' with the corresponding selection information
+    // structure.  Return the value returned from the invocation of
+    // 'accessor' if this object has a defined selection, and -1 otherwise.
 
-    /// Return a reference to the non-modifiable "Fanout" selection of this
-    /// object if "Fanout" is the current selection.  The behavior is
-    /// undefined unless "Fanout" is the selection of this object.
     const QueueModeFanout& fanout() const;
+    // Return a reference to the non-modifiable "Fanout" selection of this
+    // object if "Fanout" is the current selection.  The behavior is
+    // undefined unless "Fanout" is the selection of this object.
 
-    /// Return a reference to the non-modifiable "Priority" selection of
-    /// this object if "Priority" is the current selection.  The behavior is
-    /// undefined unless "Priority" is the selection of this object.
     const QueueModePriority& priority() const;
+    // Return a reference to the non-modifiable "Priority" selection of
+    // this object if "Priority" is the current selection.  The behavior is
+    // undefined unless "Priority" is the selection of this object.
 
-    /// Return a reference to the non-modifiable "Broadcast" selection of
-    /// this object if "Broadcast" is the current selection.  The behavior
-    /// is undefined unless "Broadcast" is the selection of this object.
     const QueueModeBroadcast& broadcast() const;
+    // Return a reference to the non-modifiable "Broadcast" selection of
+    // this object if "Broadcast" is the current selection.  The behavior
+    // is undefined unless "Broadcast" is the selection of this object.
 
-    /// Return `true` if the value of this object is a "Fanout" value, and
-    /// return `false` otherwise.
     bool isFanoutValue() const;
+    // Return 'true' if the value of this object is a "Fanout" value, and
+    // return 'false' otherwise.
 
-    /// Return `true` if the value of this object is a "Priority" value, and
-    /// return `false` otherwise.
     bool isPriorityValue() const;
+    // Return 'true' if the value of this object is a "Priority" value, and
+    // return 'false' otherwise.
 
-    /// Return `true` if the value of this object is a "Broadcast" value,
-    /// and return `false` otherwise.
     bool isBroadcastValue() const;
+    // Return 'true' if the value of this object is a "Broadcast" value,
+    // and return 'false' otherwise.
 
-    /// Return `true` if the value of this object is undefined, and `false`
-    /// otherwise.
     bool isUndefinedValue() const;
+    // Return 'true' if the value of this object is undefined, and 'false'
+    // otherwise.
 
-    /// Return the symbolic name of the current selection of this object.
     const char* selectionName() const;
+    // Return the symbolic name of the current selection of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const QueueMode& lhs, const QueueMode& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects have the same
+    // value, and 'false' otherwise.  Two 'QueueMode' objects have the same
+    // value if either the selections in both objects have the same ids and
+    // the same values, or both selections are undefined.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const QueueMode& lhs, const QueueMode& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects do not have
+    // the same values, as determined by 'operator==', and 'false'
+    // otherwise.
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const QueueMode& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const QueueMode& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'QueueMode'.
+    {
+        return object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` objects have the same
-/// value, and `false` otherwise.  Two `QueueMode` objects have the same
-/// value if either the selections in both objects have the same ids and
-/// the same values, or both selections are undefined.
-inline bool operator==(const QueueMode& lhs, const QueueMode& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` objects do not have the
-/// same values, as determined by `operator==`, and `false` otherwise.
-inline bool operator!=(const QueueMode& lhs, const QueueMode& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream& stream, const QueueMode& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `QueueMode`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const QueueMode& object);
 
 }  // close package namespace
 
@@ -3395,8 +3624,9 @@ namespace mqbconfm {
 // class Response
 // ==============
 
-/// The choice between all possible response from the bmqconf task.
 class Response {
+    // The choice between all the possible responses from the bmqconf task.
+
     // INSTANCE DATA
     union {
         bsls::ObjectBuffer<Failure>         d_failure;
@@ -3405,6 +3635,12 @@ class Response {
 
     int               d_selectionId;
     bslma::Allocator* d_allocator_p;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const Response& rhs) const;
 
   public:
     // TYPES
@@ -3425,77 +3661,74 @@ class Response {
     static const bdlat_SelectionInfo SELECTION_INFO_ARRAY[];
 
     // CLASS METHODS
-
-    /// Return selection information for the selection indicated by the
-    /// specified `id` if the selection exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(int id);
+    // Return selection information for the selection indicated by the
+    // specified 'id' if the selection exists, and 0 otherwise.
 
-    /// Return selection information for the selection indicated by the
-    /// specified `name` of the specified `nameLength` if the selection
-    /// exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(const char* name,
                                                           int nameLength);
+    // Return selection information for the selection indicated by the
+    // specified 'name' of the specified 'nameLength' if the selection
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `Response` having the default value.  Use
-    /// the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit Response(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Response' having the default value.  Use
+    // the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `Response` having the value of the
-    /// specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     Response(const Response& original, bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Response' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `Response` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     Response(Response&& original) noexcept;
+    // Create an object of type 'Response' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `Response` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     Response(Response&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'Response' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~Response();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     Response& operator=(const Response& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     Response& operator=(Response&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon default
-    /// construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon default
+    // construction).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `selectionId`.  Return 0 on success, and
-    /// non-zero value otherwise (i.e., the selection is not found).
     int makeSelection(int selectionId);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'selectionId'.  Return 0 on success, and
+    // non-zero value otherwise (i.e., the selection is not found).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `name` of the specified `nameLength`.
-    /// Return 0 on success, and non-zero value otherwise (i.e., the
-    /// selection is not found).
     int makeSelection(const char* name, int nameLength);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'name' of the specified 'nameLength'.
+    // Return 0 on success, and non-zero value otherwise (i.e., the
+    // selection is not found).
 
     Failure& makeFailure();
     Failure& makeFailure(const Failure& value);
@@ -3517,100 +3750,111 @@ class Response {
     // Optionally specify the 'value' of the "DomainConfig".  If 'value' is
     // not specified, the default "DomainConfig" value is used.
 
-    /// Invoke the specified `manipulator` on the address of the modifiable
-    /// selection, supplying `manipulator` with the corresponding selection
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if this object has a defined selection,
-    /// and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateSelection(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' on the address of the modifiable
+    // selection, supplying 'manipulator' with the corresponding selection
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if this object has a defined selection,
+    // and -1 otherwise.
 
-    /// Return a reference to the modifiable "Failure" selection of this
-    /// object if "Failure" is the current selection.  The behavior is
-    /// undefined unless "Failure" is the selection of this object.
     Failure& failure();
+    // Return a reference to the modifiable "Failure" selection of this
+    // object if "Failure" is the current selection.  The behavior is
+    // undefined unless "Failure" is the selection of this object.
 
-    /// Return a reference to the modifiable "DomainConfig" selection of
-    /// this object if "DomainConfig" is the current selection.  The
-    /// behavior is undefined unless "DomainConfig" is the selection of this
-    /// object.
     DomainConfigRaw& domainConfig();
+    // Return a reference to the modifiable "DomainConfig" selection of
+    // this object if "DomainConfig" is the current selection.  The
+    // behavior is undefined unless "DomainConfig" is the selection of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Return the id of the current selection if the selection is defined,
-    /// and -1 otherwise.
     int selectionId() const;
+    // Return the id of the current selection if the selection is defined,
+    // and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the non-modifiable selection,
-    /// supplying `accessor` with the corresponding selection information
-    /// structure.  Return the value returned from the invocation of
-    /// `accessor` if this object has a defined selection, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessSelection(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' on the non-modifiable selection,
+    // supplying 'accessor' with the corresponding selection information
+    // structure.  Return the value returned from the invocation of
+    // 'accessor' if this object has a defined selection, and -1 otherwise.
 
-    /// Return a reference to the non-modifiable "Failure" selection of this
-    /// object if "Failure" is the current selection.  The behavior is
-    /// undefined unless "Failure" is the selection of this object.
     const Failure& failure() const;
+    // Return a reference to the non-modifiable "Failure" selection of this
+    // object if "Failure" is the current selection.  The behavior is
+    // undefined unless "Failure" is the selection of this object.
 
-    /// Return a reference to the non-modifiable "DomainConfig" selection of
-    /// this object if "DomainConfig" is the current selection.  The
-    /// behavior is undefined unless "DomainConfig" is the selection of this
-    /// object.
     const DomainConfigRaw& domainConfig() const;
+    // Return a reference to the non-modifiable "DomainConfig" selection of
+    // this object if "DomainConfig" is the current selection.  The
+    // behavior is undefined unless "DomainConfig" is the selection of this
+    // object.
 
-    /// Return `true` if the value of this object is a "Failure" value, and
-    /// return `false` otherwise.
     bool isFailureValue() const;
+    // Return 'true' if the value of this object is a "Failure" value, and
+    // return 'false' otherwise.
 
-    /// Return `true` if the value of this object is a "DomainConfig" value,
-    /// and return `false` otherwise.
     bool isDomainConfigValue() const;
+    // Return 'true' if the value of this object is a "DomainConfig" value,
+    // and return 'false' otherwise.
 
-    /// Return `true` if the value of this object is undefined, and `false`
-    /// otherwise.
     bool isUndefinedValue() const;
+    // Return 'true' if the value of this object is undefined, and 'false'
+    // otherwise.
 
-    /// Return the symbolic name of the current selection of this object.
     const char* selectionName() const;
+    // Return the symbolic name of the current selection of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Response& lhs, const Response& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects have the same
+    // value, and 'false' otherwise.  Two 'Response' objects have the same
+    // value if either the selections in both objects have the same ids and
+    // the same values, or both selections are undefined.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const Response& lhs, const Response& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects do not have
+    // the same values, as determined by 'operator==', and 'false'
+    // otherwise.
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const Response& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Response& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Response'.
+    {
+        return object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` objects have the same
-/// value, and `false` otherwise.  Two `Response` objects have the same
-/// value if either the selections in both objects have the same ids and
-/// the same values, or both selections are undefined.
-inline bool operator==(const Response& lhs, const Response& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` objects do not have the
-/// same values, as determined by `operator==`, and `false` otherwise.
-inline bool operator!=(const Response& lhs, const Response& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Response& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `Response`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Response& object);
 
 }  // close package namespace
 
@@ -3624,10 +3868,11 @@ namespace mqbconfm {
 // class Storage
 // =============
 
-/// Choice of all the various Storage backend
-/// inMemory....: store data in memory fileBacked..: store data in a file on
-/// disk
 class Storage {
+    // Choice of all the various Storage backends
+    // inMemory....: store data in memory fileBacked..: store data in a file on
+    // disk
+
     // INSTANCE DATA
     union {
         bsls::ObjectBuffer<InMemoryStorage>   d_inMemory;
@@ -3635,6 +3880,12 @@ class Storage {
     };
 
     int d_selectionId;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const Storage& rhs) const;
 
   public:
     // TYPES
@@ -3655,64 +3906,61 @@ class Storage {
     static const bdlat_SelectionInfo SELECTION_INFO_ARRAY[];
 
     // CLASS METHODS
-
-    /// Return selection information for the selection indicated by the
-    /// specified `id` if the selection exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(int id);
+    // Return selection information for the selection indicated by the
+    // specified 'id' if the selection exists, and 0 otherwise.
 
-    /// Return selection information for the selection indicated by the
-    /// specified `name` of the specified `nameLength` if the selection
-    /// exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(const char* name,
                                                           int nameLength);
+    // Return selection information for the selection indicated by the
+    // specified 'name' of the specified 'nameLength' if the selection
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `Storage` having the default value.
     Storage();
+    // Create an object of type 'Storage' having the default value.
 
-    /// Create an object of type `Storage` having the value of the specified
-    /// `original` object.
     Storage(const Storage& original);
+    // Create an object of type 'Storage' having the value of the specified
+    // 'original' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `Storage` having the value of the specified
-    /// `original` object.  After performing this action, the `original`
-    /// object will be left in a valid, but unspecified state.
     Storage(Storage&& original) noexcept;
+    // Create an object of type 'Storage' having the value of the specified
+    // 'original' object.  After performing this action, the 'original'
+    // object will be left in a valid, but unspecified state.
 #endif
 
-    /// Destroy this object.
     ~Storage();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     Storage& operator=(const Storage& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     Storage& operator=(Storage&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon default
-    /// construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon default
+    // construction).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `selectionId`.  Return 0 on success, and
-    /// non-zero value otherwise (i.e., the selection is not found).
     int makeSelection(int selectionId);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'selectionId'.  Return 0 on success, and
+    // non-zero value otherwise (i.e., the selection is not found).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `name` of the specified `nameLength`.
-    /// Return 0 on success, and non-zero value otherwise (i.e., the
-    /// selection is not found).
     int makeSelection(const char* name, int nameLength);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'name' of the specified 'nameLength'.
+    // Return 0 on success, and non-zero value otherwise (i.e., the
+    // selection is not found).
 
     InMemoryStorage& makeInMemory();
     InMemoryStorage& makeInMemory(const InMemoryStorage& value);
@@ -3734,98 +3982,109 @@ class Storage {
     // specify the 'value' of the "FileBacked".  If 'value' is not
     // specified, the default "FileBacked" value is used.
 
-    /// Invoke the specified `manipulator` on the address of the modifiable
-    /// selection, supplying `manipulator` with the corresponding selection
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if this object has a defined selection,
-    /// and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateSelection(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' on the address of the modifiable
+    // selection, supplying 'manipulator' with the corresponding selection
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if this object has a defined selection,
+    // and -1 otherwise.
 
-    /// Return a reference to the modifiable "InMemory" selection of this
-    /// object if "InMemory" is the current selection.  The behavior is
-    /// undefined unless "InMemory" is the selection of this object.
     InMemoryStorage& inMemory();
+    // Return a reference to the modifiable "InMemory" selection of this
+    // object if "InMemory" is the current selection.  The behavior is
+    // undefined unless "InMemory" is the selection of this object.
 
-    /// Return a reference to the modifiable "FileBacked" selection of this
-    /// object if "FileBacked" is the current selection.  The behavior is
-    /// undefined unless "FileBacked" is the selection of this object.
     FileBackedStorage& fileBacked();
+    // Return a reference to the modifiable "FileBacked" selection of this
+    // object if "FileBacked" is the current selection.  The behavior is
+    // undefined unless "FileBacked" is the selection of this object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Return the id of the current selection if the selection is defined,
-    /// and -1 otherwise.
     int selectionId() const;
+    // Return the id of the current selection if the selection is defined,
+    // and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the non-modifiable selection,
-    /// supplying `accessor` with the corresponding selection information
-    /// structure.  Return the value returned from the invocation of
-    /// `accessor` if this object has a defined selection, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessSelection(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' on the non-modifiable selection,
+    // supplying 'accessor' with the corresponding selection information
+    // structure.  Return the value returned from the invocation of
+    // 'accessor' if this object has a defined selection, and -1 otherwise.
 
-    /// Return a reference to the non-modifiable "InMemory" selection of
-    /// this object if "InMemory" is the current selection.  The behavior is
-    /// undefined unless "InMemory" is the selection of this object.
     const InMemoryStorage& inMemory() const;
+    // Return a reference to the non-modifiable "InMemory" selection of
+    // this object if "InMemory" is the current selection.  The behavior is
+    // undefined unless "InMemory" is the selection of this object.
 
-    /// Return a reference to the non-modifiable "FileBacked" selection of
-    /// this object if "FileBacked" is the current selection.  The behavior
-    /// is undefined unless "FileBacked" is the selection of this object.
     const FileBackedStorage& fileBacked() const;
+    // Return a reference to the non-modifiable "FileBacked" selection of
+    // this object if "FileBacked" is the current selection.  The behavior
+    // is undefined unless "FileBacked" is the selection of this object.
 
-    /// Return `true` if the value of this object is a "InMemory" value, and
-    /// return `false` otherwise.
     bool isInMemoryValue() const;
+    // Return 'true' if the value of this object is a "InMemory" value, and
+    // return 'false' otherwise.
 
-    /// Return `true` if the value of this object is a "FileBacked" value,
-    /// and return `false` otherwise.
     bool isFileBackedValue() const;
+    // Return 'true' if the value of this object is a "FileBacked" value,
+    // and return 'false' otherwise.
 
-    /// Return `true` if the value of this object is undefined, and `false`
-    /// otherwise.
     bool isUndefinedValue() const;
+    // Return 'true' if the value of this object is undefined, and 'false'
+    // otherwise.
 
-    /// Return the symbolic name of the current selection of this object.
     const char* selectionName() const;
+    // Return the symbolic name of the current selection of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Storage& lhs, const Storage& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects have the same
+    // value, and 'false' otherwise.  Two 'Storage' objects have the same
+    // value if either the selections in both objects have the same ids and
+    // the same values, or both selections are undefined.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const Storage& lhs, const Storage& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects do not have
+    // the same values, as determined by 'operator==', and 'false'
+    // otherwise.
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const Storage& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Storage& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Storage'.
+    {
+        return object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` objects have the same
-/// value, and `false` otherwise.  Two `Storage` objects have the same
-/// value if either the selections in both objects have the same ids and
-/// the same values, or both selections are undefined.
-inline bool operator==(const Storage& lhs, const Storage& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` objects do not have the
-/// same values, as determined by `operator==`, and `false` otherwise.
-inline bool operator!=(const Storage& lhs, const Storage& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Storage& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `Storage`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Storage& object);
 
 }  // close package namespace
 
@@ -3839,8 +4098,9 @@ namespace mqbconfm {
 // class Request
 // =============
 
-/// The choice between all possible request to the bmqconf task.
 class Request {
+    // The choice between all the possible requests to the bmqconf task.
+
     // INSTANCE DATA
     union {
         bsls::ObjectBuffer<DomainConfigRequest> d_domainConfig;
@@ -3848,6 +4108,12 @@ class Request {
 
     int               d_selectionId;
     bslma::Allocator* d_allocator_p;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const Request& rhs) const;
 
   public:
     // TYPES
@@ -3864,77 +4130,74 @@ class Request {
     static const bdlat_SelectionInfo SELECTION_INFO_ARRAY[];
 
     // CLASS METHODS
-
-    /// Return selection information for the selection indicated by the
-    /// specified `id` if the selection exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(int id);
+    // Return selection information for the selection indicated by the
+    // specified 'id' if the selection exists, and 0 otherwise.
 
-    /// Return selection information for the selection indicated by the
-    /// specified `name` of the specified `nameLength` if the selection
-    /// exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(const char* name,
                                                           int nameLength);
+    // Return selection information for the selection indicated by the
+    // specified 'name' of the specified 'nameLength' if the selection
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `Request` having the default value.  Use
-    /// the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit Request(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Request' having the default value.  Use
+    // the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `Request` having the value of the specified
-    /// `original` object.  Use the optionally specified `basicAllocator` to
-    /// supply memory.  If `basicAllocator` is 0, the currently installed
-    /// default allocator is used.
     Request(const Request& original, bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Request' having the value of the specified
+    // 'original' object.  Use the optionally specified 'basicAllocator' to
+    // supply memory.  If 'basicAllocator' is 0, the currently installed
+    // default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `Request` having the value of the specified
-    /// `original` object.  After performing this action, the `original`
-    /// object will be left in a valid, but unspecified state.
     Request(Request&& original) noexcept;
+    // Create an object of type 'Request' having the value of the specified
+    // 'original' object.  After performing this action, the 'original'
+    // object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `Request` having the value of the specified
-    /// `original` object.  After performing this action, the `original`
-    /// object will be left in a valid, but unspecified state.  Use the
-    /// optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     Request(Request&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'Request' having the value of the specified
+    // 'original' object.  After performing this action, the 'original'
+    // object will be left in a valid, but unspecified state.  Use the
+    // optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~Request();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     Request& operator=(const Request& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     Request& operator=(Request&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon default
-    /// construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon default
+    // construction).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `selectionId`.  Return 0 on success, and
-    /// non-zero value otherwise (i.e., the selection is not found).
     int makeSelection(int selectionId);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'selectionId'.  Return 0 on success, and
+    // non-zero value otherwise (i.e., the selection is not found).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `name` of the specified `nameLength`.
-    /// Return 0 on success, and non-zero value otherwise (i.e., the
-    /// selection is not found).
     int makeSelection(const char* name, int nameLength);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'name' of the specified 'nameLength'.
+    // Return 0 on success, and non-zero value otherwise (i.e., the
+    // selection is not found).
 
     DomainConfigRequest& makeDomainConfig();
     DomainConfigRequest& makeDomainConfig(const DomainConfigRequest& value);
@@ -3946,86 +4209,97 @@ class Request {
     // Optionally specify the 'value' of the "DomainConfig".  If 'value' is
     // not specified, the default "DomainConfig" value is used.
 
-    /// Invoke the specified `manipulator` on the address of the modifiable
-    /// selection, supplying `manipulator` with the corresponding selection
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if this object has a defined selection,
-    /// and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateSelection(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' on the address of the modifiable
+    // selection, supplying 'manipulator' with the corresponding selection
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if this object has a defined selection,
+    // and -1 otherwise.
 
-    /// Return a reference to the modifiable "DomainConfig" selection of
-    /// this object if "DomainConfig" is the current selection.  The
-    /// behavior is undefined unless "DomainConfig" is the selection of this
-    /// object.
     DomainConfigRequest& domainConfig();
+    // Return a reference to the modifiable "DomainConfig" selection of
+    // this object if "DomainConfig" is the current selection.  The
+    // behavior is undefined unless "DomainConfig" is the selection of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Return the id of the current selection if the selection is defined,
-    /// and -1 otherwise.
     int selectionId() const;
+    // Return the id of the current selection if the selection is defined,
+    // and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the non-modifiable selection,
-    /// supplying `accessor` with the corresponding selection information
-    /// structure.  Return the value returned from the invocation of
-    /// `accessor` if this object has a defined selection, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessSelection(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' on the non-modifiable selection,
+    // supplying 'accessor' with the corresponding selection information
+    // structure.  Return the value returned from the invocation of
+    // 'accessor' if this object has a defined selection, and -1 otherwise.
 
-    /// Return a reference to the non-modifiable "DomainConfig" selection of
-    /// this object if "DomainConfig" is the current selection.  The
-    /// behavior is undefined unless "DomainConfig" is the selection of this
-    /// object.
     const DomainConfigRequest& domainConfig() const;
+    // Return a reference to the non-modifiable "DomainConfig" selection of
+    // this object if "DomainConfig" is the current selection.  The
+    // behavior is undefined unless "DomainConfig" is the selection of this
+    // object.
 
-    /// Return `true` if the value of this object is a "DomainConfig" value,
-    /// and return `false` otherwise.
     bool isDomainConfigValue() const;
+    // Return 'true' if the value of this object is a "DomainConfig" value,
+    // and return 'false' otherwise.
 
-    /// Return `true` if the value of this object is undefined, and `false`
-    /// otherwise.
     bool isUndefinedValue() const;
+    // Return 'true' if the value of this object is undefined, and 'false'
+    // otherwise.
 
-    /// Return the symbolic name of the current selection of this object.
     const char* selectionName() const;
+    // Return the symbolic name of the current selection of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Request& lhs, const Request& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects have the same
+    // value, and 'false' otherwise.  Two 'Request' objects have the same
+    // value if either the selections in both objects have the same ids and
+    // the same values, or both selections are undefined.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const Request& lhs, const Request& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects do not have
+    // the same values, as determined by 'operator==', and 'false'
+    // otherwise.
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const Request& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Request& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Request'.
+    {
+        return object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` objects have the same
-/// value, and `false` otherwise.  Two `Request` objects have the same
-/// value if either the selections in both objects have the same ids and
-/// the same values, or both selections are undefined.
-inline bool operator==(const Request& lhs, const Request& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` objects do not have the
-/// same values, as determined by `operator==`, and `false` otherwise.
-inline bool operator!=(const Request& lhs, const Request& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Request& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `Request`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Request& object);
 
 }  // close package namespace
 
@@ -4039,16 +4313,21 @@ namespace mqbconfm {
 // class StorageDefinition
 // =======================
 
-/// Type representing the configuration for a Storage.
-/// config........: configuration for the type of storage to use
-/// domainLimits..: global limits to apply to the entire domain, cumulated
-/// for all queues in the domain queueLimits...: individual limits (as a
-/// subset of the global limits) to apply to each queue of the domain
 class StorageDefinition {
+    // Type representing the configuration for a Storage.
+    // config........: configuration for the type of storage to use
+    // domainLimits..: global limits to apply to the entire domain, cumulated
+    // for all queues in the domain queueLimits...: individual limits (as a
+    // subset of the global limits) to apply to each queue of the domain
+
     // INSTANCE DATA
     Storage d_config;
     Limits  d_domainLimits;
     Limits  d_queueLimits;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
 
   public:
     // TYPES
@@ -4073,178 +4352,160 @@ class StorageDefinition {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `StorageDefinition` having the default
-    /// value.
     StorageDefinition();
-
-    /// Create an object of type `StorageDefinition` having the value of the
-    /// specified `original` object.
-    StorageDefinition(const StorageDefinition& original);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `StorageDefinition` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    StorageDefinition(StorageDefinition&& original) = default;
-#endif
-
-    /// Destroy this object.
-    ~StorageDefinition();
+    // Create an object of type 'StorageDefinition' having the default
+    // value.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
-    StorageDefinition& operator=(const StorageDefinition& rhs);
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
-    StorageDefinition& operator=(StorageDefinition&& rhs);
-#endif
-
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "DomainLimits" attribute of
-    /// this object.
     Limits& domainLimits();
+    // Return a reference to the modifiable "DomainLimits" attribute of
+    // this object.
 
-    /// Return a reference to the modifiable "QueueLimits" attribute of this
-    /// object.
     Limits& queueLimits();
+    // Return a reference to the modifiable "QueueLimits" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "Config" attribute of this
-    /// object.
     Storage& config();
+    // Return a reference to the modifiable "Config" attribute of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "DomainLimits" attribute of this object.
     const Limits& domainLimits() const;
+    // Return a reference offering non-modifiable access to the
+    // "DomainLimits" attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "QueueLimits" attribute of this object.
     const Limits& queueLimits() const;
+    // Return a reference offering non-modifiable access to the
+    // "QueueLimits" attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the "Config"
-    /// attribute of this object.
     const Storage& config() const;
+    // Return a reference offering non-modifiable access to the "Config"
+    // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const StorageDefinition& lhs,
+                           const StorageDefinition& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.domainLimits() == rhs.domainLimits() &&
+               lhs.queueLimits() == rhs.queueLimits() &&
+               lhs.config() == rhs.config();
+    }
+
+    friend bool operator!=(const StorageDefinition& lhs,
+                           const StorageDefinition& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&            stream,
+                                    const StorageDefinition& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&        hashAlg,
+                           const StorageDefinition& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'StorageDefinition'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const StorageDefinition& lhs,
-                       const StorageDefinition& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const StorageDefinition& lhs,
-                       const StorageDefinition& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&            stream,
-                                const StorageDefinition& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `StorageDefinition`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const StorageDefinition& object);
 
 }  // close package namespace
 
@@ -4254,33 +4515,259 @@ BDLAT_DECL_SEQUENCE_WITH_BITWISEMOVEABLE_TRAITS(mqbconfm::StorageDefinition)
 
 namespace mqbconfm {
 
+// ==================
+// class Subscription
+// ==================
+
+class Subscription {
+    // This complex type contains various parameters required by an upstream
+    // node to configure subscription for an app.
+    // appId..................: app identifier expression.............:
+    // expression denoting a subscription for the app
+
+    // INSTANCE DATA
+    bsl::string d_appId;
+    Expression  d_expression;
+
+  public:
+    // TYPES
+    enum { ATTRIBUTE_ID_APP_ID = 0, ATTRIBUTE_ID_EXPRESSION = 1 };
+
+    enum { NUM_ATTRIBUTES = 2 };
+
+    enum { ATTRIBUTE_INDEX_APP_ID = 0, ATTRIBUTE_INDEX_EXPRESSION = 1 };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
+
+  public:
+    // CLASS METHODS
+    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
+
+    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
+                                                          int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
+
+    // CREATORS
+    explicit Subscription(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Subscription' having the default value.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+
+    Subscription(const Subscription& original,
+                 bslma::Allocator*   basicAllocator = 0);
+    // Create an object of type 'Subscription' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    Subscription(Subscription&& original) noexcept;
+    // Create an object of type 'Subscription' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+
+    Subscription(Subscription&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'Subscription' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+#endif
+
+    ~Subscription();
+    // Destroy this object.
+
+    // MANIPULATORS
+    Subscription& operator=(const Subscription& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    Subscription& operator=(Subscription&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
+#endif
+
+    void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator,
+                            const char*    name,
+                            int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    bsl::string& appId();
+    // Return a reference to the modifiable "AppId" attribute of this
+    // object.
+
+    Expression& expression();
+    // Return a reference to the modifiable "Expression" attribute of this
+    // object.
+
+    // ACCESSORS
+    bsl::ostream&
+    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
+
+    template <typename t_ACCESSOR>
+    int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor,
+                        const char* name,
+                        int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    const bsl::string& appId() const;
+    // Return a reference offering non-modifiable access to the "AppId"
+    // attribute of this object.
+
+    const Expression& expression() const;
+    // Return a reference offering non-modifiable access to the
+    // "Expression" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Subscription& lhs, const Subscription& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.appId() == rhs.appId() &&
+               lhs.expression() == rhs.expression();
+    }
+
+    friend bool operator!=(const Subscription& lhs, const Subscription& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&       stream,
+                                    const Subscription& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&   hashAlg,
+                           const Subscription& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'Subscription'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.appId());
+        hashAppend(hashAlg, object.expression());
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
+    mqbconfm::Subscription)
+
+namespace mqbconfm {
+
 // ============
 // class Domain
 // ============
 
-/// Configuration for a Domain using the custom Bloomberg Domain.
-/// mode................: mode of the queues in this domain
-/// storage.............: storage to use by queues in this domain
-/// maxConsumers........: will reject if more than this number of consumers
-/// tries to connect.  0 (the default) means unlimited maxProducers........:
-/// will reject if more than this number of producers tries to connect.  0
-/// (the default) means unlimited maxQueues...........: will reject creating
-/// more than this number of queues.  0 (the default) means unlimited
-/// msgGroupIdConfig....: optional configuration for Group Id routing
-/// features maxIdleTime.........: (seconds) time queue can be inactive
-/// before alarming.  0 (the default) means no monitoring and alarming
-/// messageTtl..........: (seconds) minimum time before which a message can
-/// be discarded (i.e., it's not guaranteed that the message will be
-/// discarded exactly after `ttlSeconds` time, but it is guaranteed that it
-/// will not be discarded before at least `ttlSeconds` time
-/// maxDeliveryAttempts.: maximum number of times BMQ framework will attempt
-/// to deliver a message to consumers before purging it from the queue.
-/// Zero (the default) means unlimited deduplicationTimeMs.: timeout, in
-/// milliseconds, to keep GUID of PUT message for the purpose of detecting
-/// duplicate PUTs.  consistency.........: optional consistency mode.
 class Domain {
+    // Configuration for a Domain using the custom Bloomberg Domain.
+    // name................: name of this domain mode................: mode of
+    // the queues in this domain storage.............: storage to use by queues
+    // in this domain maxConsumers........: will reject if more than this
+    // number of consumers tries to connect.  0 (the default) means unlimited
+    // maxProducers........: will reject if more than this number of producers
+    // tries to connect.  0 (the default) means unlimited maxQueues...........:
+    // will reject creating more than this number of queues.  0 (the default)
+    // means unlimited msgGroupIdConfig....: optional configuration for Group
+    // Id routing features maxIdleTime.........: (seconds) time queue can be
+    // inactive before alarming.  0 (the default) means no monitoring and
+    // alarming messageTtl..........: (seconds) minimum time before which a
+    // message can be discarded (i.e., it's not guaranteed that the message
+    // will be discarded exactly after 'ttlSeconds' time, but it is guaranteed
+    // that it will not be discarded before at least 'ttlSeconds' time
+    // maxDeliveryAttempts.: maximum number of times BlazingMQ framework will
+    // attempt to deliver a message to consumers before purging it from the
+    // queue.  Zero (the default) means unlimited deduplicationTimeMs.:
+    // timeout, in milliseconds, to keep GUID of PUT message for the purpose of
+    // detecting duplicate PUTs.  consistency.........: optional consistency
+    // mode.  subscriptions.......: optional application subscriptions
+
     // INSTANCE DATA
     bsls::Types::Int64                    d_messageTtl;
+    bsl::vector<Subscription>             d_subscriptions;
     bsl::string                           d_name;
     bdlb::NullableValue<MsgGroupIdConfig> d_msgGroupIdConfig;
     StorageDefinition                     d_storage;
@@ -4292,6 +4779,12 @@ class Domain {
     int                                   d_maxIdleTime;
     int                                   d_maxDeliveryAttempts;
     int                                   d_deduplicationTimeMs;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const Domain& rhs) const;
 
   public:
     // TYPES
@@ -4307,10 +4800,11 @@ class Domain {
         ATTRIBUTE_ID_MESSAGE_TTL           = 8,
         ATTRIBUTE_ID_MAX_DELIVERY_ATTEMPTS = 9,
         ATTRIBUTE_ID_DEDUPLICATION_TIME_MS = 10,
-        ATTRIBUTE_ID_CONSISTENCY           = 11
+        ATTRIBUTE_ID_CONSISTENCY           = 11,
+        ATTRIBUTE_ID_SUBSCRIPTIONS         = 12
     };
 
-    enum { NUM_ATTRIBUTES = 12 };
+    enum { NUM_ATTRIBUTES = 13 };
 
     enum {
         ATTRIBUTE_INDEX_NAME                  = 0,
@@ -4324,7 +4818,8 @@ class Domain {
         ATTRIBUTE_INDEX_MESSAGE_TTL           = 8,
         ATTRIBUTE_INDEX_MAX_DELIVERY_ATTEMPTS = 9,
         ATTRIBUTE_INDEX_DEDUPLICATION_TIME_MS = 10,
-        ATTRIBUTE_INDEX_CONSISTENCY           = 11
+        ATTRIBUTE_INDEX_CONSISTENCY           = 11,
+        ATTRIBUTE_INDEX_SUBSCRIPTIONS         = 12
     };
 
     // CONSTANTS
@@ -4346,254 +4841,266 @@ class Domain {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `Domain` having the default value.  Use the
-    /// optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit Domain(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Domain' having the default value.  Use the
+    // optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `Domain` having the value of the specified
-    /// `original` object.  Use the optionally specified `basicAllocator` to
-    /// supply memory.  If `basicAllocator` is 0, the currently installed
-    /// default allocator is used.
     Domain(const Domain& original, bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'Domain' having the value of the specified
+    // 'original' object.  Use the optionally specified 'basicAllocator' to
+    // supply memory.  If 'basicAllocator' is 0, the currently installed
+    // default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `Domain` having the value of the specified
-    /// `original` object.  After performing this action, the `original`
-    /// object will be left in a valid, but unspecified state.
     Domain(Domain&& original) noexcept;
+    // Create an object of type 'Domain' having the value of the specified
+    // 'original' object.  After performing this action, the 'original'
+    // object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `Domain` having the value of the specified
-    /// `original` object.  After performing this action, the `original`
-    /// object will be left in a valid, but unspecified state.  Use the
-    /// optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     Domain(Domain&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'Domain' having the value of the specified
+    // 'original' object.  After performing this action, the 'original'
+    // object will be left in a valid, but unspecified state.  Use the
+    // optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~Domain();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     Domain& operator=(const Domain& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     Domain& operator=(Domain&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "Name" attribute of this
-    /// object.
     bsl::string& name();
+    // Return a reference to the modifiable "Name" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "Mode" attribute of this
-    /// object.
     QueueMode& mode();
+    // Return a reference to the modifiable "Mode" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "Storage" attribute of this
-    /// object.
     StorageDefinition& storage();
+    // Return a reference to the modifiable "Storage" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "MaxConsumers" attribute of
-    /// this object.
     int& maxConsumers();
+    // Return a reference to the modifiable "MaxConsumers" attribute of
+    // this object.
 
-    /// Return a reference to the modifiable "MaxProducers" attribute of
-    /// this object.
     int& maxProducers();
+    // Return a reference to the modifiable "MaxProducers" attribute of
+    // this object.
 
-    /// Return a reference to the modifiable "MaxQueues" attribute of this
-    /// object.
     int& maxQueues();
+    // Return a reference to the modifiable "MaxQueues" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "MsgGroupIdConfig" attribute of
-    /// this object.
     bdlb::NullableValue<MsgGroupIdConfig>& msgGroupIdConfig();
+    // Return a reference to the modifiable "MsgGroupIdConfig" attribute of
+    // this object.
 
-    /// Return a reference to the modifiable "MaxIdleTime" attribute of this
-    /// object.
     int& maxIdleTime();
+    // Return a reference to the modifiable "MaxIdleTime" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "MessageTtl" attribute of this
-    /// object.
     bsls::Types::Int64& messageTtl();
+    // Return a reference to the modifiable "MessageTtl" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "MaxDeliveryAttempts" attribute
-    /// of this object.
     int& maxDeliveryAttempts();
+    // Return a reference to the modifiable "MaxDeliveryAttempts" attribute
+    // of this object.
 
-    /// Return a reference to the modifiable "DeduplicationTimeMs" attribute
-    /// of this object.
     int& deduplicationTimeMs();
+    // Return a reference to the modifiable "DeduplicationTimeMs" attribute
+    // of this object.
 
-    /// Return a reference to the modifiable "Consistency" attribute of this
-    /// object.
     Consistency& consistency();
+    // Return a reference to the modifiable "Consistency" attribute of this
+    // object.
+
+    bsl::vector<Subscription>& subscriptions();
+    // Return a reference to the modifiable "Subscriptions" attribute of
+    // this object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return a reference offering non-modifiable access to the "Name"
-    /// attribute of this object.
     const bsl::string& name() const;
+    // Return a reference offering non-modifiable access to the "Name"
+    // attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the "Mode"
-    /// attribute of this object.
     const QueueMode& mode() const;
+    // Return a reference offering non-modifiable access to the "Mode"
+    // attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the "Storage"
-    /// attribute of this object.
     const StorageDefinition& storage() const;
+    // Return a reference offering non-modifiable access to the "Storage"
+    // attribute of this object.
 
-    /// Return the value of the "MaxConsumers" attribute of this object.
     int maxConsumers() const;
+    // Return the value of the "MaxConsumers" attribute of this object.
 
-    /// Return the value of the "MaxProducers" attribute of this object.
     int maxProducers() const;
+    // Return the value of the "MaxProducers" attribute of this object.
 
-    /// Return the value of the "MaxQueues" attribute of this object.
     int maxQueues() const;
+    // Return the value of the "MaxQueues" attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "MsgGroupIdConfig" attribute of this object.
     const bdlb::NullableValue<MsgGroupIdConfig>& msgGroupIdConfig() const;
+    // Return a reference offering non-modifiable access to the
+    // "MsgGroupIdConfig" attribute of this object.
 
-    /// Return the value of the "MaxIdleTime" attribute of this object.
     int maxIdleTime() const;
+    // Return the value of the "MaxIdleTime" attribute of this object.
 
-    /// Return the value of the "MessageTtl" attribute of this object.
     bsls::Types::Int64 messageTtl() const;
+    // Return the value of the "MessageTtl" attribute of this object.
 
-    /// Return the value of the "MaxDeliveryAttempts" attribute of this
-    /// object.
     int maxDeliveryAttempts() const;
+    // Return the value of the "MaxDeliveryAttempts" attribute of this
+    // object.
 
-    /// Return the value of the "DeduplicationTimeMs" attribute of this
-    /// object.
     int deduplicationTimeMs() const;
+    // Return the value of the "DeduplicationTimeMs" attribute of this
+    // object.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "Consistency" attribute of this object.
     const Consistency& consistency() const;
+    // Return a reference offering non-modifiable access to the
+    // "Consistency" attribute of this object.
+
+    const bsl::vector<Subscription>& subscriptions() const;
+    // Return a reference offering non-modifiable access to the
+    // "Subscriptions" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Domain& lhs, const Domain& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const Domain& lhs, const Domain& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const Domain& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Domain& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Domain'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const Domain& lhs, const Domain& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const Domain& lhs, const Domain& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Domain& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `Domain`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Domain& object);
 
 }  // close package namespace
 
@@ -4607,12 +5114,13 @@ namespace mqbconfm {
 // class DomainDefinition
 // ======================
 
-/// Top level type representing the information retrieved when resolving a
-/// domain.
-/// location..: Domain location (i.e., cluster name)  REVIEW: consider:
-/// s/location/cluster/ parameters: Domain parameters
-/// REVIEW: consider merging Domain into DomainDefinition
 class DomainDefinition {
+    // Top level type representing the information retrieved when resolving a
+    // domain.
+    // location..: Domain location (i.e., cluster name)  REVIEW: consider:
+    // s/location/cluster/ parameters: Domain parameters
+    // REVIEW: consider merging Domain into DomainDefinition
+
     // INSTANCE DATA
     bsl::string d_location;
     Domain      d_parameters;
@@ -4632,184 +5140,193 @@ class DomainDefinition {
 
   public:
     // CLASS METHODS
-
-    /// Return attribute information for the attribute indicated by the
-    /// specified `id` if the attribute exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
 
-    /// Return attribute information for the attribute indicated by the
-    /// specified `name` of the specified `nameLength` if the attribute
-    /// exists, and 0 otherwise.
     static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
                                                           int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `DomainDefinition` having the default
-    /// value.  Use the optionally specified `basicAllocator` to supply
-    /// memory.  If `basicAllocator` is 0, the currently installed default
-    /// allocator is used.
     explicit DomainDefinition(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'DomainDefinition' having the default
+    // value.  Use the optionally specified 'basicAllocator' to supply
+    // memory.  If 'basicAllocator' is 0, the currently installed default
+    // allocator is used.
 
-    /// Create an object of type `DomainDefinition` having the value of the
-    /// specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     DomainDefinition(const DomainDefinition& original,
                      bslma::Allocator*       basicAllocator = 0);
+    // Create an object of type 'DomainDefinition' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `DomainDefinition` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     DomainDefinition(DomainDefinition&& original) noexcept;
+    // Create an object of type 'DomainDefinition' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `DomainDefinition` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     DomainDefinition(DomainDefinition&& original,
                      bslma::Allocator*  basicAllocator);
+    // Create an object of type 'DomainDefinition' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~DomainDefinition();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     DomainDefinition& operator=(const DomainDefinition& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     DomainDefinition& operator=(DomainDefinition&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon
-    /// default construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
 
-    /// Invoke the specified `manipulator` sequentially on the address of
-    /// each (modifiable) attribute of this object, supplying `manipulator`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `manipulator` (i.e., the invocation that
-    /// terminated the sequence).
     template <typename t_MANIPULATOR>
     int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `id`,
-    /// supplying `manipulator` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if `id` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Invoke the specified `manipulator` on the address of
-    /// the (modifiable) attribute indicated by the specified `name` of the
-    /// specified `nameLength`, supplying `manipulator` with the
-    /// corresponding attribute information structure.  Return the value
-    /// returned from the invocation of `manipulator` if `name` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateAttribute(t_MANIPULATOR& manipulator,
                             const char*    name,
                             int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Return a reference to the modifiable "Location" attribute of this
-    /// object.
     bsl::string& location();
+    // Return a reference to the modifiable "Location" attribute of this
+    // object.
 
-    /// Return a reference to the modifiable "Parameters" attribute of this
-    /// object.
     Domain& parameters();
+    // Return a reference to the modifiable "Parameters" attribute of this
+    // object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Invoke the specified `accessor` sequentially on each
-    /// (non-modifiable) attribute of this object, supplying `accessor`
-    /// with the corresponding attribute information structure until such
-    /// invocation returns a non-zero value.  Return the value from the
-    /// last invocation of `accessor` (i.e., the invocation that terminated
-    /// the sequence).
     template <typename t_ACCESSOR>
     int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `id`, supplying `accessor`
-    /// with the corresponding attribute information structure.  Return the
-    /// value returned from the invocation of `accessor` if `id` identifies
-    /// an attribute of this class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the (non-modifiable) attribute
-    /// of this object indicated by the specified `name` of the specified
-    /// `nameLength`, supplying `accessor` with the corresponding attribute
-    /// information structure.  Return the value returned from the
-    /// invocation of `accessor` if `name` identifies an attribute of this
-    /// class, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessAttribute(t_ACCESSOR& accessor,
                         const char* name,
                         int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
 
-    /// Return a reference offering non-modifiable access to the "Location"
-    /// attribute of this object.
     const bsl::string& location() const;
+    // Return a reference offering non-modifiable access to the "Location"
+    // attribute of this object.
 
-    /// Return a reference offering non-modifiable access to the
-    /// "Parameters" attribute of this object.
     const Domain& parameters() const;
+    // Return a reference offering non-modifiable access to the
+    // "Parameters" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const DomainDefinition& lhs,
+                           const DomainDefinition& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.location() == rhs.location() &&
+               lhs.parameters() == rhs.parameters();
+    }
+
+    friend bool operator!=(const DomainDefinition& lhs,
+                           const DomainDefinition& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&           stream,
+                                    const DomainDefinition& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&       hashAlg,
+                           const DomainDefinition& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'DomainDefinition'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.location());
+        hashAppend(hashAlg, object.parameters());
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects have
-/// the same value, and `false` otherwise.  Two attribute objects have the
-/// same value if each respective attribute has the same value.
-inline bool operator==(const DomainDefinition& lhs,
-                       const DomainDefinition& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` attribute objects do not
-/// have the same value, and `false` otherwise.  Two attribute objects do
-/// not have the same value if one or more respective attributes differ in
-/// values.
-inline bool operator!=(const DomainDefinition& lhs,
-                       const DomainDefinition& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&           stream,
-                                const DomainDefinition& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `DomainDefinition`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const DomainDefinition& object);
 
 }  // close package namespace
 
@@ -4824,10 +5341,11 @@ namespace mqbconfm {
 // class DomainVariant
 // ===================
 
-/// Either a Domain or a DomainRedirection.
-/// definition..: The full definition of a domain redirection.: The name of
-/// the domain to redirect to
 class DomainVariant {
+    // Either a Domain or a DomainRedirection.
+    // definition..: The full definition of a domain redirection.: The name of
+    // the domain to redirect to
+
     // INSTANCE DATA
     union {
         bsls::ObjectBuffer<DomainDefinition> d_definition;
@@ -4836,6 +5354,12 @@ class DomainVariant {
 
     int               d_selectionId;
     bslma::Allocator* d_allocator_p;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const DomainVariant& rhs) const;
 
   public:
     // TYPES
@@ -4856,78 +5380,75 @@ class DomainVariant {
     static const bdlat_SelectionInfo SELECTION_INFO_ARRAY[];
 
     // CLASS METHODS
-
-    /// Return selection information for the selection indicated by the
-    /// specified `id` if the selection exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(int id);
+    // Return selection information for the selection indicated by the
+    // specified 'id' if the selection exists, and 0 otherwise.
 
-    /// Return selection information for the selection indicated by the
-    /// specified `name` of the specified `nameLength` if the selection
-    /// exists, and 0 otherwise.
     static const bdlat_SelectionInfo* lookupSelectionInfo(const char* name,
                                                           int nameLength);
+    // Return selection information for the selection indicated by the
+    // specified 'name' of the specified 'nameLength' if the selection
+    // exists, and 0 otherwise.
 
     // CREATORS
-
-    /// Create an object of type `DomainVariant` having the default value.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     explicit DomainVariant(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'DomainVariant' having the default value.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 
-    /// Create an object of type `DomainVariant` having the value of the
-    /// specified `original` object.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
     DomainVariant(const DomainVariant& original,
                   bslma::Allocator*    basicAllocator = 0);
+    // Create an object of type 'DomainVariant' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Create an object of type `DomainVariant` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
     DomainVariant(DomainVariant&& original) noexcept;
+    // Create an object of type 'DomainVariant' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
 
-    /// Create an object of type `DomainVariant` having the value of the
-    /// specified `original` object.  After performing this action, the
-    /// `original` object will be left in a valid, but unspecified state.
-    /// Use the optionally specified `basicAllocator` to supply memory.  If
-    /// `basicAllocator` is 0, the currently installed default allocator is
-    /// used.
     DomainVariant(DomainVariant&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'DomainVariant' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
 #endif
 
-    /// Destroy this object.
     ~DomainVariant();
+    // Destroy this object.
 
     // MANIPULATORS
-
-    /// Assign to this object the value of the specified `rhs` object.
     DomainVariant& operator=(const DomainVariant& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    /// Assign to this object the value of the specified `rhs` object.
-    /// After performing this action, the `rhs` object will be left in a
-    /// valid, but unspecified state.
     DomainVariant& operator=(DomainVariant&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
 #endif
 
-    /// Reset this object to the default value (i.e., its value upon default
-    /// construction).
     void reset();
+    // Reset this object to the default value (i.e., its value upon default
+    // construction).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `selectionId`.  Return 0 on success, and
-    /// non-zero value otherwise (i.e., the selection is not found).
     int makeSelection(int selectionId);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'selectionId'.  Return 0 on success, and
+    // non-zero value otherwise (i.e., the selection is not found).
 
-    /// Set the value of this object to be the default for the selection
-    /// indicated by the specified `name` of the specified `nameLength`.
-    /// Return 0 on success, and non-zero value otherwise (i.e., the
-    /// selection is not found).
     int makeSelection(const char* name, int nameLength);
+    // Set the value of this object to be the default for the selection
+    // indicated by the specified 'name' of the specified 'nameLength'.
+    // Return 0 on success, and non-zero value otherwise (i.e., the
+    // selection is not found).
 
     DomainDefinition& makeDefinition();
     DomainDefinition& makeDefinition(const DomainDefinition& value);
@@ -4949,99 +5470,112 @@ class DomainVariant {
     // specify the 'value' of the "Redirect".  If 'value' is not specified,
     // the default "Redirect" value is used.
 
-    /// Invoke the specified `manipulator` on the address of the modifiable
-    /// selection, supplying `manipulator` with the corresponding selection
-    /// information structure.  Return the value returned from the
-    /// invocation of `manipulator` if this object has a defined selection,
-    /// and -1 otherwise.
     template <typename t_MANIPULATOR>
     int manipulateSelection(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' on the address of the modifiable
+    // selection, supplying 'manipulator' with the corresponding selection
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if this object has a defined selection,
+    // and -1 otherwise.
 
-    /// Return a reference to the modifiable "Definition" selection of this
-    /// object if "Definition" is the current selection.  The behavior is
-    /// undefined unless "Definition" is the selection of this object.
     DomainDefinition& definition();
+    // Return a reference to the modifiable "Definition" selection of this
+    // object if "Definition" is the current selection.  The behavior is
+    // undefined unless "Definition" is the selection of this object.
 
-    /// Return a reference to the modifiable "Redirect" selection of this
-    /// object if "Redirect" is the current selection.  The behavior is
-    /// undefined unless "Redirect" is the selection of this object.
     bsl::string& redirect();
+    // Return a reference to the modifiable "Redirect" selection of this
+    // object if "Redirect" is the current selection.  The behavior is
+    // undefined unless "Redirect" is the selection of this object.
 
     // ACCESSORS
-
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
 
-    /// Return the id of the current selection if the selection is defined,
-    /// and -1 otherwise.
     int selectionId() const;
+    // Return the id of the current selection if the selection is defined,
+    // and -1 otherwise.
 
-    /// Invoke the specified `accessor` on the non-modifiable selection,
-    /// supplying `accessor` with the corresponding selection information
-    /// structure.  Return the value returned from the invocation of
-    /// `accessor` if this object has a defined selection, and -1 otherwise.
     template <typename t_ACCESSOR>
     int accessSelection(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' on the non-modifiable selection,
+    // supplying 'accessor' with the corresponding selection information
+    // structure.  Return the value returned from the invocation of
+    // 'accessor' if this object has a defined selection, and -1 otherwise.
 
-    /// Return a reference to the non-modifiable "Definition" selection of
-    /// this object if "Definition" is the current selection.  The behavior
-    /// is undefined unless "Definition" is the selection of this object.
     const DomainDefinition& definition() const;
+    // Return a reference to the non-modifiable "Definition" selection of
+    // this object if "Definition" is the current selection.  The behavior
+    // is undefined unless "Definition" is the selection of this object.
 
-    /// Return a reference to the non-modifiable "Redirect" selection of
-    /// this object if "Redirect" is the current selection.  The behavior is
-    /// undefined unless "Redirect" is the selection of this object.
     const bsl::string& redirect() const;
+    // Return a reference to the non-modifiable "Redirect" selection of
+    // this object if "Redirect" is the current selection.  The behavior is
+    // undefined unless "Redirect" is the selection of this object.
 
-    /// Return `true` if the value of this object is a "Definition" value,
-    /// and return `false` otherwise.
     bool isDefinitionValue() const;
+    // Return 'true' if the value of this object is a "Definition" value,
+    // and return 'false' otherwise.
 
-    /// Return `true` if the value of this object is a "Redirect" value, and
-    /// return `false` otherwise.
     bool isRedirectValue() const;
+    // Return 'true' if the value of this object is a "Redirect" value, and
+    // return 'false' otherwise.
 
-    /// Return `true` if the value of this object is undefined, and `false`
-    /// otherwise.
     bool isUndefinedValue() const;
+    // Return 'true' if the value of this object is undefined, and 'false'
+    // otherwise.
 
-    /// Return the symbolic name of the current selection of this object.
     const char* selectionName() const;
+    // Return the symbolic name of the current selection of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const DomainVariant& lhs, const DomainVariant& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects have the same
+    // value, and 'false' otherwise.  Two 'DomainVariant' objects have the
+    // same value if either the selections in both objects have the same
+    // ids and the same values, or both selections are undefined.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const DomainVariant& lhs, const DomainVariant& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects do not have
+    // the same values, as determined by 'operator==', and 'false'
+    // otherwise.
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&        stream,
+                                    const DomainVariant& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&    hashAlg,
+                           const DomainVariant& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'DomainVariant'.
+    {
+        return object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-
-/// Return `true` if the specified `lhs` and `rhs` objects have the same
-/// value, and `false` otherwise.  Two `DomainVariant` objects have the same
-/// value if either the selections in both objects have the same ids and
-/// the same values, or both selections are undefined.
-inline bool operator==(const DomainVariant& lhs, const DomainVariant& rhs);
-
-/// Return `true` if the specified `lhs` and `rhs` objects do not have the
-/// same values, as determined by `operator==`, and `false` otherwise.
-inline bool operator!=(const DomainVariant& lhs, const DomainVariant& rhs);
-
-/// Format the specified `rhs` to the specified output `stream` and
-/// return a reference to the modifiable `stream`.
-inline bsl::ostream& operator<<(bsl::ostream&        stream,
-                                const DomainVariant& rhs);
-
-/// Pass the specified `object` to the specified `hashAlg`.  This function
-/// integrates with the `bslh` modular hashing system and effectively
-/// provides a `bsl::hash` specialization for `DomainVariant`.
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const DomainVariant& object);
 
 }  // close package namespace
 
@@ -5050,15 +5584,25 @@ void hashAppend(t_HASH_ALGORITHM& hashAlg, const DomainVariant& object);
 BDLAT_DECL_CHOICE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
     mqbconfm::DomainVariant)
 
-// ============================================================================
-//                         INLINE FUNCTION DEFINITIONS
-// ============================================================================
+//=============================================================================
+//                          INLINE DEFINITIONS
+//=============================================================================
 
 namespace mqbconfm {
 
 // --------------------
 // class BrokerIdentity
 // --------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void BrokerIdentity::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->hostName());
+    hashAppend(hashAlgorithm, this->hostTags());
+    hashAppend(hashAlgorithm, this->brokerVersion());
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -5486,6 +6030,25 @@ inline const bsl::string& DomainResolver::cluster() const
     return d_cluster;
 }
 
+// -----------------------
+// class ExpressionVersion
+// -----------------------
+
+// CLASS METHODS
+inline int ExpressionVersion::fromString(Value*             result,
+                                         const bsl::string& string)
+{
+    return fromString(result,
+                      string.c_str(),
+                      static_cast<int>(string.length()));
+}
+
+inline bsl::ostream& ExpressionVersion::print(bsl::ostream&            stream,
+                                              ExpressionVersion::Value value)
+{
+    return stream << toString(value);
+}
+
 // -------------
 // class Failure
 // -------------
@@ -5771,6 +6334,25 @@ int InMemoryStorage::accessAttribute(t_ACCESSOR& accessor,
 // class Limits
 // ------------
 
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void Limits::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->messages());
+    hashAppend(hashAlgorithm, this->messagesWatermarkRatio());
+    hashAppend(hashAlgorithm, this->bytes());
+    hashAppend(hashAlgorithm, this->bytesWatermarkRatio());
+}
+
+inline bool Limits::isEqualTo(const Limits& rhs) const
+{
+    return this->messages() == rhs.messages() &&
+           this->messagesWatermarkRatio() == rhs.messagesWatermarkRatio() &&
+           this->bytes() == rhs.bytes() &&
+           this->bytesWatermarkRatio() == rhs.bytesWatermarkRatio();
+}
+
 // CLASS METHODS
 // MANIPULATORS
 template <typename t_MANIPULATOR>
@@ -5969,6 +6551,16 @@ inline double Limits::bytesWatermarkRatio() const
 // ----------------------
 // class MsgGroupIdConfig
 // ----------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void MsgGroupIdConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->rebalance());
+    hashAppend(hashAlgorithm, this->maxGroups());
+    hashAppend(hashAlgorithm, this->ttlSeconds());
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -6376,6 +6968,13 @@ int QueueModeFanout::manipulateAttributes(t_MANIPULATOR& manipulator)
         return ret;
     }
 
+    ret = manipulator(
+        &d_publishAppIdMetrics,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_APP_ID_METRICS]);
+    if (ret) {
+        return ret;
+    }
+
     return 0;
 }
 
@@ -6388,6 +6987,11 @@ int QueueModeFanout::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
     case ATTRIBUTE_ID_APP_I_DS: {
         return manipulator(&d_appIDs,
                            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_I_DS]);
+    }
+    case ATTRIBUTE_ID_PUBLISH_APP_ID_METRICS: {
+        return manipulator(
+            &d_publishAppIdMetrics,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_APP_ID_METRICS]);
     }
     default: return NOT_FOUND;
     }
@@ -6414,6 +7018,11 @@ inline bsl::vector<bsl::string>& QueueModeFanout::appIDs()
     return d_appIDs;
 }
 
+inline bool& QueueModeFanout::publishAppIdMetrics()
+{
+    return d_publishAppIdMetrics;
+}
+
 // ACCESSORS
 template <typename t_ACCESSOR>
 int QueueModeFanout::accessAttributes(t_ACCESSOR& accessor) const
@@ -6421,6 +7030,13 @@ int QueueModeFanout::accessAttributes(t_ACCESSOR& accessor) const
     int ret;
 
     ret = accessor(d_appIDs, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_I_DS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(
+        d_publishAppIdMetrics,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_APP_ID_METRICS]);
     if (ret) {
         return ret;
     }
@@ -6437,6 +7053,11 @@ int QueueModeFanout::accessAttribute(t_ACCESSOR& accessor, int id) const
     case ATTRIBUTE_ID_APP_I_DS: {
         return accessor(d_appIDs,
                         ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_I_DS]);
+    }
+    case ATTRIBUTE_ID_PUBLISH_APP_ID_METRICS: {
+        return accessor(
+            d_publishAppIdMetrics,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_APP_ID_METRICS]);
     }
     default: return NOT_FOUND;
     }
@@ -6461,6 +7082,11 @@ int QueueModeFanout::accessAttribute(t_ACCESSOR& accessor,
 inline const bsl::vector<bsl::string>& QueueModeFanout::appIDs() const
 {
     return d_appIDs;
+}
+
+inline bool QueueModeFanout::publishAppIdMetrics() const
+{
+    return d_publishAppIdMetrics;
 }
 
 // -----------------------
@@ -6543,6 +7169,42 @@ int QueueModePriority::accessAttribute(t_ACCESSOR& accessor,
 // -----------------
 
 // CLASS METHODS
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void Consistency::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    typedef Consistency Class;
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->selectionId());
+    switch (this->selectionId()) {
+    case Class::SELECTION_ID_EVENTUAL:
+        hashAppend(hashAlgorithm, this->eventual());
+        break;
+    case Class::SELECTION_ID_STRONG:
+        hashAppend(hashAlgorithm, this->strong());
+        break;
+    default: BSLS_ASSERT(this->selectionId() == Class::SELECTION_ID_UNDEFINED);
+    }
+}
+
+inline bool Consistency::isEqualTo(const Consistency& rhs) const
+{
+    typedef Consistency Class;
+    if (this->selectionId() == rhs.selectionId()) {
+        switch (rhs.selectionId()) {
+        case Class::SELECTION_ID_EVENTUAL:
+            return this->eventual() == rhs.eventual();
+        case Class::SELECTION_ID_STRONG: return this->strong() == rhs.strong();
+        default:
+            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
 // CREATORS
 inline Consistency::Consistency()
 : d_selectionId(SELECTION_ID_UNDEFINED)
@@ -6767,11 +7429,183 @@ inline const bsl::string& DomainConfigRequest::domainName() const
     return d_domainName;
 }
 
+// ----------------
+// class Expression
+// ----------------
+
+// CLASS METHODS
+// MANIPULATORS
+template <typename t_MANIPULATOR>
+int Expression::manipulateAttributes(t_MANIPULATOR& manipulator)
+{
+    int ret;
+
+    ret = manipulator(&d_version,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_text, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TEXT]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_MANIPULATOR>
+int Expression::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_VERSION: {
+        return manipulator(&d_version,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION]);
+    }
+    case ATTRIBUTE_ID_TEXT: {
+        return manipulator(&d_text,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TEXT]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_MANIPULATOR>
+int Expression::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                    const char*    name,
+                                    int            nameLength)
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return manipulateAttribute(manipulator, attributeInfo->d_id);
+}
+
+inline ExpressionVersion::Value& Expression::version()
+{
+    return d_version;
+}
+
+inline bsl::string& Expression::text()
+{
+    return d_text;
+}
+
+// ACCESSORS
+template <typename t_ACCESSOR>
+int Expression::accessAttributes(t_ACCESSOR& accessor) const
+{
+    int ret;
+
+    ret = accessor(d_version, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_text, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TEXT]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_ACCESSOR>
+int Expression::accessAttribute(t_ACCESSOR& accessor, int id) const
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_VERSION: {
+        return accessor(d_version,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION]);
+    }
+    case ATTRIBUTE_ID_TEXT: {
+        return accessor(d_text, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TEXT]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_ACCESSOR>
+int Expression::accessAttribute(t_ACCESSOR& accessor,
+                                const char* name,
+                                int         nameLength) const
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return accessAttribute(accessor, attributeInfo->d_id);
+}
+
+inline ExpressionVersion::Value Expression::version() const
+{
+    return d_version;
+}
+
+inline const bsl::string& Expression::text() const
+{
+    return d_text;
+}
+
 // ---------------
 // class QueueMode
 // ---------------
 
 // CLASS METHODS
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void QueueMode::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    typedef QueueMode Class;
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->selectionId());
+    switch (this->selectionId()) {
+    case Class::SELECTION_ID_FANOUT:
+        hashAppend(hashAlgorithm, this->fanout());
+        break;
+    case Class::SELECTION_ID_PRIORITY:
+        hashAppend(hashAlgorithm, this->priority());
+        break;
+    case Class::SELECTION_ID_BROADCAST:
+        hashAppend(hashAlgorithm, this->broadcast());
+        break;
+    default: BSLS_ASSERT(this->selectionId() == Class::SELECTION_ID_UNDEFINED);
+    }
+}
+
+inline bool QueueMode::isEqualTo(const QueueMode& rhs) const
+{
+    typedef QueueMode Class;
+    if (this->selectionId() == rhs.selectionId()) {
+        switch (rhs.selectionId()) {
+        case Class::SELECTION_ID_FANOUT: return this->fanout() == rhs.fanout();
+        case Class::SELECTION_ID_PRIORITY:
+            return this->priority() == rhs.priority();
+        case Class::SELECTION_ID_BROADCAST:
+            return this->broadcast() == rhs.broadcast();
+        default:
+            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
 // CREATORS
 inline QueueMode::QueueMode(bslma::Allocator* basicAllocator)
 : d_selectionId(SELECTION_ID_UNDEFINED)
@@ -6888,6 +7722,43 @@ inline bool QueueMode::isUndefinedValue() const
 // --------------
 
 // CLASS METHODS
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void Response::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    typedef Response Class;
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->selectionId());
+    switch (this->selectionId()) {
+    case Class::SELECTION_ID_FAILURE:
+        hashAppend(hashAlgorithm, this->failure());
+        break;
+    case Class::SELECTION_ID_DOMAIN_CONFIG:
+        hashAppend(hashAlgorithm, this->domainConfig());
+        break;
+    default: BSLS_ASSERT(this->selectionId() == Class::SELECTION_ID_UNDEFINED);
+    }
+}
+
+inline bool Response::isEqualTo(const Response& rhs) const
+{
+    typedef Response Class;
+    if (this->selectionId() == rhs.selectionId()) {
+        switch (rhs.selectionId()) {
+        case Class::SELECTION_ID_FAILURE:
+            return this->failure() == rhs.failure();
+        case Class::SELECTION_ID_DOMAIN_CONFIG:
+            return this->domainConfig() == rhs.domainConfig();
+        default:
+            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
 // CREATORS
 inline Response::Response(bslma::Allocator* basicAllocator)
 : d_selectionId(SELECTION_ID_UNDEFINED)
@@ -6982,6 +7853,43 @@ inline bool Response::isUndefinedValue() const
 // -------------
 
 // CLASS METHODS
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void Storage::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    typedef Storage Class;
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->selectionId());
+    switch (this->selectionId()) {
+    case Class::SELECTION_ID_IN_MEMORY:
+        hashAppend(hashAlgorithm, this->inMemory());
+        break;
+    case Class::SELECTION_ID_FILE_BACKED:
+        hashAppend(hashAlgorithm, this->fileBacked());
+        break;
+    default: BSLS_ASSERT(this->selectionId() == Class::SELECTION_ID_UNDEFINED);
+    }
+}
+
+inline bool Storage::isEqualTo(const Storage& rhs) const
+{
+    typedef Storage Class;
+    if (this->selectionId() == rhs.selectionId()) {
+        switch (rhs.selectionId()) {
+        case Class::SELECTION_ID_IN_MEMORY:
+            return this->inMemory() == rhs.inMemory();
+        case Class::SELECTION_ID_FILE_BACKED:
+            return this->fileBacked() == rhs.fileBacked();
+        default:
+            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
 // CREATORS
 inline Storage::Storage()
 : d_selectionId(SELECTION_ID_UNDEFINED)
@@ -7074,6 +7982,38 @@ inline bool Storage::isUndefinedValue() const
 // -------------
 
 // CLASS METHODS
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void Request::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    typedef Request Class;
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->selectionId());
+    switch (this->selectionId()) {
+    case Class::SELECTION_ID_DOMAIN_CONFIG:
+        hashAppend(hashAlgorithm, this->domainConfig());
+        break;
+    default: BSLS_ASSERT(this->selectionId() == Class::SELECTION_ID_UNDEFINED);
+    }
+}
+
+inline bool Request::isEqualTo(const Request& rhs) const
+{
+    typedef Request Class;
+    if (this->selectionId() == rhs.selectionId()) {
+        switch (rhs.selectionId()) {
+        case Class::SELECTION_ID_DOMAIN_CONFIG:
+            return this->domainConfig() == rhs.domainConfig();
+        default:
+            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
 // CREATORS
 inline Request::Request(bslma::Allocator* basicAllocator)
 : d_selectionId(SELECTION_ID_UNDEFINED)
@@ -7143,6 +8083,16 @@ inline bool Request::isUndefinedValue() const
 // -----------------------
 // class StorageDefinition
 // -----------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void StorageDefinition::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->domainLimits());
+    hashAppend(hashAlgorithm, this->queueLimits());
+    hashAppend(hashAlgorithm, this->config());
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -7304,9 +8254,177 @@ inline const Storage& StorageDefinition::config() const
     return d_config;
 }
 
+// ------------------
+// class Subscription
+// ------------------
+
+// CLASS METHODS
+// MANIPULATORS
+template <typename t_MANIPULATOR>
+int Subscription::manipulateAttributes(t_MANIPULATOR& manipulator)
+{
+    int ret;
+
+    ret = manipulator(&d_appId, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_ID]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_expression,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_EXPRESSION]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_MANIPULATOR>
+int Subscription::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_APP_ID: {
+        return manipulator(&d_appId,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_ID]);
+    }
+    case ATTRIBUTE_ID_EXPRESSION: {
+        return manipulator(&d_expression,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_EXPRESSION]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_MANIPULATOR>
+int Subscription::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                      const char*    name,
+                                      int            nameLength)
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return manipulateAttribute(manipulator, attributeInfo->d_id);
+}
+
+inline bsl::string& Subscription::appId()
+{
+    return d_appId;
+}
+
+inline Expression& Subscription::expression()
+{
+    return d_expression;
+}
+
+// ACCESSORS
+template <typename t_ACCESSOR>
+int Subscription::accessAttributes(t_ACCESSOR& accessor) const
+{
+    int ret;
+
+    ret = accessor(d_appId, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_ID]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_expression,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_EXPRESSION]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_ACCESSOR>
+int Subscription::accessAttribute(t_ACCESSOR& accessor, int id) const
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_APP_ID: {
+        return accessor(d_appId, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_ID]);
+    }
+    case ATTRIBUTE_ID_EXPRESSION: {
+        return accessor(d_expression,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_EXPRESSION]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_ACCESSOR>
+int Subscription::accessAttribute(t_ACCESSOR& accessor,
+                                  const char* name,
+                                  int         nameLength) const
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return accessAttribute(accessor, attributeInfo->d_id);
+}
+
+inline const bsl::string& Subscription::appId() const
+{
+    return d_appId;
+}
+
+inline const Expression& Subscription::expression() const
+{
+    return d_expression;
+}
+
 // ------------
 // class Domain
 // ------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void Domain::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->name());
+    hashAppend(hashAlgorithm, this->mode());
+    hashAppend(hashAlgorithm, this->storage());
+    hashAppend(hashAlgorithm, this->maxConsumers());
+    hashAppend(hashAlgorithm, this->maxProducers());
+    hashAppend(hashAlgorithm, this->maxQueues());
+    hashAppend(hashAlgorithm, this->msgGroupIdConfig());
+    hashAppend(hashAlgorithm, this->maxIdleTime());
+    hashAppend(hashAlgorithm, this->messageTtl());
+    hashAppend(hashAlgorithm, this->maxDeliveryAttempts());
+    hashAppend(hashAlgorithm, this->deduplicationTimeMs());
+    hashAppend(hashAlgorithm, this->consistency());
+    hashAppend(hashAlgorithm, this->subscriptions());
+}
+
+inline bool Domain::isEqualTo(const Domain& rhs) const
+{
+    return this->name() == rhs.name() && this->mode() == rhs.mode() &&
+           this->storage() == rhs.storage() &&
+           this->maxConsumers() == rhs.maxConsumers() &&
+           this->maxProducers() == rhs.maxProducers() &&
+           this->maxQueues() == rhs.maxQueues() &&
+           this->msgGroupIdConfig() == rhs.msgGroupIdConfig() &&
+           this->maxIdleTime() == rhs.maxIdleTime() &&
+           this->messageTtl() == rhs.messageTtl() &&
+           this->maxDeliveryAttempts() == rhs.maxDeliveryAttempts() &&
+           this->deduplicationTimeMs() == rhs.deduplicationTimeMs() &&
+           this->consistency() == rhs.consistency() &&
+           this->subscriptions() == rhs.subscriptions();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -7388,6 +8506,12 @@ int Domain::manipulateAttributes(t_MANIPULATOR& manipulator)
         return ret;
     }
 
+    ret = manipulator(&d_subscriptions,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SUBSCRIPTIONS]);
+    if (ret) {
+        return ret;
+    }
+
     return 0;
 }
 
@@ -7450,6 +8574,11 @@ int Domain::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
     case ATTRIBUTE_ID_CONSISTENCY: {
         return manipulator(&d_consistency,
                            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONSISTENCY]);
+    }
+    case ATTRIBUTE_ID_SUBSCRIPTIONS: {
+        return manipulator(
+            &d_subscriptions,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SUBSCRIPTIONS]);
     }
     default: return NOT_FOUND;
     }
@@ -7531,6 +8660,11 @@ inline Consistency& Domain::consistency()
     return d_consistency;
 }
 
+inline bsl::vector<Subscription>& Domain::subscriptions()
+{
+    return d_subscriptions;
+}
+
 // ACCESSORS
 template <typename t_ACCESSOR>
 int Domain::accessAttributes(t_ACCESSOR& accessor) const
@@ -7608,6 +8742,12 @@ int Domain::accessAttributes(t_ACCESSOR& accessor) const
         return ret;
     }
 
+    ret = accessor(d_subscriptions,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SUBSCRIPTIONS]);
+    if (ret) {
+        return ret;
+    }
+
     return 0;
 }
 
@@ -7665,6 +8805,10 @@ int Domain::accessAttribute(t_ACCESSOR& accessor, int id) const
     case ATTRIBUTE_ID_CONSISTENCY: {
         return accessor(d_consistency,
                         ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONSISTENCY]);
+    }
+    case ATTRIBUTE_ID_SUBSCRIPTIONS: {
+        return accessor(d_subscriptions,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SUBSCRIPTIONS]);
     }
     default: return NOT_FOUND;
     }
@@ -7745,6 +8889,11 @@ inline int Domain::deduplicationTimeMs() const
 inline const Consistency& Domain::consistency() const
 {
     return d_consistency;
+}
+
+inline const bsl::vector<Subscription>& Domain::subscriptions() const
+{
+    return d_subscriptions;
 }
 
 // ----------------------
@@ -7886,6 +9035,43 @@ inline const Domain& DomainDefinition::parameters() const
 // -------------------
 
 // CLASS METHODS
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void DomainVariant::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    typedef DomainVariant Class;
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->selectionId());
+    switch (this->selectionId()) {
+    case Class::SELECTION_ID_DEFINITION:
+        hashAppend(hashAlgorithm, this->definition());
+        break;
+    case Class::SELECTION_ID_REDIRECT:
+        hashAppend(hashAlgorithm, this->redirect());
+        break;
+    default: BSLS_ASSERT(this->selectionId() == Class::SELECTION_ID_UNDEFINED);
+    }
+}
+
+inline bool DomainVariant::isEqualTo(const DomainVariant& rhs) const
+{
+    typedef DomainVariant Class;
+    if (this->selectionId() == rhs.selectionId()) {
+        switch (rhs.selectionId()) {
+        case Class::SELECTION_ID_DEFINITION:
+            return this->definition() == rhs.definition();
+        case Class::SELECTION_ID_REDIRECT:
+            return this->redirect() == rhs.redirect();
+        default:
+            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
 // CREATORS
 inline DomainVariant::DomainVariant(bslma::Allocator* basicAllocator)
 : d_selectionId(SELECTION_ID_UNDEFINED)
@@ -7977,811 +9163,17 @@ inline bool DomainVariant::isUndefinedValue() const
 
 // FREE FUNCTIONS
 
-inline bool mqbconfm::operator==(const mqbconfm::BrokerIdentity& lhs,
-                                 const mqbconfm::BrokerIdentity& rhs)
-{
-    return lhs.hostName() == rhs.hostName() &&
-           lhs.hostTags() == rhs.hostTags() &&
-           lhs.brokerVersion() == rhs.brokerVersion();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::BrokerIdentity& lhs,
-                                 const mqbconfm::BrokerIdentity& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream& stream,
-                                          const mqbconfm::BrokerIdentity& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&               hashAlg,
-                          const mqbconfm::BrokerIdentity& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.hostName());
-    hashAppend(hashAlg, object.hostTags());
-    hashAppend(hashAlg, object.brokerVersion());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::DomainConfigRaw& lhs,
-                                 const mqbconfm::DomainConfigRaw& rhs)
-{
-    return lhs.domainName() == rhs.domainName() &&
-           lhs.config() == rhs.config();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::DomainConfigRaw& lhs,
-                                 const mqbconfm::DomainConfigRaw& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream& stream,
-                                          const mqbconfm::DomainConfigRaw& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                          const mqbconfm::DomainConfigRaw& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.domainName());
-    hashAppend(hashAlg, object.config());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::DomainResolver& lhs,
-                                 const mqbconfm::DomainResolver& rhs)
-{
-    return lhs.name() == rhs.name() && lhs.cluster() == rhs.cluster();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::DomainResolver& lhs,
-                                 const mqbconfm::DomainResolver& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream& stream,
-                                          const mqbconfm::DomainResolver& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&               hashAlg,
-                          const mqbconfm::DomainResolver& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.cluster());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::Failure& lhs,
-                                 const mqbconfm::Failure& rhs)
-{
-    return lhs.code() == rhs.code() && lhs.message() == rhs.message();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::Failure& lhs,
-                                 const mqbconfm::Failure& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream&            stream,
-                                          const mqbconfm::Failure& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&        hashAlg,
-                          const mqbconfm::Failure& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.code());
-    hashAppend(hashAlg, object.message());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::FileBackedStorage&,
-                                 const mqbconfm::FileBackedStorage&)
-{
-    return true;
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::FileBackedStorage&,
-                                 const mqbconfm::FileBackedStorage&)
-{
-    return false;
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                      stream,
-                     const mqbconfm::FileBackedStorage& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                  hashAlg,
-                          const mqbconfm::FileBackedStorage& object)
-{
-    (void)hashAlg;
-    (void)object;
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::InMemoryStorage&,
-                                 const mqbconfm::InMemoryStorage&)
-{
-    return true;
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::InMemoryStorage&,
-                                 const mqbconfm::InMemoryStorage&)
-{
-    return false;
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream& stream,
-                                          const mqbconfm::InMemoryStorage& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                          const mqbconfm::InMemoryStorage& object)
-{
-    (void)hashAlg;
-    (void)object;
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::Limits& lhs,
-                                 const mqbconfm::Limits& rhs)
-{
-    return lhs.messages() == rhs.messages() &&
-           lhs.messagesWatermarkRatio() == rhs.messagesWatermarkRatio() &&
-           lhs.bytes() == rhs.bytes() &&
-           lhs.bytesWatermarkRatio() == rhs.bytesWatermarkRatio();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::Limits& lhs,
-                                 const mqbconfm::Limits& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream&           stream,
-                                          const mqbconfm::Limits& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&       hashAlg,
-                          const mqbconfm::Limits& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.messages());
-    hashAppend(hashAlg, object.messagesWatermarkRatio());
-    hashAppend(hashAlg, object.bytes());
-    hashAppend(hashAlg, object.bytesWatermarkRatio());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::MsgGroupIdConfig& lhs,
-                                 const mqbconfm::MsgGroupIdConfig& rhs)
-{
-    return lhs.rebalance() == rhs.rebalance() &&
-           lhs.maxGroups() == rhs.maxGroups() &&
-           lhs.ttlSeconds() == rhs.ttlSeconds();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::MsgGroupIdConfig& lhs,
-                                 const mqbconfm::MsgGroupIdConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                     stream,
-                     const mqbconfm::MsgGroupIdConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                 hashAlg,
-                          const mqbconfm::MsgGroupIdConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.rebalance());
-    hashAppend(hashAlg, object.maxGroups());
-    hashAppend(hashAlg, object.ttlSeconds());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::QueueConsistencyEventual&,
-                                 const mqbconfm::QueueConsistencyEventual&)
-{
-    return true;
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::QueueConsistencyEventual&,
-                                 const mqbconfm::QueueConsistencyEventual&)
-{
-    return false;
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                             stream,
-                     const mqbconfm::QueueConsistencyEventual& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                         hashAlg,
-                          const mqbconfm::QueueConsistencyEventual& object)
-{
-    (void)hashAlg;
-    (void)object;
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::QueueConsistencyStrong&,
-                                 const mqbconfm::QueueConsistencyStrong&)
-{
-    return true;
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::QueueConsistencyStrong&,
-                                 const mqbconfm::QueueConsistencyStrong&)
-{
-    return false;
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                           stream,
-                     const mqbconfm::QueueConsistencyStrong& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                       hashAlg,
-                          const mqbconfm::QueueConsistencyStrong& object)
-{
-    (void)hashAlg;
-    (void)object;
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::QueueModeBroadcast&,
-                                 const mqbconfm::QueueModeBroadcast&)
-{
-    return true;
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::QueueModeBroadcast&,
-                                 const mqbconfm::QueueModeBroadcast&)
-{
-    return false;
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                       stream,
-                     const mqbconfm::QueueModeBroadcast& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                   hashAlg,
-                          const mqbconfm::QueueModeBroadcast& object)
-{
-    (void)hashAlg;
-    (void)object;
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::QueueModeFanout& lhs,
-                                 const mqbconfm::QueueModeFanout& rhs)
-{
-    return lhs.appIDs() == rhs.appIDs();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::QueueModeFanout& lhs,
-                                 const mqbconfm::QueueModeFanout& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream& stream,
-                                          const mqbconfm::QueueModeFanout& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                          const mqbconfm::QueueModeFanout& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.appIDs());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::QueueModePriority&,
-                                 const mqbconfm::QueueModePriority&)
-{
-    return true;
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::QueueModePriority&,
-                                 const mqbconfm::QueueModePriority&)
-{
-    return false;
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                      stream,
-                     const mqbconfm::QueueModePriority& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                  hashAlg,
-                          const mqbconfm::QueueModePriority& object)
-{
-    (void)hashAlg;
-    (void)object;
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::Consistency& lhs,
-                                 const mqbconfm::Consistency& rhs)
-{
-    typedef mqbconfm::Consistency Class;
-    if (lhs.selectionId() == rhs.selectionId()) {
-        switch (rhs.selectionId()) {
-        case Class::SELECTION_ID_EVENTUAL:
-            return lhs.eventual() == rhs.eventual();
-        case Class::SELECTION_ID_STRONG: return lhs.strong() == rhs.strong();
-        default:
-            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
-            return true;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::Consistency& lhs,
-                                 const mqbconfm::Consistency& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream&                stream,
-                                          const mqbconfm::Consistency& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&            hashAlg,
-                          const mqbconfm::Consistency& object)
-{
-    typedef mqbconfm::Consistency Class;
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.selectionId());
-    switch (object.selectionId()) {
-    case Class::SELECTION_ID_EVENTUAL:
-        hashAppend(hashAlg, object.eventual());
-        break;
-    case Class::SELECTION_ID_STRONG:
-        hashAppend(hashAlg, object.strong());
-        break;
-    default:
-        BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == object.selectionId());
-    }
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::DomainConfigRequest& lhs,
-                                 const mqbconfm::DomainConfigRequest& rhs)
-{
-    return lhs.brokerIdentity() == rhs.brokerIdentity() &&
-           lhs.domainName() == rhs.domainName();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::DomainConfigRequest& lhs,
-                                 const mqbconfm::DomainConfigRequest& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                        stream,
-                     const mqbconfm::DomainConfigRequest& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                    hashAlg,
-                          const mqbconfm::DomainConfigRequest& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.brokerIdentity());
-    hashAppend(hashAlg, object.domainName());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::QueueMode& lhs,
-                                 const mqbconfm::QueueMode& rhs)
-{
-    typedef mqbconfm::QueueMode Class;
-    if (lhs.selectionId() == rhs.selectionId()) {
-        switch (rhs.selectionId()) {
-        case Class::SELECTION_ID_FANOUT: return lhs.fanout() == rhs.fanout();
-        case Class::SELECTION_ID_PRIORITY:
-            return lhs.priority() == rhs.priority();
-        case Class::SELECTION_ID_BROADCAST:
-            return lhs.broadcast() == rhs.broadcast();
-        default:
-            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
-            return true;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::QueueMode& lhs,
-                                 const mqbconfm::QueueMode& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream&              stream,
-                                          const mqbconfm::QueueMode& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&          hashAlg,
-                          const mqbconfm::QueueMode& object)
-{
-    typedef mqbconfm::QueueMode Class;
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.selectionId());
-    switch (object.selectionId()) {
-    case Class::SELECTION_ID_FANOUT:
-        hashAppend(hashAlg, object.fanout());
-        break;
-    case Class::SELECTION_ID_PRIORITY:
-        hashAppend(hashAlg, object.priority());
-        break;
-    case Class::SELECTION_ID_BROADCAST:
-        hashAppend(hashAlg, object.broadcast());
-        break;
-    default:
-        BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == object.selectionId());
-    }
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::Response& lhs,
-                                 const mqbconfm::Response& rhs)
-{
-    typedef mqbconfm::Response Class;
-    if (lhs.selectionId() == rhs.selectionId()) {
-        switch (rhs.selectionId()) {
-        case Class::SELECTION_ID_FAILURE:
-            return lhs.failure() == rhs.failure();
-        case Class::SELECTION_ID_DOMAIN_CONFIG:
-            return lhs.domainConfig() == rhs.domainConfig();
-        default:
-            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
-            return true;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::Response& lhs,
-                                 const mqbconfm::Response& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream&             stream,
-                                          const mqbconfm::Response& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&         hashAlg,
-                          const mqbconfm::Response& object)
-{
-    typedef mqbconfm::Response Class;
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.selectionId());
-    switch (object.selectionId()) {
-    case Class::SELECTION_ID_FAILURE:
-        hashAppend(hashAlg, object.failure());
-        break;
-    case Class::SELECTION_ID_DOMAIN_CONFIG:
-        hashAppend(hashAlg, object.domainConfig());
-        break;
-    default:
-        BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == object.selectionId());
-    }
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::Storage& lhs,
-                                 const mqbconfm::Storage& rhs)
-{
-    typedef mqbconfm::Storage Class;
-    if (lhs.selectionId() == rhs.selectionId()) {
-        switch (rhs.selectionId()) {
-        case Class::SELECTION_ID_IN_MEMORY:
-            return lhs.inMemory() == rhs.inMemory();
-        case Class::SELECTION_ID_FILE_BACKED:
-            return lhs.fileBacked() == rhs.fileBacked();
-        default:
-            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
-            return true;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::Storage& lhs,
-                                 const mqbconfm::Storage& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream&            stream,
-                                          const mqbconfm::Storage& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&        hashAlg,
-                          const mqbconfm::Storage& object)
-{
-    typedef mqbconfm::Storage Class;
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.selectionId());
-    switch (object.selectionId()) {
-    case Class::SELECTION_ID_IN_MEMORY:
-        hashAppend(hashAlg, object.inMemory());
-        break;
-    case Class::SELECTION_ID_FILE_BACKED:
-        hashAppend(hashAlg, object.fileBacked());
-        break;
-    default:
-        BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == object.selectionId());
-    }
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::Request& lhs,
-                                 const mqbconfm::Request& rhs)
-{
-    typedef mqbconfm::Request Class;
-    if (lhs.selectionId() == rhs.selectionId()) {
-        switch (rhs.selectionId()) {
-        case Class::SELECTION_ID_DOMAIN_CONFIG:
-            return lhs.domainConfig() == rhs.domainConfig();
-        default:
-            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
-            return true;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::Request& lhs,
-                                 const mqbconfm::Request& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream&            stream,
-                                          const mqbconfm::Request& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&        hashAlg,
-                          const mqbconfm::Request& object)
-{
-    typedef mqbconfm::Request Class;
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.selectionId());
-    switch (object.selectionId()) {
-    case Class::SELECTION_ID_DOMAIN_CONFIG:
-        hashAppend(hashAlg, object.domainConfig());
-        break;
-    default:
-        BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == object.selectionId());
-    }
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::StorageDefinition& lhs,
-                                 const mqbconfm::StorageDefinition& rhs)
-{
-    return lhs.domainLimits() == rhs.domainLimits() &&
-           lhs.queueLimits() == rhs.queueLimits() &&
-           lhs.config() == rhs.config();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::StorageDefinition& lhs,
-                                 const mqbconfm::StorageDefinition& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                      stream,
-                     const mqbconfm::StorageDefinition& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                  hashAlg,
-                          const mqbconfm::StorageDefinition& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.domainLimits());
-    hashAppend(hashAlg, object.queueLimits());
-    hashAppend(hashAlg, object.config());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::Domain& lhs,
-                                 const mqbconfm::Domain& rhs)
-{
-    return lhs.name() == rhs.name() && lhs.mode() == rhs.mode() &&
-           lhs.storage() == rhs.storage() &&
-           lhs.maxConsumers() == rhs.maxConsumers() &&
-           lhs.maxProducers() == rhs.maxProducers() &&
-           lhs.maxQueues() == rhs.maxQueues() &&
-           lhs.msgGroupIdConfig() == rhs.msgGroupIdConfig() &&
-           lhs.maxIdleTime() == rhs.maxIdleTime() &&
-           lhs.messageTtl() == rhs.messageTtl() &&
-           lhs.maxDeliveryAttempts() == rhs.maxDeliveryAttempts() &&
-           lhs.deduplicationTimeMs() == rhs.deduplicationTimeMs() &&
-           lhs.consistency() == rhs.consistency();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::Domain& lhs,
-                                 const mqbconfm::Domain& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream&           stream,
-                                          const mqbconfm::Domain& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&       hashAlg,
-                          const mqbconfm::Domain& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.mode());
-    hashAppend(hashAlg, object.storage());
-    hashAppend(hashAlg, object.maxConsumers());
-    hashAppend(hashAlg, object.maxProducers());
-    hashAppend(hashAlg, object.maxQueues());
-    hashAppend(hashAlg, object.msgGroupIdConfig());
-    hashAppend(hashAlg, object.maxIdleTime());
-    hashAppend(hashAlg, object.messageTtl());
-    hashAppend(hashAlg, object.maxDeliveryAttempts());
-    hashAppend(hashAlg, object.deduplicationTimeMs());
-    hashAppend(hashAlg, object.consistency());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::DomainDefinition& lhs,
-                                 const mqbconfm::DomainDefinition& rhs)
-{
-    return lhs.location() == rhs.location() &&
-           lhs.parameters() == rhs.parameters();
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::DomainDefinition& lhs,
-                                 const mqbconfm::DomainDefinition& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbconfm::operator<<(bsl::ostream&                     stream,
-                     const mqbconfm::DomainDefinition& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&                 hashAlg,
-                          const mqbconfm::DomainDefinition& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.location());
-    hashAppend(hashAlg, object.parameters());
-}
-
-inline bool mqbconfm::operator==(const mqbconfm::DomainVariant& lhs,
-                                 const mqbconfm::DomainVariant& rhs)
-{
-    typedef mqbconfm::DomainVariant Class;
-    if (lhs.selectionId() == rhs.selectionId()) {
-        switch (rhs.selectionId()) {
-        case Class::SELECTION_ID_DEFINITION:
-            return lhs.definition() == rhs.definition();
-        case Class::SELECTION_ID_REDIRECT:
-            return lhs.redirect() == rhs.redirect();
-        default:
-            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
-            return true;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-inline bool mqbconfm::operator!=(const mqbconfm::DomainVariant& lhs,
-                                 const mqbconfm::DomainVariant& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbconfm::operator<<(bsl::ostream& stream,
-                                          const mqbconfm::DomainVariant& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbconfm::hashAppend(t_HASH_ALGORITHM&              hashAlg,
-                          const mqbconfm::DomainVariant& object)
-{
-    typedef mqbconfm::DomainVariant Class;
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.selectionId());
-    switch (object.selectionId()) {
-    case Class::SELECTION_ID_DEFINITION:
-        hashAppend(hashAlg, object.definition());
-        break;
-    case Class::SELECTION_ID_REDIRECT:
-        hashAppend(hashAlg, object.redirect());
-        break;
-    default:
-        BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == object.selectionId());
-    }
-}
-
 }  // close enterprise namespace
 #endif
 
-// GENERATED BY BLP_BAS_CODEGEN_2023.05.27
+// GENERATED BY @BLP_BAS_CODEGEN_VERSION@
 // USING bas_codegen.pl -m msg --noAggregateConversion --noExternalization
-// --noIdent --package mqbconfm --msgComponent messages mqbconf.xsd
+// --noIdent --package mqbconfm --msgComponent messages mqbconf.xsd SERVICE
+// VERSION bmqconf:183474-1.0
+// ----------------------------------------------------------------------------
+// NOTICE:
+//      Copyright 2024 Bloomberg Finance L.P. All rights reserved.
+//      Property of Bloomberg Finance L.P. (BFLP)
+//      This software is made available solely pursuant to the
+//      terms of a BFLP license agreement which governs its use.
+// ------------------------------- END-OF-FILE --------------------------------

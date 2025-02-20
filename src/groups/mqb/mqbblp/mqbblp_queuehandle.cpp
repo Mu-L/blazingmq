@@ -31,14 +31,14 @@
 #include <bmqt_queueflags.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcc_orderedhashmap.h>
-#include <mwcsys_time.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_printutil.h>
+#include <bmqc_orderedhashmap.h>
+#include <bmqsys_time.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_printutil.h>
 
 // BDE
+#include <ball_logthrottle.h>
 #include <bdlb_print.h>
 #include <bdlf_bind.h>
 #include <bdlt_timeunitratio.h>
@@ -61,9 +61,20 @@ namespace {
 const double k_WATERMARK_RATIO = 0.8;
 // Percentage of the 'capacity' to use for the 'lowWatermark'
 
+const int k_MAX_INSTANT_MESSAGES = 10;
+// Maximum messages logged with throttling in a short period of time.
+
+const bsls::Types::Int64 k_NS_PER_MESSAGE =
+    bdlt::TimeUnitRatio::k_NANOSECONDS_PER_SECOND;
+// Time interval between messages logged with throttling.
+
+#define BMQ_LOGTHROTTLE_INFO()                                                \
+    BALL_LOGTHROTTLE_INFO(k_MAX_INSTANT_MESSAGES, k_NS_PER_MESSAGE)           \
+        << "[THROTTLED] "
+
 typedef bsl::function<void()> CompletionCallback;
 
-/// Utility function used in `mwcu::OperationChain` as the operation
+/// Utility function used in `bmqu::OperationChain` as the operation
 /// callback which just calls the completion callback.
 void allSubstreamsDeconfigured(const CompletionCallback& callback)
 {
@@ -255,8 +266,6 @@ QueueHandle::updateMonitor(const bsl::shared_ptr<Downstream>& subStream,
 
     mqbi::QueueHandle::UnconfirmedMessageInfoMap::iterator it = messages->find(
         msgGUID);
-    RUMStateTransition::Enum resourceUsageStateChange =
-        RUMStateTransition::e_NO_CHANGE;
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(it == messages->end())) {
         BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
 
@@ -290,9 +299,9 @@ QueueHandle::updateMonitor(const bsl::shared_ptr<Downstream>& subStream,
             // The message exist in the storage, we likely are in situation
             // (3), so it's a legit confirm and therefore, update the domain
             // stats.
-            d_domainStats_p->onEvent(
-                mqbstat::QueueStatsDomain::EventType::e_CONFIRM,
-                msgSize);
+            d_domainStats_p
+                ->onEvent<mqbstat::QueueStatsDomain::EventType::e_CONFIRM>(
+                    msgSize);
         }
 
         BALL_LOG_INFO_BLOCK
@@ -308,13 +317,15 @@ QueueHandle::updateMonitor(const bsl::shared_ptr<Downstream>& subStream,
                     << " Message was also not found in storage.";
             }
         }
-        return resourceUsageStateChange;  // RETURN
+        return RUMStateTransition::e_NO_CHANGE;  // RETURN
     }
 
-    SubscriptionSp subscription = d_subscriptions[it->second.d_subscriptionId];
-    resourceUsageStateChange    = updateMonitor(it,
-                                             subscription.get(),
-                                             eventType);
+    Subscriptions::iterator sit = d_subscriptions.find(
+        it->second.d_subscriptionId);
+    BSLS_ASSERT_SAFE(sit != d_subscriptions.end());
+
+    const RUMStateTransition::Enum resourceUsageStateChange =
+        updateMonitor(it, sit->second.get(), eventType, subStream->d_appId);
     messages->erase(it);
 
     // As mentioned above, if we hit the maxUnconfirmed and are now back to
@@ -346,8 +357,9 @@ QueueHandle::updateMonitor(const bsl::shared_ptr<Downstream>& subStream,
     if (resourceUsageStateChange == RUMStateTransition::e_LOW_WATERMARK) {
         BSLS_ASSERT_SAFE(d_queue_sp->queueEngine() &&
                          "Queue has no engine associated !");
-        d_queue_sp->queueEngine()->onHandleUsable(this,
-                                                  subscription->d_upstreamId);
+        d_queue_sp->queueEngine()->onHandleUsable(
+            this,
+            sit->second.get()->d_upstreamId);
     }
 
     return resourceUsageStateChange;
@@ -356,7 +368,8 @@ QueueHandle::updateMonitor(const bsl::shared_ptr<Downstream>& subStream,
 mqbu::ResourceUsageMonitorStateTransition::Enum QueueHandle::updateMonitor(
     mqbi::QueueHandle::UnconfirmedMessageInfoMap::iterator it,
     Subscription*                                          subscription,
-    bmqp::EventType::Enum                                  type)
+    bmqp::EventType::Enum                                  type,
+    const bsl::string&                                     appId)
 {
     const unsigned int msgSize = it->second.d_size;
     // NOTE: if we don't convert msgSize to Int64 and instead below just
@@ -364,7 +377,7 @@ mqbu::ResourceUsageMonitorStateTransition::Enum QueueHandle::updateMonitor(
     //       overflow and the update actually increments by a very large
     //       value
 
-    const bsls::Types::Int64 timeDelta = mwcsys::Time::highResolutionTimer() -
+    const bsls::Types::Int64 timeDelta = bmqsys::Time::highResolutionTimer() -
                                          it->second.d_timeStamp;
     BSLS_ASSERT_SAFE(timeDelta >= 0);
 
@@ -391,15 +404,20 @@ mqbu::ResourceUsageMonitorStateTransition::Enum QueueHandle::updateMonitor(
 
     if (type == bmqp::EventType::e_CONFIRM) {
         // Update domain stats
-        d_domainStats_p->onEvent(
-            mqbstat::QueueStatsDomain::EventType::e_CONFIRM,
-            msgSize);
+        d_domainStats_p
+            ->onEvent<mqbstat::QueueStatsDomain::EventType::e_CONFIRM>(
+                msgSize);
 
         // Report CONFIRM time only at first hop
+        // Note that we update metric per entire queue and also per `appId`
         if (d_clientContext_sp->isFirstHop()) {
+            d_domainStats_p->onEvent<
+                mqbstat::QueueStatsDomain::EventType::e_CONFIRM_TIME>(
+                timeDelta);
             d_domainStats_p->onEvent(
                 mqbstat::QueueStatsDomain::EventType::e_CONFIRM_TIME,
-                timeDelta);
+                timeDelta,
+                appId);
         }
     }
 
@@ -446,7 +464,8 @@ void QueueHandle::clearClientDispatched(bool hasLostClient)
                 updateMonitor(
                     it,
                     d_subscriptions[it->second.d_subscriptionId].get(),
-                    bmqp::EventType::e_REJECT);
+                    bmqp::EventType::e_REJECT,
+                    downstream->d_appId);
 
                 // Do not call 'onHandleUsable' because 'd_clientContext_sp' is
                 // reset
@@ -466,7 +485,8 @@ void QueueHandle::deliverMessageImpl(
     const bmqt::MessageGUID&                  msgGUID,
     const mqbi::StorageMessageAttributes&     attributes,
     const bmqp::Protocol::MsgGroupId&         msgGroupId,
-    const bmqp::Protocol::SubQueueInfosArray& subQueueInfos)
+    const bmqp::Protocol::SubQueueInfosArray& subQueueInfos,
+    bool                                      isOutOfOrder)
 {
     // executed by the *QUEUE_DISPATCHER* thread
 
@@ -478,8 +498,8 @@ void QueueHandle::deliverMessageImpl(
     BSLS_ASSERT_SAFE(subQueueInfos.size() >= 1 &&
                      subQueueInfos.size() <= d_subscriptions.size());
 
-    d_domainStats_p->onEvent(mqbstat::QueueStatsDomain::EventType::e_PUSH,
-                             msgSize);
+    d_domainStats_p->onEvent<mqbstat::QueueStatsDomain::EventType::e_PUSH>(
+        msgSize);
 
     // Create an event to dispatch delivery of the message to the client
     mqbi::DispatcherClient* client = d_clientContext_sp->client();
@@ -494,7 +514,8 @@ void QueueHandle::deliverMessageImpl(
             attributes.messagePropertiesInfo()))
         .setSubQueueInfos(subQueueInfos)
         .setMsgGroupId(msgGroupId)
-        .setCompressionAlgorithmType(attributes.compressionAlgorithmType());
+        .setCompressionAlgorithmType(attributes.compressionAlgorithmType())
+        .setOutOfOrderPush(isOutOfOrder);
 
     if (message) {
         event->setBlob(message);
@@ -533,9 +554,6 @@ QueueHandle::QueueHandle(
         1,
         5 * bdlt::TimeUnitRatio::k_NS_PER_S);
     d_throttledDroppedPutMessages.initialize(
-        1,
-        5 * bdlt::TimeUnitRatio::k_NS_PER_S);
-    d_throttledSubscriptionInfo.initialize(
         1,
         5 * bdlt::TimeUnitRatio::k_NS_PER_S);
     // One maximum log per 5 seconds
@@ -608,12 +626,11 @@ void QueueHandle::registerSubscription(unsigned int downstreamSubId,
                                        const bmqp_ctrlmsg::ConsumerInfo& ci,
                                        unsigned int upstreamId)
 {
-    if (d_throttledSubscriptionInfo.requestPermission()) {
-        BALL_LOG_INFO << "QueueHandle [" << this
-                      << "] registering Subscription [id = " << downstreamId
-                      << ", downstreamSubQueueId = " << downstreamSubId
-                      << ", upstreamId = " << upstreamId << "]";
-    }
+    BMQ_LOGTHROTTLE_INFO() << "QueueHandle [" << this
+                           << "] registering Subscription [id = "
+                           << downstreamId
+                           << ", downstreamSubQueueId = " << downstreamSubId
+                           << ", upstreamId = " << upstreamId << "]";
 
     const bsl::shared_ptr<Downstream>& subStream = downstream(downstreamSubId);
 
@@ -641,7 +658,7 @@ void QueueHandle::registerSubscription(unsigned int downstreamSubId,
     // Ceil the limits values, so that if max redeliveries is 1, it will
     // compute ok
     const bsls::Types::Int64 lowWatermarkBytes =
-        static_cast<const bsls::Types::Int64>(
+        static_cast<bsls::Types::Int64>(
             bsl::ceil(ci.maxUnconfirmedBytes() * k_WATERMARK_RATIO));
 
     // We only care about whether we are at or above the `capacity`
@@ -715,12 +732,10 @@ bool QueueHandle::unregisterSubStream(
              itSubscription != d_subscriptions.end();) {
             const SubscriptionSp& subscription = itSubscription->second;
             if (subscription->d_downstreamSubQueueId == downstreamSubQueueId) {
-                if (d_throttledSubscriptionInfo.requestPermission()) {
-                    BALL_LOG_INFO << "Queue '" << d_queue_sp->description()
-                                  << "' handle " << this
-                                  << " removing Subscription "
-                                  << itSubscription->first;
-                }
+                BMQ_LOGTHROTTLE_INFO()
+                    << "Queue '" << d_queue_sp->description() << "' handle "
+                    << this << " removing Subscription "
+                    << itSubscription->first;
                 itSubscription = d_subscriptions.erase(itSubscription);
             }
             else {
@@ -788,7 +803,8 @@ void QueueHandle::deliverMessageNoTrack(
                        msgGUID,
                        attributes,
                        msgGroupId,
-                       subQueueInfos);
+                       subQueueInfos,
+                       false);
 }
 
 void QueueHandle::deliverMessage(
@@ -796,7 +812,8 @@ void QueueHandle::deliverMessage(
     const bmqt::MessageGUID&                  msgGUID,
     const mqbi::StorageMessageAttributes&     attributes,
     const bmqp::Protocol::MsgGroupId&         msgGroupId,
-    const bmqp::Protocol::SubQueueInfosArray& subscriptions)
+    const bmqp::Protocol::SubQueueInfosArray& subscriptions,
+    bool                                      isOutOfOrder)
 {
     // executed by the *QUEUE_DISPATCHER* thread
 
@@ -808,7 +825,7 @@ void QueueHandle::deliverMessage(
 
     const int                          msgSize = message->length();
     bmqp::Protocol::SubQueueInfosArray targetSubscriptions;
-    bsls::Types::Int64 now = mwcsys::Time::highResolutionTimer();
+    bsls::Types::Int64 now = bmqsys::Time::highResolutionTimer();
     for (size_t i = 0; i < subscriptions.size(); ++i) {
         unsigned int          subscriptionId = subscriptions[i].id();
         const SubscriptionSp& subscription   = d_subscriptions[subscriptionId];
@@ -876,22 +893,22 @@ void QueueHandle::deliverMessage(
 
             // Increasing resource usage ('update()' above) made us hit our
             // maxUnconfirmed limit.
-            BALL_LOG_INFO
+            BMQ_LOGTHROTTLE_INFO()
                 << "Queue '" << d_queue_sp->description()
                 << "' with subscription [" << subscriptions[i] << "]"
                 << " of client '"
                 << d_clientContext_sp->client()->description()
                 << "' has too many outstanding data ["
-                << mwcu::PrintUtil::prettyNumber(
+                << bmqu::PrintUtil::prettyNumber(
                        subscription->d_unconfirmedMonitor.messages())
                 << " msgs (max: "
-                << mwcu::PrintUtil::prettyNumber(
+                << bmqu::PrintUtil::prettyNumber(
                        subscription->d_unconfirmedMonitor.messageCapacity())
                 << "), "
-                << mwcu::PrintUtil::prettyBytes(
+                << bmqu::PrintUtil::prettyBytes(
                        subscription->d_unconfirmedMonitor.bytes())
                 << " (max: "
-                << mwcu::PrintUtil::prettyBytes(
+                << bmqu::PrintUtil::prettyBytes(
                        subscription->d_unconfirmedMonitor.byteCapacity())
                 << ")], I'm taking a break!";
         }
@@ -908,7 +925,8 @@ void QueueHandle::deliverMessage(
                        msgGUID,
                        attributes,
                        msgGroupId,
-                       targetSubscriptions);
+                       targetSubscriptions,
+                       isOutOfOrder);
 }
 
 void QueueHandle::postMessage(const bmqp::PutHeader&              putHeader,
@@ -981,7 +999,11 @@ void QueueHandle::deconfigureAll(
         bdlf::BindUtil::bind(&QueueHandle::deconfigureDispatched,
                              this,
                              deconfiguredCb),
-        d_queue_sp.get());
+        d_queue_sp.get(),
+        mqbi::DispatcherEventType::e_DISPATCHER);
+
+    // Use 'mqbi::DispatcherEventType::e_DISPATCHER' to avoid (re)enabling
+    // 'd_flushList'
 }
 
 void QueueHandle::deconfigureDispatched(
@@ -995,7 +1017,7 @@ void QueueHandle::deconfigureDispatched(
     BSLS_ASSERT_SAFE(d_clientContext_sp);
 
     // Fill the first link with deconfigure operations
-    mwcu::OperationChainLink link(d_deconfigureChain.allocator());
+    bmqu::OperationChainLink link(d_deconfigureChain.allocator());
 
     mqbi::QueueHandle::SubStreams::const_iterator citer =
         d_subStreamInfos.begin();
@@ -1186,7 +1208,7 @@ void QueueHandle::onAckMessage(const bmqp::AckMessage& ackMessage)
     ackMsg.setQueueId(id());
 
     client->dispatcher()->dispatchEvent(event, client);
-    d_domainStats_p->onEvent(mqbstat::QueueStatsDomain::EventType::e_ACK, 1);
+    d_domainStats_p->onEvent<mqbstat::QueueStatsDomain::EventType::e_ACK>(1);
 }
 
 bool QueueHandle::canDeliver(unsigned int downstreamSubscriptionId) const
@@ -1262,7 +1284,7 @@ void QueueHandle::loadInternals(mqbcmd::QueueHandle* out) const
     BSLS_ASSERT_SAFE(
         d_queue_sp->dispatcher()->inDispatcherThread(d_queue_sp.get()));
 
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << d_handleParameters;
     out->parametersJson()        = os.str();
     out->isClientClusterMember() = d_isClientClusterMember;

@@ -59,12 +59,15 @@
 //       Max JournalFileHeader size.....................: 1020 bytes
 //       Max QlistFileHeader size.......................: 1020 bytes
 //       Max QueueRecordHeader size.....................: 1020 bytes
-//       Max Data file size.............................: 32GB
-//                               (courtesy MessageRecord.d_messageOffsetDwords)
-//       Max Journal file size..........................: 16GB
-//                          (courtesy bmqp::StorageHeader.d_journalOffsetWords)
-//       Max Qlist file size............................: 16GB
-//                         (courtesy QueueOpRecord.d_queueUriRecordOffsetWords)
+//       Max Data file size.............................: 34359738360 bytes
+//                                                        or 32GiB - 8B
+//               (See also: mqbs::FileStoreProtocol::k_MAX_DATA_FILE_SIZE_HARD)
+//       Max Journal file size..........................: 17179869180 bytes
+//                                                        or 16GiB - 4B
+//            (See also: mqbs::FileStoreProtocol::k_MAX_JOURNAL_FILE_SIZE_HARD)
+//       Max Qlist file size............................: 17179869180 bytes
+//                                                        or 16GiB - 4B
+//              (See also: mqbs::FileStoreProtocol::k_MAX_QLIST_FILE_SIZE_HARD)
 //       Max Journal Record size........................: 1020 bytes
 //       Max Journal Record types.......................: 15
 //
@@ -74,7 +77,7 @@
 //       Max app ID length..............................: ~256 KB
 //       Max payload length.............................: ~4 GB
 //                                           (courtesy DataHeader.d_dataLength)
-//       Max message reference count....................: 4096
+//       Max message reference count....................: 1048575 (20 bits)
 //     ========================================================================
 //..
 //
@@ -129,6 +132,7 @@
 #include <bsl_ostream.h>
 #include <bsls_types.h>
 
+#include <bslmf_assert.h>
 #include <bsls_assert.h>
 
 namespace BloombergLP {
@@ -152,12 +156,27 @@ struct FileStoreProtocol {
     static const int k_JOURNAL_RECORD_SIZE = 60;
     // Record size
 
-    static const int k_MAX_MSG_REF_COUNT_HARD = 4096;
+    static const int k_MAX_MSG_REF_COUNT_HARD = 1048575;
     // Maximum value of reference count for a given message
     // per BlazingMQ file store protocol
 
     static const int k_NUM_FILES_PER_PARTITION = 3;
     // Number of files per partition (data, journal & qlist)
+
+    /// The unsigned 32-bit `mqbs::MessageRecord::d_messageOffsetDwords` allows
+    /// to address at most `((2 ^ 32) - 1) * 8` byte offset
+    static const bsls::Types::Uint64 k_MAX_DATA_FILE_SIZE_HARD =
+        34359738360ULL;
+
+    /// The unsigned 32-bit `bmqp::StorageHeader::d_journalOffsetWords` allows
+    /// to address at most `((2 ^ 32) - 1) * 4` byte offset
+    static const bsls::Types::Uint64 k_MAX_JOURNAL_FILE_SIZE_HARD =
+        17179869180ULL;
+
+    /// The unsigned 32-bit `mqbs::QueueOpRecord::d_queueUriRecordOffsetWords`
+    /// allows to address at most `((2 ^ 32) - 1) * 4` byte offset
+    static const bsls::Types::Uint64 k_MAX_QLIST_FILE_SIZE_HARD =
+        17179869180ULL;
 
     static const char* k_DATA_FILE_EXTENSION;
 
@@ -1024,17 +1043,18 @@ struct RecordHeader {
 
   private:
     // PRIVATE CONSTANTS
-    static const int k_TYPE_NUM_BITS  = 4;
-    static const int k_FLAGS_NUM_BITS = 12;
+    static const int k_TYPE_NUM_BITS = 4;
 
     static const int k_TYPE_START_IDX  = 12;
     static const int k_FLAGS_START_IDX = 0;
 
     static const int k_TYPE_MASK;
-    static const int k_FLAGS_MASK;
 
   public:
     // CONSTANTS
+    static const int k_FLAGS_NUM_BITS = 12;
+    static const int k_FLAGS_MASK;
+
     static const unsigned int k_MAGIC = 0x2A724563;  // *rEc
 
   private:
@@ -1120,7 +1140,7 @@ struct MessageRecord {
     //   +---------------+---------------+---------------+---------------+
     //   |                             Header                            |
     //   +---------------+---------------+---------------+---------------+
-    //   |           Reserved      | CAT |          QueueKey             |
+    //   |     RefCountHighBits    | CAT |          QueueKey             |
     //   +---------------+---------------+---------------+---------------+
     //   |                  QueueKey                     |    FileKey    |
     //   +---------------+---------------+---------------+---------------+
@@ -1142,8 +1162,11 @@ struct MessageRecord {
     //   +---------------+---------------+---------------+---------------+
     //
     //  Header................: Record header
+    //  RefCountHighBits......: RecordHeader keeps lower 12 bits of the App
+    //                          count and MessageRecord keeps high 8 bits
     //  CAT...................: Compression Algorithm Type
     //  QueueKey..............: Queue key to which this message record belongs
+    //
     //  FileKey...............: File key of the corresponding data file
     //  MessageOffsetDwords...: Offset (in DWORDS) in the corresponding data
     //                          file of the message
@@ -1160,10 +1183,18 @@ struct MessageRecord {
     static const int  k_CAT_START_IDX = 0;
     static const char k_CAT_MASK;
 
+    // PRIVATE CONSTANTS
+    static const int k_REFCOUNT_NUM_LOW_BITS  = RecordHeader::k_FLAGS_NUM_BITS;
+    static const int k_REFCOUNT_NUM_HIGH_BITS = 8;
+
+    static const int k_REFCOUNT_LOW_BITS_MASK;
+    static const int k_REFCOUNT_HIGH_BITS_MASK =
+        (1u << k_REFCOUNT_NUM_HIGH_BITS) - 1;
+
     // DATA
     RecordHeader d_header;
 
-    char d_reserved;
+    unsigned char d_refCountHighBits;
 
     char d_reservedAndCAT;
 
@@ -1180,6 +1211,9 @@ struct MessageRecord {
     bdlb::BigEndianUint32 d_magic;
 
   public:
+    static const int k_REFCOUNT_MAX_VALUE =
+        (1u << (k_REFCOUNT_NUM_LOW_BITS + k_REFCOUNT_NUM_HIGH_BITS)) - 1;
+
     // CREATORS
 
     /// Create an instance with all fields unset.
@@ -1251,7 +1285,8 @@ bsl::ostream& operator<<(bsl::ostream& stream, const MessageRecord& rhs);
 /// precisely the reason for confirming the message.
 struct ConfirmReason {
     // TYPES
-    enum Enum { e_CONFIRMED = 0, e_REJECTED = 1 };
+    // This is a bitmask, not enumeration
+    enum Enum { e_CONFIRMED = 0, e_REJECTED = 1, e_AUTO_CONFIRMED = 2 };
 
     // CLASS METHODS
 
@@ -1683,11 +1718,11 @@ struct QueueOpRecord {
     //   +---------------+---------------+---------------+---------------+
     //   |                   QueueUriRecordOffsetWords                   |
     //   +---------------+---------------+---------------+---------------+
-    //   |                           Reserved                            |
+    //   |          Start of the range Sequence Number Upper Bits        |
     //   +---------------+---------------+---------------+---------------+
-    //   |                           Reserved                            |
+    //   |          Start of the range Sequence Number Lower Bits        |
     //   +---------------+---------------+---------------+---------------+
-    //   |                           Reserved                            |
+    //   |          Start of the range Primary Lease Id                  |
     //   +---------------+---------------+---------------+---------------+
     //   |                           Reserved                            |
     //   +---------------+---------------+---------------+---------------+
@@ -1703,6 +1738,8 @@ struct QueueOpRecord {
     //  QueueUriRecordOffsetWords..: Offset (in WORDS) of the QueueUriRecord in
     //                               the QLIST file.  Valid only if
     //                               QueueOpType == CREATION or ADDITION.
+    //  Start of the range         : The oldest message affected by PURGE.
+    //                               Valid when QueueOpType == PURGE only.
     //  Magic......................: Magic word
     //..
     //
@@ -1725,7 +1762,13 @@ struct QueueOpRecord {
 
     bdlb::BigEndianUint32 d_queueUriRecordOffsetWords;
 
-    char d_reserved2[16];
+    bdlb::BigEndianUint32 d_startSequenceNumberUpper;
+
+    bdlb::BigEndianUint32 d_startSequenceNumberLower;
+
+    bdlb::BigEndianUint32 d_startPrimaryLeaseId;
+
+    char d_reserved2[4];
 
     bdlb::BigEndianUint32 d_magic;
 
@@ -1748,6 +1791,9 @@ struct QueueOpRecord {
 
     QueueOpRecord& setQueueUriRecordOffsetWords(unsigned int value);
 
+    QueueOpRecord& setStartSequenceNumber(bsls::Types::Uint64 value);
+    QueueOpRecord& setStartPrimaryLeaseId(unsigned int value);
+
     QueueOpRecord& setMagic(unsigned int value);
 
     // ACCESSORS
@@ -1762,6 +1808,10 @@ struct QueueOpRecord {
     QueueOpType::Enum type() const;
 
     unsigned int queueUriRecordOffsetWords() const;
+
+    bsls::Types::Uint64 startSequenceNumber() const;
+
+    unsigned int startPrimaryLeaseId() const;
 
     unsigned int magic() const;
 
@@ -2106,28 +2156,30 @@ inline FileHeader& FileHeader::setMagic2(unsigned int value)
 
 inline FileHeader& FileHeader::setProtocolVersion(unsigned char value)
 {
-    d_protoVerAndHeaderWords = (d_protoVerAndHeaderWords &
-                                k_HEADER_WORDS_MASK) |
-                               (value << k_PROTOCOL_VERSION_START_IDX);
+    d_protoVerAndHeaderWords = static_cast<unsigned char>(
+        (d_protoVerAndHeaderWords & k_HEADER_WORDS_MASK) |
+        (value << k_PROTOCOL_VERSION_START_IDX));
     return *this;
 }
 
 inline FileHeader& FileHeader::setHeaderWords(unsigned char value)
 {
-    d_protoVerAndHeaderWords = (d_protoVerAndHeaderWords &
-                                k_PROTOCOL_VERSION_MASK) |
-                               (value & k_HEADER_WORDS_MASK);
+    d_protoVerAndHeaderWords = static_cast<unsigned char>(
+        (d_protoVerAndHeaderWords & k_PROTOCOL_VERSION_MASK) |
+        (value & k_HEADER_WORDS_MASK));
     return *this;
 }
 
 inline FileHeader& FileHeader::setBitness(Bitness::Enum value)
 {
     if (Bitness::e_64 == value) {
-        d_bitnessAndFileType = (d_bitnessAndFileType & k_FILE_TYPE_MASK) |
-                               (1 << k_BITNESS_START_IDX);
+        d_bitnessAndFileType = static_cast<char>(
+            (d_bitnessAndFileType & k_FILE_TYPE_MASK) |
+            (1 << k_BITNESS_START_IDX));
     }
     else {
-        d_bitnessAndFileType = d_bitnessAndFileType & k_FILE_TYPE_MASK;
+        d_bitnessAndFileType = static_cast<char>(d_bitnessAndFileType &
+                                                 k_FILE_TYPE_MASK);
     }
 
     return *this;
@@ -2135,9 +2187,8 @@ inline FileHeader& FileHeader::setBitness(Bitness::Enum value)
 
 inline FileHeader& FileHeader::setFileType(FileType::Enum value)
 {
-    d_bitnessAndFileType = (d_bitnessAndFileType & k_BITNESS_MASK) |
-                           (static_cast<unsigned int>(value) &
-                            k_FILE_TYPE_MASK);
+    d_bitnessAndFileType = static_cast<char>(
+        (d_bitnessAndFileType & k_BITNESS_MASK) | (value & k_FILE_TYPE_MASK));
 
     return *this;
 }
@@ -2161,13 +2212,15 @@ inline unsigned int FileHeader::magic2() const
 
 inline unsigned char FileHeader::protocolVersion() const
 {
-    return (d_protoVerAndHeaderWords & k_PROTOCOL_VERSION_MASK) >>
-           k_PROTOCOL_VERSION_START_IDX;
+    return static_cast<unsigned char>(
+        (d_protoVerAndHeaderWords & k_PROTOCOL_VERSION_MASK) >>
+        k_PROTOCOL_VERSION_START_IDX);
 }
 
 inline unsigned char FileHeader::headerWords() const
 {
-    return d_protoVerAndHeaderWords & k_HEADER_WORDS_MASK;
+    return static_cast<unsigned char>(d_protoVerAndHeaderWords &
+                                      k_HEADER_WORDS_MASK);
 }
 
 inline Bitness::Enum FileHeader::bitness() const
@@ -2458,6 +2511,7 @@ inline unsigned int AppIdHeader::appIdLengthWords() const
 inline QueueRecordHeader::QueueRecordHeader()
 : d_queueUriLengthWords(bdlb::BigEndianUint16::make(0))
 , d_numAppIds(bdlb::BigEndianUint16::make(0))
+, d_headerWordsAndQueueRecordWords(bdlb::BigEndianUint32::make(0))
 {
     const size_t val = sizeof(QueueRecordHeader) / bmqp::Protocol::k_WORD_SIZE;
     setHeaderWords(val);
@@ -2533,15 +2587,15 @@ inline RecordHeader::RecordHeader()
 // MANIPULATORS
 inline RecordHeader& RecordHeader::setType(RecordType::Enum value)
 {
-    d_typeAndFlags = (d_typeAndFlags & k_FLAGS_MASK) |
-                     (static_cast<unsigned short>(value) << k_TYPE_START_IDX);
+    d_typeAndFlags = static_cast<unsigned short>(
+        (d_typeAndFlags & k_FLAGS_MASK) | (value << k_TYPE_START_IDX));
     return *this;
 }
 
 inline RecordHeader& RecordHeader::setFlags(unsigned int value)
 {
-    d_typeAndFlags = (d_typeAndFlags & k_TYPE_MASK) |
-                     static_cast<unsigned short>(value);
+    d_typeAndFlags = static_cast<unsigned short>(
+        (d_typeAndFlags & k_TYPE_MASK) | value);
     return *this;
 }
 
@@ -2614,7 +2668,7 @@ inline MessageRecord::MessageRecord()
     d_header.setType(RecordType::e_MESSAGE);
     setQueueKey(mqbu::StorageKey::k_NULL_KEY);
     setFileKey(mqbu::StorageKey::k_NULL_KEY);
-    static_cast<void>(d_reserved);
+    static_cast<void>(d_refCountHighBits);
 }
 
 // MANIPULATORS
@@ -2625,7 +2679,15 @@ inline RecordHeader& MessageRecord::header()
 
 inline MessageRecord& MessageRecord::setRefCount(unsigned int value)
 {
-    d_header.setFlags(value);
+    const bsl::uint16_t lowBits = static_cast<bsl::uint16_t>(
+        value & k_REFCOUNT_LOW_BITS_MASK);
+    d_header.setFlags(lowBits);
+
+    value >>= k_REFCOUNT_NUM_LOW_BITS;
+    d_refCountHighBits = static_cast<unsigned char>(value);
+
+    BSLS_ASSERT_SAFE((value & ~k_REFCOUNT_HIGH_BITS_MASK) == 0);
+
     return *this;
 }
 
@@ -2641,7 +2703,8 @@ inline MessageRecord& MessageRecord::setCompressionAlgorithmType(
 
     d_reservedAndCAT = 0;
     d_reservedAndCAT = d_reservedAndCAT |
-                       (compressionAlgorithmType << k_CAT_START_IDX);
+                       static_cast<char>(compressionAlgorithmType
+                                         << k_CAT_START_IDX);
     return *this;
 }
 
@@ -2690,7 +2753,12 @@ inline const RecordHeader& MessageRecord::header() const
 
 inline unsigned int MessageRecord::refCount() const
 {
-    return d_header.flags();
+    unsigned int result = d_refCountHighBits;
+
+    result <<= k_REFCOUNT_NUM_LOW_BITS;
+    result += d_header.flags();
+
+    return result;
 }
 
 inline bmqt::CompressionAlgorithmType::Enum
@@ -2940,6 +3008,21 @@ QueueOpRecord::setQueueUriRecordOffsetWords(unsigned int value)
     return *this;
 }
 
+inline QueueOpRecord&
+QueueOpRecord::setStartSequenceNumber(bsls::Types::Uint64 value)
+{
+    bmqp::Protocol::split(&d_startSequenceNumberUpper,
+                          &d_startSequenceNumberLower,
+                          value);
+    return *this;
+}
+
+inline QueueOpRecord& QueueOpRecord::setStartPrimaryLeaseId(unsigned int value)
+{
+    d_startPrimaryLeaseId = value;
+    return *this;
+}
+
 inline QueueOpRecord& QueueOpRecord::setMagic(unsigned int value)
 {
     d_magic = value;
@@ -2975,6 +3058,17 @@ inline QueueOpType::Enum QueueOpRecord::type() const
 inline unsigned int QueueOpRecord::queueUriRecordOffsetWords() const
 {
     return d_queueUriRecordOffsetWords;
+}
+
+inline bsls::Types::Uint64 QueueOpRecord::startSequenceNumber() const
+{
+    return bmqp::Protocol::combine(d_startSequenceNumberUpper,
+                                   d_startSequenceNumberLower);
+}
+
+inline unsigned int QueueOpRecord::startPrimaryLeaseId() const
+{
+    return d_startPrimaryLeaseId;
 }
 
 inline unsigned int QueueOpRecord::magic() const

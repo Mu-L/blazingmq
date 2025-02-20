@@ -1,5 +1,6 @@
 bmqp_ackeventbuilder
 bmqp_ackmessageiterator
+bmqp_blobpoolutil
 bmqp_compression
 bmqp_confirmeventbuilder
 bmqp_confirmmessageiterator
@@ -8,6 +9,7 @@ bmqp_crc32c
 bmqp_ctrlmsg_messages
 bmqp_event
 bmqp_eventutil
+bmqp_heartbeatmonitor
 bmqp_messageproperties
 bmqp_messageguidgenerator
 bmqp_optionsview

@@ -44,7 +44,7 @@ namespace BloombergLP {
 namespace bmqp_ctrlmsg {
 class NegotiationMessage;
 }
-namespace mwcio {
+namespace bmqio {
 class Channel;
 }
 
@@ -102,7 +102,8 @@ class Session : public SessionEventProcessor {
     /// `onProcessed` callback.
     typedef bsl::function<void(const bslstl::StringRef&       source,
                                const bsl::string&             command,
-                               const AdminCommandProcessedCb& onProcessed)>
+                               const AdminCommandProcessedCb& onProcessed,
+                               bool                           fromReroute)>
         AdminCommandEnqueueCb;
 
   public:
@@ -128,15 +129,19 @@ class Session : public SessionEventProcessor {
 
     /// Initiate the shutdown of the session and invoke the specified
     /// `callback` upon completion of (asynchronous) shutdown sequence or
-    /// if the specified `timeout` is expired.
+    /// if the specified `timeout` is expired.  If the optional (temporary)
+    /// specified 'supportShutdownV2' is 'true' execute shutdown logic V2
+    /// where upstream (not downstream) nodes deconfigure  queues and the
+    /// shutting down node (not downstream) waits for CONFIRMS.
     virtual void initiateShutdown(const ShutdownCb&         callback,
-                                  const bsls::TimeInterval& timeout) = 0;
+                                  const bsls::TimeInterval& timeout,
+                                  bool supportShutdownV2 = false) = 0;
 
     /// Make the session abandon any work it has.
     virtual void invalidate() = 0;
 
     /// Return the channel associated to this session.
-    virtual bsl::shared_ptr<mwcio::Channel> channel() const = 0;
+    virtual bsl::shared_ptr<bmqio::Channel> channel() const = 0;
 
     /// Return the clusterNode associated to this session, or 0 if there are
     /// none.

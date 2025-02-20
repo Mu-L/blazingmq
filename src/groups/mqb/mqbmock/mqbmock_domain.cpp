@@ -22,8 +22,7 @@
 #include <mqbi_queue.h>
 #include <mqbstat_queuestats.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bsl_iostream.h>
@@ -78,6 +77,12 @@ int Domain::configure(BSLS_ANNOTATION_UNUSED bsl::ostream& errorDescription,
 }
 
 void Domain::teardown(
+    BSLS_ANNOTATION_UNUSED const mqbi::Domain::TeardownCb& teardownCb)
+{
+    // NOTHING
+}
+
+void Domain::teardownRemove(
     BSLS_ANNOTATION_UNUSED const mqbi::Domain::TeardownCb& teardownCb)
 {
     // NOTHING
@@ -144,7 +149,7 @@ mqbu::CapacityMeter* Domain::capacityMeter()
 int Domain::processCommand(mqbcmd::DomainResult*        result,
                            const mqbcmd::DomainCommand& command)
 {
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << "MockDomain::processCommand '" << command << "' not implemented!";
     result->makeError().message() = os.str();
     return -1;
@@ -205,7 +210,7 @@ mqbstat::DomainStats* Domain::domainStats()
     return &d_domainsStats;
 }
 
-mwcst::StatContext* Domain::queueStatContext()
+bmqst::StatContext* Domain::queueStatContext()
 {
     return d_statContext.get();
 }
@@ -219,6 +224,18 @@ void Domain::loadRoutingConfiguration(
     BSLS_ANNOTATION_UNUSED bmqp_ctrlmsg::RoutingConfiguration* config) const
 {
     // NOTHING
+}
+
+bool Domain::tryRemove()
+{
+    BSLS_ASSERT_SAFE(false && "NOT IMPLEMENTED!");
+    return true;
+}
+
+bool Domain::isRemoveComplete() const
+{
+    BSLS_ASSERT_SAFE(false && "NOT IMPLEMENTED!");
+    return true;
 }
 
 // -------------------

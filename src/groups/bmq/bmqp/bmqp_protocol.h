@@ -143,12 +143,10 @@
 
 // BMQ
 
+#include <bmqc_array.h>
 #include <bmqp_queueid.h>
 #include <bmqt_compressionalgorithmtype.h>
 #include <bmqt_messageguid.h>
-
-// MWC
-#include <mwcc_array.h>
 
 // BDE
 #include <bdlb_bigendian.h>
@@ -347,7 +345,7 @@ struct Protocol {
     /// An array of subQueueInfos with statically reserved space for a
     /// number of subQueueInfos (as indicated by the second template
     /// parameter).
-    typedef mwcc::Array<SubQueueInfo, k_SUBID_ARRAY_STATIC_LEN>
+    typedef bmqc::Array<SubQueueInfo, k_SUBID_ARRAY_STATIC_LEN>
         SubQueueInfosArray;
 
     /// An array of subQueueIds with statically reserved space for a number
@@ -355,7 +353,7 @@ struct Protocol {
     /// is deprecated by the new SubQueueInfosArray above inside the
     /// brokers, but the SDK still receives and process this older flavor
     /// due to backward compatibility issues.
-    typedef mwcc::Array<unsigned int, k_SUBID_ARRAY_STATIC_LEN>
+    typedef bmqc::Array<unsigned int, k_SUBID_ARRAY_STATIC_LEN>
         SubQueueIdsArrayOld;
 
     /// Holds the client-provided Group Id.
@@ -411,6 +409,7 @@ struct Protocol {
     // RemainingDeliveryAttempts counter value.
 
     static const unsigned int k_DEFAULT_SUBSCRIPTION_ID = 0;
+    // Internal unique id in Configure request
 
     // CLASS METHODS
 
@@ -632,6 +631,8 @@ struct HighAvailabilityFeatures {
     static const char k_BROADCAST_TO_PROXIES[];
 
     static const char k_GRACEFUL_SHUTDOWN[];
+
+    static const char k_GRACEFUL_SHUTDOWN_V2[];
 };
 
 /// This struct defines feature names related to MessageProperties
@@ -641,6 +642,15 @@ struct MessagePropertiesFeatures {
 
     // CONSTANTS
     static const char k_MESSAGE_PROPERTIES_EX[];
+};
+
+/// TEMPORARILY. This struct defines feature names related to Subscriptions
+struct SubscriptionsFeatures {
+    /// Field name of the encoding features
+    static const char k_FIELD_NAME[];
+
+    // CONSTANTS
+    static const char k_CONFIGURE_STREAM[];
 };
 
 // =================
@@ -813,11 +823,13 @@ struct EventHeader {
     /// an outgoing storage message can exceed
     /// `PutHeader::k_MAX_PAYLOAD_SIZE_SOFT`.  So, we assign a value of 65MB
     /// to `StorageHeader::k_MAX_PAYLOAD_SIZE_SOFT`, and assign a value of
-    /// 66MB to `'EventHeader::k_MAX_SIZE_SOFT` such that a PUT message
-    /// having the maximum allowable value is processed through the entire
-    /// BlazingMQ pipeline w/o any issues.  Also see notes in
+    /// at least 66MB to `EventHeader::k_MAX_SIZE_SOFT` such that a PUT
+    /// message having the maximum allowable value is processed through the
+    /// BlazingMQ pipeline w/o any issues.  The value of
+    /// `EventHeader::k_MAX_SIZE_SOFT` is 512Mb to improve batching at high
+    /// posting rates.  Also see notes for the
     /// `StorageHeader::k_MAX_PAYLOAD_SIZE_SOFT` constant.
-    static const int k_MAX_SIZE_SOFT = (64 + 2) * 1024 * 1024;
+    static const int k_MAX_SIZE_SOFT = 512 * 1024 * 1024;
 
     /// Highest possible value for the type of an event.
     static const int k_MAX_TYPE = (1 << k_TYPE_NUM_BITS) - 1;
@@ -1482,6 +1494,7 @@ struct PutHeader {
     /// be increased but not up to `k_MAX_SIZE`.
     static const int k_MAX_PAYLOAD_SIZE_SOFT = 64 * 1024 * 1024;
 
+    static const int k_MAX_SIZE_SOFT = (64 + 2) * 1024 * 1024;
     /// Maximum size (bytes) of the options area.
     static const int k_MAX_OPTIONS_SIZE = ((1 << k_OPTIONS_WORDS_NUM_BITS) -
                                            1) *
@@ -1872,8 +1885,7 @@ struct AckMessage {
     //                  message
     //  MessageGUID...: MessageGUID associated to this message by the broker
     //  QueueId.......: Id of the queue (as advertised during open queue by the
-    //                  the producer of the Put event this Ack is a response
-    //                  of)
+    //                  producer of the Put event this Ack is a response of)
     //..
 
   private:
@@ -2179,7 +2191,7 @@ struct PushHeaderFlags {
     enum Enum {
         e_IMPLICIT_PAYLOAD   = (1 << 0),
         e_MESSAGE_PROPERTIES = (1 << 1),
-        e_UNUSED3            = (1 << 2),
+        e_OUT_OF_ORDER       = (1 << 2),
         e_UNUSED4            = (1 << 3)
     };
 
@@ -3377,7 +3389,7 @@ struct MessagePropertiesInfo {
     MessagePropertiesInfo(const MessagePropertiesInfo& other);
 
     /// Construct object indicating MessageProperties presence as the
-    /// the specified `isPresent` with Schema id as the specified `schemaId`
+    /// specified `isPresent` with Schema id as the specified `schemaId`
     /// and the specified `isRecycled`.
     MessagePropertiesInfo(bool         isPresent,
                           SchemaIdType schemaId,
@@ -3515,7 +3527,7 @@ inline bool MessagePropertiesInfo::isExtended() const
 inline MessagePropertiesInfo::SchemaIdType
 MessagePropertiesInfo::schemaId() const
 {
-    return d_schemaWireId >> 1;
+    return static_cast<SchemaIdType>(d_schemaWireId >> 1);
 }
 
 inline bool
@@ -3565,7 +3577,7 @@ inline RdaInfo::RdaInfo(unsigned int internalRepresentation)
 {
     BSLS_ASSERT_SAFE(internalRepresentation <= k_MAX_INTERNAL_COUNTER_VALUE);
 
-    d_counter = internalRepresentation;
+    d_counter = static_cast<unsigned char>(internalRepresentation);
 }
 
 inline RdaInfo::RdaInfo(const RdaInfo& original)
@@ -3598,15 +3610,9 @@ inline RdaInfo& RdaInfo::setPotentiallyPoisonous(bool flag)
 inline RdaInfo& RdaInfo::setCounter(unsigned int counter)
 {
     BSLS_ASSERT_SAFE(counter <= k_MAX_COUNTER_VALUE);
-    if (isUnlimited()) {
-        d_counter &= ~e_UNLIMITED;
-        d_counter += counter;
-    }
-    else {
-        d_counter &= ~k_MAX_COUNTER_VALUE;
-        d_counter += counter;
-    }
-
+    // Drop e_UNLIMITED bit flag if set, but save e_POISONOUS bit
+    d_counter = static_cast<unsigned char>(counter |
+                                           (d_counter & e_POISONOUS));
     return *this;
 }
 
@@ -3672,7 +3678,7 @@ inline bsls::Types::Uint64 Protocol::combine(unsigned int upper,
 
 inline unsigned int Protocol::getUpper(bsls::Types::Uint64 value)
 {
-    return (value >> 32) & 0xFFFFFFFF;
+    return static_cast<unsigned int>((value >> 32) & 0xFFFFFFFF);
 }
 
 inline unsigned int Protocol::getLower(bsls::Types::Uint64 value)
@@ -3752,8 +3758,9 @@ inline EventHeader& EventHeader::setProtocolVersion(unsigned char value)
     // PRECONDITIONS: protect against overflow
     BSLS_ASSERT_SAFE(value <= (1 << k_PROTOCOL_VERSION_NUM_BITS) - 1);
 
-    d_protocolVersionAndType = (d_protocolVersionAndType & k_TYPE_MASK) |
-                               (value << k_PROTOCOL_VERSION_START_IDX);
+    d_protocolVersionAndType = static_cast<unsigned char>(
+        (d_protocolVersionAndType & k_TYPE_MASK) |
+        (value << k_PROTOCOL_VERSION_START_IDX));
 
     return *this;
 }
@@ -3764,10 +3771,9 @@ inline EventHeader& EventHeader::setType(EventType::Enum value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      static_cast<int>(value) <= (1 << k_TYPE_NUM_BITS) - 1);
 
-    d_protocolVersionAndType = (d_protocolVersionAndType &
-                                k_PROTOCOL_VERSION_MASK) |
-                               (static_cast<unsigned char>(value) &
-                                k_TYPE_MASK);
+    d_protocolVersionAndType = static_cast<unsigned char>(
+        (d_protocolVersionAndType & k_PROTOCOL_VERSION_MASK) |
+        (value & k_TYPE_MASK));
 
     return *this;
 }
@@ -3799,8 +3805,9 @@ inline int EventHeader::length() const
 
 inline unsigned char EventHeader::protocolVersion() const
 {
-    return (d_protocolVersionAndType & k_PROTOCOL_VERSION_MASK) >>
-           k_PROTOCOL_VERSION_START_IDX;
+    return static_cast<unsigned char>(
+        (d_protocolVersionAndType & k_PROTOCOL_VERSION_MASK) >>
+        k_PROTOCOL_VERSION_START_IDX);
 }
 
 inline EventType::Enum EventHeader::type() const
@@ -3834,10 +3841,11 @@ EventHeaderUtil::setControlEventEncodingType(EventHeader*       eventHeader,
     unsigned char typeSpecific = eventHeader->typeSpecific();
 
     // Reset the bits for encoding type
-    typeSpecific &= ~k_CONTROL_EVENT_ENCODING_MASK;
+    typeSpecific &= static_cast<unsigned char>(~k_CONTROL_EVENT_ENCODING_MASK);
 
     // Set those bits to represent 'type'
-    typeSpecific |= (type << k_CONTROL_EVENT_ENCODING_START_IDX);
+    typeSpecific |= static_cast<unsigned char>(
+        type << k_CONTROL_EVENT_ENCODING_START_IDX);
 
     eventHeader->setTypeSpecific(typeSpecific);
 }
@@ -3942,10 +3950,11 @@ inline MessagePropertiesHeader::MessagePropertiesHeader()
 {
     bsl::memset(this, 0, sizeof(MessagePropertiesHeader));
     size_t headerSize = sizeof(MessagePropertiesHeader);
-    setHeaderSize(headerSize);
+    setHeaderSize(static_cast<int>(headerSize));
 
     size_t roundedSize = headerSize + (headerSize % Protocol::k_WORD_SIZE);
-    setMessagePropertiesAreaWords(roundedSize / Protocol::k_WORD_SIZE);
+    setMessagePropertiesAreaWords(
+        static_cast<int>(roundedSize / Protocol::k_WORD_SIZE));
 
     setMessagePropertyHeaderSize(sizeof(MessagePropertyHeader));
     static_cast<void>(d_reserved);
@@ -3959,9 +3968,9 @@ MessagePropertiesHeader::setHeaderSize(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= ((1 << k_HEADER_SIZE_2X_NUM_BITS) - 1));
 
-    d_mphSize2xAndHeaderSize2x = (d_mphSize2xAndHeaderSize2x &
-                                  k_MPH_SIZE_2X_MASK) |
-                                 (value & k_HEADER_SIZE_2X_MASK);
+    d_mphSize2xAndHeaderSize2x = static_cast<char>(
+        (d_mphSize2xAndHeaderSize2x & k_MPH_SIZE_2X_MASK) |
+        (value & k_HEADER_SIZE_2X_MASK));
     return *this;
 }
 
@@ -3972,9 +3981,9 @@ MessagePropertiesHeader::setMessagePropertyHeaderSize(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= ((1 << k_MPH_SIZE_2X_NUM_BITS) - 1));
 
-    d_mphSize2xAndHeaderSize2x = (d_mphSize2xAndHeaderSize2x &
-                                  k_HEADER_SIZE_2X_MASK) |
-                                 (value << k_MPH_SIZE_2X_START_IDX);
+    d_mphSize2xAndHeaderSize2x = static_cast<char>(
+        (d_mphSize2xAndHeaderSize2x & k_HEADER_SIZE_2X_MASK) |
+        (value << k_MPH_SIZE_2X_START_IDX));
     return *this;
 }
 
@@ -3986,9 +3995,8 @@ MessagePropertiesHeader::setMessagePropertiesAreaWords(int value)
                      value <= ((1 << k_MSG_PROPS_AREA_WORDS_NUM_BITS) - 1));
 
     d_msgPropsAreaWordsLower = static_cast<unsigned short>(value & 0xFFFF);
-    d_msgPropsAreaWordsUpper = (value >>
-                                k_MSG_PROPS_AREA_WORDS_LOWER_NUM_BITS) &
-                               0xFF;
+    d_msgPropsAreaWordsUpper = static_cast<unsigned short>(
+        (value >> k_MSG_PROPS_AREA_WORDS_LOWER_NUM_BITS) & 0xFF);
 
     return *this;
 }
@@ -3999,7 +4007,7 @@ MessagePropertiesHeader::setNumProperties(int value)
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(value >= 0 && value <= k_MAX_NUM_PROPERTIES);
 
-    d_numProperties = value;
+    d_numProperties = static_cast<unsigned char>(value);
     return *this;
 }
 
@@ -4046,9 +4054,9 @@ inline MessagePropertyHeader& MessagePropertyHeader::setPropertyType(int value)
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(value >= 0 && value <= ((1 << k_PROP_TYPE_NUM_BITS) - 1));
 
-    d_propTypeAndPropValueLenUpper = (d_propTypeAndPropValueLenUpper &
-                                      k_PROP_VALUE_LEN_UPPER_MASK) |
-                                     (value << k_PROP_TYPE_START_IDX);
+    d_propTypeAndPropValueLenUpper = static_cast<unsigned short>(
+        (d_propTypeAndPropValueLenUpper & k_PROP_VALUE_LEN_UPPER_MASK) |
+        (value << k_PROP_TYPE_START_IDX));
 
     return *this;
 }
@@ -4061,10 +4069,10 @@ MessagePropertyHeader::setPropertyValueLength(int value)
 
     d_propValueLenLower = static_cast<unsigned short>(value & 0xFFFF);
 
-    d_propTypeAndPropValueLenUpper =
+    d_propTypeAndPropValueLenUpper = static_cast<unsigned short>(
         (d_propTypeAndPropValueLenUpper & k_PROP_TYPE_MASK) |
         ((value >> k_PROP_VALUE_LEN_LOWER_NUM_BITS) &
-         k_PROP_VALUE_LEN_UPPER_MASK);
+         k_PROP_VALUE_LEN_UPPER_MASK));
 
     return *this;
 }
@@ -4075,7 +4083,8 @@ MessagePropertyHeader::setPropertyNameLength(int value)
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(value >= 0 && value <= k_MAX_PROPERTY_NAME_LENGTH);
 
-    d_reservedAndPropNameLen = value & k_PROP_NAME_LEN_MASK;
+    d_reservedAndPropNameLen = static_cast<unsigned short>(
+        value & k_PROP_NAME_LEN_MASK);
 
     return *this;
 }
@@ -4134,12 +4143,13 @@ inline SchemaWireId::SchemaWireId()
 // PUBLIC MODIFIERS
 inline void SchemaWireId::set(unsigned value)
 {
-    d_value = value;
+    // Include precondition check or adjust function signature?
+    d_value = static_cast<unsigned short>(value);
 }
 
 inline unsigned SchemaWireId::value() const
 {
-    return d_value;
+    return static_cast<unsigned short>(d_value);
 }
 
 // ---------------
@@ -4348,9 +4358,9 @@ inline AckHeader& AckHeader::setHeaderWords(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= (1 << k_HEADER_WORDS_NUM_BITS) - 1);
 
-    d_headerWordsAndPerMsgWords = (d_headerWordsAndPerMsgWords &
-                                   k_PER_MSG_WORDS_MASK) |
-                                  (value << k_HEADER_WORDS_START_IDX);
+    d_headerWordsAndPerMsgWords = static_cast<unsigned char>(
+        (d_headerWordsAndPerMsgWords & k_PER_MSG_WORDS_MASK) |
+        (value << k_HEADER_WORDS_START_IDX));
     return *this;
 }
 
@@ -4360,9 +4370,9 @@ inline AckHeader& AckHeader::setPerMessageWords(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= (1 << k_PER_MSG_WORDS_NUM_BITS) - 1);
 
-    d_headerWordsAndPerMsgWords = (d_headerWordsAndPerMsgWords &
-                                   k_HEADER_WORDS_MASK) |
-                                  (value & k_PER_MSG_WORDS_MASK);
+    d_headerWordsAndPerMsgWords = static_cast<unsigned char>(
+        (d_headerWordsAndPerMsgWords & k_HEADER_WORDS_MASK) |
+        (value & k_PER_MSG_WORDS_MASK));
     return *this;
 }
 
@@ -4654,9 +4664,9 @@ inline ConfirmHeader& ConfirmHeader::setHeaderWords(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= (1 << k_HEADER_WORDS_NUM_BITS) - 1);
 
-    d_headerWordsAndPerMsgWords = (d_headerWordsAndPerMsgWords &
-                                   k_PER_MSG_WORDS_MASK) |
-                                  (value << k_HEADER_WORDS_START_IDX);
+    d_headerWordsAndPerMsgWords = static_cast<unsigned char>(
+        (d_headerWordsAndPerMsgWords & k_PER_MSG_WORDS_MASK) |
+        (value << k_HEADER_WORDS_START_IDX));
     return *this;
 }
 
@@ -4666,9 +4676,9 @@ inline ConfirmHeader& ConfirmHeader::setPerMessageWords(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= (1 << k_PER_MSG_WORDS_NUM_BITS) - 1);
 
-    d_headerWordsAndPerMsgWords = (d_headerWordsAndPerMsgWords &
-                                   k_HEADER_WORDS_MASK) |
-                                  (value & k_PER_MSG_WORDS_MASK);
+    d_headerWordsAndPerMsgWords = static_cast<unsigned char>(
+        (d_headerWordsAndPerMsgWords & k_HEADER_WORDS_MASK) |
+        (value & k_PER_MSG_WORDS_MASK));
     return *this;
 }
 
@@ -4749,9 +4759,9 @@ inline RejectHeader& RejectHeader::setHeaderWords(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= (1 << k_HEADER_WORDS_NUM_BITS) - 1);
 
-    d_headerWordsAndPerMsgWords = (d_headerWordsAndPerMsgWords &
-                                   k_PER_MSG_WORDS_MASK) |
-                                  (value << k_HEADER_WORDS_START_IDX);
+    d_headerWordsAndPerMsgWords = static_cast<unsigned char>(
+        (d_headerWordsAndPerMsgWords & k_PER_MSG_WORDS_MASK) |
+        (value << k_HEADER_WORDS_START_IDX));
     return *this;
 }
 
@@ -4761,9 +4771,9 @@ inline RejectHeader& RejectHeader::setPerMessageWords(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= (1 << k_PER_MSG_WORDS_NUM_BITS) - 1);
 
-    d_headerWordsAndPerMsgWords = (d_headerWordsAndPerMsgWords &
-                                   k_HEADER_WORDS_MASK) |
-                                  (value & k_PER_MSG_WORDS_MASK);
+    d_headerWordsAndPerMsgWords = static_cast<unsigned char>(
+        (d_headerWordsAndPerMsgWords & k_HEADER_WORDS_MASK) |
+        (value & k_PER_MSG_WORDS_MASK));
     return *this;
 }
 
@@ -4914,9 +4924,9 @@ inline StorageHeader& StorageHeader::setStorageProtocolVersion(int value)
     // PRECONDITIONS: protect against overflow
     BSLS_ASSERT_SAFE(value >= 0 && value <= (1 << k_SPV_NUM_BITS) - 1);
 
-    d_reservedAndSpvAndHeaderWords = (d_reservedAndSpvAndHeaderWords &
-                                      k_HEADER_WORDS_MASK) |
-                                     (value << k_SPV_START_IDX);
+    d_reservedAndSpvAndHeaderWords = static_cast<unsigned char>(
+        (d_reservedAndSpvAndHeaderWords & k_HEADER_WORDS_MASK) |
+        (value << k_SPV_START_IDX));
     return *this;
 }
 
@@ -4925,9 +4935,9 @@ inline StorageHeader& StorageHeader::setHeaderWords(unsigned int value)
     // PRECONDITIONS: protect against overflow
     BSLS_ASSERT_SAFE(value <= (1 << k_HEADER_WORDS_NUM_BITS) - 1);
 
-    d_reservedAndSpvAndHeaderWords = (d_reservedAndSpvAndHeaderWords &
-                                      k_SPV_MASK) |
-                                     (value & k_HEADER_WORDS_MASK);
+    d_reservedAndSpvAndHeaderWords = static_cast<unsigned char>(
+        (d_reservedAndSpvAndHeaderWords & k_SPV_MASK) |
+        (value & k_HEADER_WORDS_MASK));
     return *this;
 }
 
@@ -5048,9 +5058,9 @@ inline RecoveryHeader& RecoveryHeader::setHeaderWords(int value)
     BSLS_ASSERT_SAFE(value >= 0 &&
                      value <= (1 << k_HEADER_WORDS_NUM_BITS) - 1);
 
-    d_headerWordsAndFileChunkType = (d_headerWordsAndFileChunkType &
-                                     k_FILE_CHUNK_TYPE_MASK) |
-                                    (value << k_HEADER_WORDS_START_IDX);
+    d_headerWordsAndFileChunkType = static_cast<unsigned char>(
+        (d_headerWordsAndFileChunkType & k_FILE_CHUNK_TYPE_MASK) |
+        (value << k_HEADER_WORDS_START_IDX));
 
     return *this;
 }
@@ -5058,15 +5068,15 @@ inline RecoveryHeader& RecoveryHeader::setHeaderWords(int value)
 inline RecoveryHeader&
 RecoveryHeader::setFileChunkType(RecoveryFileChunkType::Enum value)
 {
-    d_headerWordsAndFileChunkType = (d_headerWordsAndFileChunkType &
-                                     k_HEADER_WORDS_MASK) |
-                                    (value & k_FILE_CHUNK_TYPE_MASK);
+    d_headerWordsAndFileChunkType = static_cast<unsigned char>(
+        (d_headerWordsAndFileChunkType & k_HEADER_WORDS_MASK) |
+        (value & k_FILE_CHUNK_TYPE_MASK));
     return *this;
 }
 
 inline RecoveryHeader& RecoveryHeader::setPartitionId(unsigned int value)
 {
-    d_partitionId = value;
+    d_partitionId = static_cast<unsigned short>(value);
     return *this;
 }
 

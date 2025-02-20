@@ -28,19 +28,19 @@
 // file store protocol, in the 'mqbs::FileStoreProtocolUtil' namespace.
 
 // MQB
-
 #include <mqbconfm_messages.h>
+#include <mqbi_storage.h>
 #include <mqbs_filestoreprotocol.h>
 #include <mqbs_mappedfiledescriptor.h>
 #include <mqbu_storagekey.h>
 
-// MWC
-#include <mwcu_blob.h>
+#include <bmqu_blob.h>
 
 // BDE
 #include <bdlbb_blob.h>
 #include <bdlde_md5.h>
 #include <bsl_string.h>
+#include <bsl_unordered_set.h>
 #include <bsl_utility.h>
 #include <bsl_vector.h>
 #include <bsls_types.h>
@@ -105,13 +105,12 @@ struct FileStoreProtocolUtil {
     /// position in the `blob` and `length` is non-zero.
     static int calculateMd5Digest(bdlde::Md5::Md5Digest*    buffer,
                                   const bdlbb::Blob&        blob,
-                                  const mwcu::BlobPosition& startPos,
+                                  const bmqu::BlobPosition& startPos,
                                   unsigned int              length);
 
-    static void loadAppIdKeyPairs(
-        bsl::vector<bsl::pair<bsl::string, mqbu::StorageKey> >* appIdKeyPairs,
-        const MemoryBlock&                                      appIdsBlock,
-        unsigned int                                            numAppIds);
+    static void loadAppInfos(mqbi::Storage::AppInfos* appIdKeyPairs,
+                             const MemoryBlock&       appIdsBlock,
+                             unsigned int             numAppIds);
 };
 
 }  // close package namespace

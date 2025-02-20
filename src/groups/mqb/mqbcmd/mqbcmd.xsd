@@ -6,18 +6,95 @@
         targetNamespace="http://bloomberg.com/schemas/schema">
 
   <complexType name="Command">
-    <choice>
-      <element name="help"           type="tns:HelpCommand"/>
-      <element name="domains"        type="tns:DomainsCommand"/>
-      <element name="configProvider" type="tns:ConfigProviderCommand"/>
-      <element name="stat"           type="tns:StatCommand"/>
-      <element name="clusters"       type="tns:ClustersCommand"/>
-      <element name="danger"         type="tns:DangerCommand"/>
-      <element name="brokerConfig"   type="tns:BrokerConfigCommand"/>
-    </choice>
+    <annotation>
+      <documentation>
+        The type represents a variant representing Command with options
+        common for all commands.
+
+        The optionally specified 'encoding' option contains the desired output
+        format of this command output.
+      </documentation>
+    </annotation>
+    <sequence>
+      <choice>
+        <element name="help"           type="tns:HelpCommand"/>
+        <element name="domains"        type="tns:DomainsCommand"/>
+        <element name="configProvider" type="tns:ConfigProviderCommand"/>
+        <element name="stat"           type="tns:StatCommand"/>
+        <element name="clusters"       type="tns:ClustersCommand"/>
+        <element name="danger"         type="tns:DangerCommand"/>
+        <element name="brokerConfig"   type="tns:BrokerConfigCommand"/>
+      </choice>
+      <element   name='encoding'       type='tns:EncodingFormat' default='TEXT'/>
+    </sequence>
+  </complexType>
+
+  <simpleType name='EncodingFormat'>
+    <annotation>
+      <documentation>
+        Enumeration of the various encoding format versions.
+      </documentation>
+    </annotation>
+    <restriction base='string' bdem:preserveEnumOrder='1'>
+      <enumeration value='TEXT'         bdem:id='0'/>
+      <enumeration value='JSON_COMPACT' bdem:id='1'/>
+      <enumeration value='JSON_PRETTY'  bdem:id='2'/>
+    </restriction>
+  </simpleType>
+
+  <complexType name="RouteResponse">
+    <annotation>
+      <documentation>
+        A report of a command routed to a particular node.
+      </documentation>
+    </annotation>
+    <sequence>
+      <element name="sourceNodeDescription"   type="xs:string"/>
+      <element name="response" type="xs:string"/>
+    </sequence>
+  </complexType>
+
+  <complexType name="RouteResponseList">
+    <annotation>
+      <documentation>
+        A list of the textual responses from a routed command.
+      </documentation>
+    </annotation>
+    <sequence>
+      <element name="responses" type="tns:RouteResponse" maxOccurs="unbounded" minOccurs="0"/>
+    </sequence>
+  </complexType>
+
+  <complexType name="RouteResponseResult">
+    <annotation>
+      <documentation>
+        A response from a routed command containing the decoded result.
+      </documentation>
+    </annotation>
+    <sequence>
+      <element name="sourceNodeDescription" type="xs:string"/>
+      <element name="result" type="tns:Result"/>
+    </sequence>
+  </complexType>
+
+  <complexType name="RouteResponseResultList">
+    <annotation>
+      <documentation>
+        A list of responses containing decoded results.
+      </documentation>
+    </annotation>
+    <sequence>
+      <element name="responses" type="tns:RouteResponseResult" maxOccurs="unbounded" minOccurs="0"/>
+    </sequence>
   </complexType>
 
   <complexType name="InternalResult">
+    <annotation>
+      <documentation>
+        The type represents a command execution result with all intermediate
+        structures created after each command dispatch.
+      </documentation>
+    </annotation>
     <choice>
       <element name="error"                      type="tns:Error"/>
       <element name="success"                    type="tns:Void"/>
@@ -35,6 +112,13 @@
   </complexType>
 
   <complexType name="Result">
+    <annotation>
+      <documentation>
+        The type represents a command execution result flattened for a calling
+        client.  Client doesn't need to know about dispatcher hops happened to
+        process a command.
+      </documentation>
+    </annotation>
     <choice>
       <element name="error"                      type="tns:Error"/>
       <element name="success"                    type="tns:Void"/>
@@ -110,6 +194,7 @@
       <element name="storageContent"        type="tns:StorageContent"/>
       <element name="clusterStorageSummary" type="tns:ClusterStorageSummary"/>
       <element name="replicationResult"     type="tns:ReplicationResult"/>
+      <element name="purgedQueues"          type="tns:PurgedQueues"/>
     </choice>
   </complexType>
 
@@ -247,6 +332,7 @@
       <element name="summary"     type="tns:Void"/>
       <element name="partition"   type="tns:StoragePartition"/>
       <element name="domain"      type="tns:StorageDomain"/>
+      <element name="queue"       type="tns:StorageQueue"/>
       <element name="replication" type="tns:ReplicationCommand"/>
     </choice>
   </complexType>
@@ -680,6 +766,7 @@
       <element name="domain"      type="tns:Domain"/>
       <element name="resolver"    type="tns:DomainResolverCommand"/>
       <element name="reconfigure" type="tns:DomainReconfigure"/>
+      <element name="remove"      type="tns:DomainRemove"/>
     </choice>
   </complexType>
 
@@ -693,6 +780,13 @@
     <choice>
       <element name="domain" type="xs:string"/>
     </choice>
+  </complexType>
+
+  <complexType name="DomainRemove">
+    <sequence>
+      <element name="domain"   type="xs:string"/>
+      <element name="finalize" type="xs:boolean" minOccurs="0"/>
+    </sequence>
   </complexType>
 
   <complexType name="ConfigProviderCommand">
@@ -752,10 +846,17 @@
     </sequence>
   </complexType>
 
+  <complexType name="StorageQueue">
+    <sequence>
+      <element name="canonicalUri" type="xs:string"/>
+      <element name="command"      type="tns:StorageQueueCommand"/>
+    </sequence>
+  </complexType>
+
   <complexType name="ElectorCommand">
     <choice>
       <element name="setTunable"   type="tns:SetTunable"/>
-      <element name="getTunable"   type="xs:string"/>
+      <element name="getTunable"   type="tns:GetTunable"/>
       <element name="listTunables" type="tns:Void"/>
     </choice>
 </complexType>
@@ -763,7 +864,7 @@
   <complexType name="ReplicationCommand">
     <choice>
       <element name="setTunable"   type="tns:SetTunable"/>
-      <element name="getTunable"   type="xs:string"/>
+      <element name="getTunable"   type="tns:GetTunable"/>
       <element name="listTunables" type="tns:Void"/>
     </choice>
   </complexType>
@@ -972,6 +1073,17 @@
   <complexType name="StorageDomainCommand">
     <choice>
       <element name="queueStatus" type="tns:Void"/>
+      <element name="purge"       type="tns:Void"/>
+    </choice>
+  </complexType>
+
+  <complexType name="StorageQueueCommand">
+    <choice>
+      <element name="purgeAppId" type="xs:string">
+        <annotation>
+          <documentation>The special value "*" indicates the entire queue.</documentation>
+        </annotation>
+      </element>
     </choice>
   </complexType>
 
@@ -979,6 +1091,20 @@
     <sequence>
       <element name="name"  type="xs:string"/>
       <element name="value" type="tns:Value"/>
+      <choice>
+        <element name="all" type="tns:Void"/>
+        <element name="self" type="tns:Void"/>
+      </choice>
+    </sequence>
+  </complexType>
+
+  <complexType name="GetTunable">
+    <sequence>
+      <element name="name"  type="xs:string"/>
+      <choice>
+        <element name="all" type="tns:Void"/>
+        <element name="self" type="tns:Void"/>
+      </choice>
     </sequence>
   </complexType>
 

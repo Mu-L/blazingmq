@@ -29,9 +29,8 @@
 #include <bmqp_queueutil.h>
 #include <bmqp_routingconfigurationutils.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bsl_iostream.h>
@@ -45,13 +44,14 @@ namespace mqbblp {
 // class QueueState
 // ----------------
 
-QueueState::QueueState(mqbi::Queue*            queue,
-                       const bmqt::Uri&        uri,
-                       unsigned int            id,
-                       const mqbu::StorageKey& key,
-                       int                     partitionId,
-                       mqbi::Domain*           domain,
-                       bslma::Allocator*       allocator)
+QueueState::QueueState(mqbi::Queue*                 queue,
+                       const bmqt::Uri&             uri,
+                       unsigned int                 id,
+                       const mqbu::StorageKey&      key,
+                       int                          partitionId,
+                       mqbi::Domain*                domain,
+                       const mqbi::ClusterResources resources,
+                       bslma::Allocator*            allocator)
 : d_queue_p(queue)
 , d_uri(uri, allocator)
 , d_description(allocator)
@@ -63,11 +63,10 @@ QueueState::QueueState(mqbi::Queue*            queue,
 , d_partitionId(partitionId)
 , d_domain_p(domain)
 , d_storageManager_p(0)
-, d_blobBufferFactory_p(0)
-, d_scheduler_p(0)
+, d_resources(resources)
 , d_miscWorkThreadPool_p(0)
-, d_storage_mp(0)
-, d_stats()
+, d_storage_sp(0)
+, d_stats_sp(0)
 , d_messageThrottleConfig()
 , d_handleCatalog(queue, allocator)
 , d_context(queue->schemaLearner(), allocator)
@@ -80,18 +79,23 @@ QueueState::QueueState(mqbi::Queue*            queue,
     d_handleParameters.qId() = d_id;
 
     // Initialize stats
-    d_stats.initialize(d_uri, d_domain_p, allocator);
+    // There are neither FileBackedStorage nor domain config on proxies
+    if (d_domain_p->cluster()->isRemote() ||
+        !d_domain_p->config().storage().config().isFileBackedValue()) {
+        d_stats_sp.createInplace(allocator, allocator);
+        d_stats_sp->initialize(d_uri, d_domain_p);
+    }
 
     // NOTE: The 'description' will be set by the owner of this object.
 
-    mqbstat::BrokerStats::instance().onEvent(
-        mqbstat::BrokerStats::EventType::e_QUEUE_CREATED);
+    mqbstat::BrokerStats::instance()
+        .onEvent<mqbstat::BrokerStats::EventType::e_QUEUE_CREATED>();
 }
 
 QueueState::~QueueState()
 {
-    mqbstat::BrokerStats::instance().onEvent(
-        mqbstat::BrokerStats::EventType::e_QUEUE_DESTROYED);
+    mqbstat::BrokerStats::instance()
+        .onEvent<mqbstat::BrokerStats::EventType::e_QUEUE_DESTROYED>();
 }
 
 void QueueState::add(const bmqp_ctrlmsg::QueueHandleParameters& params)
@@ -132,6 +136,13 @@ QueueState::subtract(const bmqp_ctrlmsg::QueueHandleParameters& params)
     return mqbi::QueueCounts(it->second.readCount(), it->second.writeCount());
 }
 
+void QueueState::updateStats()
+{
+    stats()
+        ->setReaderCount(handleParameters().readCount())
+        .setWriterCount(handleParameters().writeCount());
+}
+
 mqbi::QueueCounts QueueState::consumerAndProducerCounts(
     const bmqp_ctrlmsg::QueueHandleParameters& params) const
 {
@@ -151,13 +162,14 @@ mqbi::QueueCounts QueueState::consumerAndProducerCounts(
     return mqbi::QueueCounts(0, 0);
 }
 
-bool QueueState::isStorageCompatible(const StorageMp& storageMp) const
+bool QueueState::isStorageCompatible(
+    const bsl::shared_ptr<mqbi::Storage>& storageSp) const
 {
     // executed by either the *QUEUE* or *CLUSTER* thread
 
     // If persistent, then there are no validation rules at the moment.
     // If no persistence, then the storage should be in-memory.
-    return !isAtMostOnce() || !storageMp->isPersistent();
+    return !isAtMostOnce() || !storageSp->isPersistent();
 }
 
 bool QueueState::isAtMostOnce() const
@@ -197,7 +209,7 @@ void QueueState::loadInternals(mqbcmd::QueueState* out) const
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(d_queue_p->dispatcher()->inDispatcherThread(d_queue_p));
 
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
 
     out->uri() = d_uri.asString();
     os << d_handleParameters;
@@ -211,39 +223,43 @@ void QueueState::loadInternals(mqbcmd::QueueState* out) const
     out->key()         = os.str();
     out->partitionId() = d_partitionId;
 
-    if (d_storage_mp) {
+    if (d_storage_sp) {
         mqbcmd::QueueStorage& queueStorage = out->storage().makeValue();
-        queueStorage.numMessages()         = d_storage_mp->numMessages(
+        queueStorage.numMessages()         = d_storage_sp->numMessages(
             mqbu::StorageKey::k_NULL_KEY);
-        queueStorage.numBytes() = d_storage_mp->numBytes(
+        queueStorage.numBytes() = d_storage_sp->numBytes(
             mqbu::StorageKey::k_NULL_KEY);
-        if (d_storage_mp->numVirtualStorages()) {
-            mqbi::Storage::AppIdKeyPairs appIdKeyPairs;
-            d_storage_mp->loadVirtualStorageDetails(&appIdKeyPairs);
+        if (d_storage_sp->numVirtualStorages()) {
+            mqbi::Storage::AppInfos appIdKeyPairs;
+            d_storage_sp->loadVirtualStorageDetails(&appIdKeyPairs);
             BSLS_ASSERT_SAFE(
                 appIdKeyPairs.size() ==
-                static_cast<size_t>(d_storage_mp->numVirtualStorages()));
+                static_cast<size_t>(d_storage_sp->numVirtualStorages()));
 
             bsl::vector<mqbcmd::VirtualStorage>& virtualStorages =
                 queueStorage.virtualStorages();
             virtualStorages.resize(appIdKeyPairs.size());
-            for (size_t i = 0; i < appIdKeyPairs.size(); ++i) {
-                const mqbi::Storage::AppIdKeyPair& p = appIdKeyPairs[i];
-                virtualStorages[i].appId()           = p.first;
+
+            size_t i = 0;
+            for (mqbi::Storage::AppInfos::const_iterator cit =
+                     appIdKeyPairs.cbegin();
+                 cit != appIdKeyPairs.cend();
+                 ++cit, ++i) {
+                virtualStorages[i].appId() = cit->first;
                 os.reset();
-                os << p.second;
+                os << cit->second;
                 virtualStorages[i].appKey()      = os.str();
-                virtualStorages[i].numMessages() = d_storage_mp->numMessages(
-                    p.second);
+                virtualStorages[i].numMessages() = d_storage_sp->numMessages(
+                    cit->second);
             }
         }
     }
 
-    if (d_storage_mp) {
+    if (d_storage_sp) {
         mqbcmd::CapacityMeter& capacityMeter =
             out->capacityMeter().makeValue();
         mqbu::CapacityMeterUtil::loadState(&capacityMeter,
-                                           *d_storage_mp->capacityMeter());
+                                           *d_storage_sp->capacityMeter());
     }
 
     d_handleCatalog.loadInternals(&out->handles());

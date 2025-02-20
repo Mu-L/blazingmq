@@ -24,7 +24,7 @@
 #include <bmqt_queueflags.h>
 #include <bmqt_sessionoptions.h>
 #include <bmqt_uri.h>
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <balcl_commandline.h>
@@ -360,7 +360,7 @@ static bool parseArgs(Parameters* parameters, int argc, const char* argv[])
         // as an initial generator for the profile JSON to feed in to the
         // '--profile' argument.
 
-        mwcu::MemOutStream     os;
+        bmqu::MemOutStream     os;
         baljsn::Encoder        encoder;
         baljsn::EncoderOptions options;
 
@@ -426,7 +426,7 @@ int main(int argc, const char* argv[])
                                       ? &ta
                                       : bslma::Default::allocator();
 
-    Application app(&parameters, &shutdownSemaphore, allocator);
+    Application app(parameters, &shutdownSemaphore, allocator);
     if (app.start() != 0) {
         return 2;  // RETURN
     }

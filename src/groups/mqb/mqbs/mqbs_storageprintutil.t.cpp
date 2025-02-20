@@ -24,8 +24,7 @@
 #include <mqbu_messageguidutil.h>
 #include <mqbu_storagekey.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlbb_pooledblobbufferfactory.h>
@@ -38,7 +37,7 @@
 #include <bsls_types.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -79,7 +78,7 @@ void verifyMessageConstruction(const mqbcmd::Message&   output,
                                const mqbi::Storage*     storage)
 {
     mqbcmd::Message    expected;
-    mwcu::MemOutStream guidStr;
+    bmqu::MemOutStream guidStr;
     int                msgSize = -1;
 
     guidStr << guid;
@@ -90,7 +89,7 @@ void verifyMessageConstruction(const mqbcmd::Message&   output,
                                                    0);
     expected.sizeBytes()        = msgSize;
 
-    ASSERT_EQ(expected, output);
+    BMQTST_ASSERT_EQ(expected, output);
 }
 
 /// Verify that the specified `output` matches the expected output based on
@@ -109,7 +108,7 @@ void verifyOutput(const mqbcmd::QueueContents&          queueContents,
                                   storage);
     }
 
-    ASSERT_EQ(index, queueContents.messages().size());
+    BMQTST_ASSERT_EQ(index, queueContents.messages().size());
 }
 
 // CLASSES
@@ -128,9 +127,9 @@ struct Tester {
   public:
     // CREATORS
     Tester()
-    : d_bufferFactory(1024, s_allocator_p)
-    , d_guids(s_allocator_p)
-    , d_capacityMeter("test", s_allocator_p)
+    : d_bufferFactory(1024, bmqtst::TestHelperUtil::allocator())
+    , d_guids(bmqtst::TestHelperUtil::allocator())
+    , d_capacityMeter("test", bmqtst::TestHelperUtil::allocator())
     {
         d_capacityMeter.setLimits(k_INT64_MAX, k_INT64_MAX);
 
@@ -139,17 +138,18 @@ struct Tester {
         domainCfg.messageTtl()          = k_INT64_MAX;
 
         const bsl::string uri("my.domain/myqueue");
-        d_storage_mp.load(new (*s_allocator_p) mqbs::InMemoryStorage(
-                              bmqt::Uri(uri, s_allocator_p),
-                              k_QUEUE_KEY,
-                              0,
-                              domainCfg,
-                              &d_capacityMeter,
-                              bmqp::RdaInfo(),
-                              s_allocator_p),
-                          s_allocator_p);
+        d_storage_mp.load(
+            new (*bmqtst::TestHelperUtil::allocator()) mqbs::InMemoryStorage(
+                bmqt::Uri(uri, bmqtst::TestHelperUtil::allocator()),
+                k_QUEUE_KEY,
+                0,
+                domainCfg,
+                &d_capacityMeter,
+                bmqtst::TestHelperUtil::allocator()),
+            bmqtst::TestHelperUtil::allocator());
 
-        mwcu::MemOutStream errorDescription(s_allocator_p);
+        bmqu::MemOutStream errorDescription(
+            bmqtst::TestHelperUtil::allocator());
         d_storage_mp->addVirtualStorage(errorDescription,
                                         k_APP_ID1,
                                         k_APP_KEY1);
@@ -182,22 +182,19 @@ struct Tester {
             mqbu::MessageGUIDUtil::generateGUID(&guid);
 
             bsl::shared_ptr<bdlbb::Blob> appDataPtr(
-                new (*s_allocator_p)
-                    bdlbb::Blob(&d_bufferFactory, s_allocator_p),
-                s_allocator_p);
+                new (*bmqtst::TestHelperUtil::allocator())
+                    bdlbb::Blob(&d_bufferFactory,
+                                bmqtst::TestHelperUtil::allocator()),
+                bmqtst::TestHelperUtil::allocator());
             appDataPtr->setLength(i * 10);
 
             mqbi::StorageMessageAttributes attributes;
-            d_storage_mp->put(&attributes,
-                              guid,
-                              appDataPtr,
-                              appDataPtr,
-                              mqbi::Storage::StorageKeys());
+            d_storage_mp->put(&attributes, guid, appDataPtr, appDataPtr);
         }
 
         for (int i = 0; i < 5; ++i) {
-            d_storage_mp->releaseRef(d_guids[i * 2], k_APP_KEY1, 0);
-            d_storage_mp->releaseRef(d_guids[i * 2 + 1], k_APP_KEY2, 0);
+            d_storage_mp->confirm(d_guids[i * 2], k_APP_KEY1, 0);
+            d_storage_mp->confirm(d_guids[i * 2 + 1], k_APP_KEY2, 0);
         }
     }
 
@@ -227,7 +224,7 @@ static void test1_listMessage()
 //   listMessage(...)
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("LIST MESSAGE");
+    bmqtst::TestHelper::printTestName("LIST MESSAGE");
 
     Tester tester;
     tester.populateMessages();
@@ -268,7 +265,7 @@ static void test2_listMessages()
 //   listMessages(...)
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("LIST MESSAGES");
+    bmqtst::TestHelper::printTestName("LIST MESSAGES");
 
     Tester tester;
     tester.populateMessages();
@@ -292,7 +289,8 @@ static void test2_listMessages()
     for (int idx = 0; idx < k_NUM_DATA; ++idx) {
         const TestData& test = k_DATA[idx];
 
-        mqbcmd::QueueContents queueContents(s_allocator_p);
+        mqbcmd::QueueContents queueContents(
+            bmqtst::TestHelperUtil::allocator());
         mqbs::StoragePrintUtil::listMessages(&queueContents,
                                              test.d_appId,
                                              test.d_offset,
@@ -308,9 +306,9 @@ static void test2_listMessages()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    bmqt::UriParser::initialize(s_allocator_p);
+    bmqt::UriParser::initialize(bmqtst::TestHelperUtil::allocator());
 
     switch (_testCase) {
     case 0:
@@ -318,11 +316,11 @@ int main(int argc, char* argv[])
     case 1: test1_listMessage(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
     bmqt::UriParser::shutdown();
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_GBL_ALLOC);
 }

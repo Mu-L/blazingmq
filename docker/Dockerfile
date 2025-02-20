@@ -1,20 +1,20 @@
-FROM docker.io/ubuntu:22.04 AS builder
+FROM docker.io/ubuntu:24.04 AS builder
 
 # Set up CA certificates first before installing other dependencies
-RUN apt update && \
-    apt -y install ca-certificates
-
-RUN apt install -y --no-install-recommends \
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     gdb \
-    curl \
-    python3.10 \
     cmake \
+    curl \
+    python3 \
     ninja-build \
     pkg-config \
     bison \
     libfl-dev \
     libbenchmark-dev \
+    libgmock-dev \
     libz-dev \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
@@ -48,12 +48,12 @@ RUN cd srcs/bmq \
     && mv /bmq/bin/bmqbrkr.tsk /bmq/bin/bmqbrkr \
     && mv /bmq/bin/bmqtool.tsk /bmq/bin/bmqtool
 
-FROM docker.io/ubuntu:22.04
+FROM docker.io/ubuntu:24.04
 
 COPY --from=builder /bmq /usr/local
 
-RUN addgroup bmq \
-    && adduser bmq --home /var/local/bmq --system --ingroup bmq --shell /usr/bin/bash
+RUN groupadd bmq \
+    && useradd bmq --home /var/local/bmq --system --gid bmq --shell /usr/bin/bash
 USER bmq
 WORKDIR /var/local/bmq
 RUN mkdir -p logs storage/archive

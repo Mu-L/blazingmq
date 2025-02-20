@@ -23,10 +23,9 @@
 // BMQ
 #include <bmqp_queueid.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_printutil.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bdlb_print.h>
@@ -51,7 +50,8 @@ struct SortPurgeQueueResultByBytesDesc {
     bool operator()(const PurgeQueueResult& lhs,
                     const PurgeQueueResult& rhs) const
     {
-        return (lhs.queue().numBytesPurged() > rhs.queue().numBytesPurged());
+        return (lhs.isQueueValue() ? lhs.queue().numBytesPurged() : 0) >
+               (rhs.isQueueValue() ? rhs.queue().numBytesPurged() : 0);
     }
 };
 
@@ -68,23 +68,23 @@ void printCapacityMeter(bsl::ostream&        os,
     }
 
     os << capacityMeter.name() << ":"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Messages: [current: "
-       << mwcu::PrintUtil::prettyNumber(capacityMeter.numMessages())
+       << bmqu::PrintUtil::prettyNumber(capacityMeter.numMessages())
        << ", limit: "
-       << mwcu::PrintUtil::prettyNumber(capacityMeter.messageCapacity());
+       << bmqu::PrintUtil::prettyNumber(capacityMeter.messageCapacity());
     if (capacityMeter.numMessagesReserved() != 0) {
         os << ", reserved: "
-           << mwcu::PrintUtil::prettyNumber(
+           << bmqu::PrintUtil::prettyNumber(
                   capacityMeter.numMessagesReserved());
     }
-    os << "]" << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << "]" << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Bytes   : [current: "
-       << mwcu::PrintUtil::prettyBytes(capacityMeter.numBytes()) << ", limit: "
-       << mwcu::PrintUtil::prettyBytes(capacityMeter.byteCapacity());
+       << bmqu::PrintUtil::prettyBytes(capacityMeter.numBytes()) << ", limit: "
+       << bmqu::PrintUtil::prettyBytes(capacityMeter.byteCapacity());
     if (capacityMeter.numBytesReserved() != 0) {
         os << ", reserved: "
-           << mwcu::PrintUtil::prettyBytes(capacityMeter.numBytesReserved());
+           << bmqu::PrintUtil::prettyBytes(capacityMeter.numBytesReserved());
     }
     os << "]";
 
@@ -105,23 +105,23 @@ void printQueueStatus(bsl::ostream&         os,
         return;  // RETURN
     }
 
-    os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << " QueueKey    Partition    NumMsgs    NumBytes"
        << "                QueueUri";
 
     typedef bsl::vector<StorageQueueInfo> Storages;
     const Storages&                       storages = storageContent.storages();
-    mwcu::OutStreamFormatSaver            fmtSaver(os);
+    bmqu::OutStreamFormatSaver            fmtSaver(os);
 
     for (Storages::const_iterator cit = storages.cbegin();
          cit != storages.cend();
          ++cit) {
-        os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
            << cit->queueKey() << " " << bsl::setfill(' ') << bsl::setw(7)
            << cit->partitionId() << "      " << bsl::setfill(' ')
-           << bsl::setw(8) << mwcu::PrintUtil::prettyNumber(cit->numMessages())
+           << bsl::setw(8) << bmqu::PrintUtil::prettyNumber(cit->numMessages())
            << "  " << bsl::setfill(' ') << bsl::setw(10)
-           << mwcu::PrintUtil::prettyBytes(cit->numBytes()) << "    "
+           << bmqu::PrintUtil::prettyBytes(cit->numBytes()) << "    "
            << cit->queueUri()
            << (cit->isPersistent() ? "" : "  (non-persistent)");
     }
@@ -133,32 +133,32 @@ void printDomainInfo(bsl::ostream&     os,
                      int               spacesPerLevel)
 {
     bdlb::Print::indent(os, level, spacesPerLevel);
-    os << "Domain:" << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << "Domain:" << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "-------"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Name ............: " << domainInfo.name()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Config ..........:\n"
        << domainInfo.configJson()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Cluster .........: " << domainInfo.clusterName()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Capacity Meter ..: ";
     printCapacityMeter(os,
                        domainInfo.capacityMeter(),
                        level + 2,
                        spacesPerLevel);
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Queues ..........: "
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "------------------"
-       << mwcu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
        << "ActiveQueues ..: " << domainInfo.queueUris().size();
     {
-        mwcu::OutStreamFormatSaver fmtSaver(os);
+        bmqu::OutStreamFormatSaver fmtSaver(os);
         for (size_t i = 0; i < domainInfo.queueUris().size(); ++i) {
             const bsl::string& queueUri = domainInfo.queueUris()[i];
-            os << mwcu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
+            os << bmqu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
                << " " << bsl::setfill(' ') << bsl::setw(3) << i << ". "
                << queueUri;
         }
@@ -167,7 +167,7 @@ void printDomainInfo(bsl::ostream&     os,
 
     bdlb::Print::indent(os, level, spacesPerLevel);
     os << "Storage ......."
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Number of assigned queue-storages: "
        << domainInfo.storageContent().storages().size();
 
@@ -179,7 +179,7 @@ void printDomainInfo(bsl::ostream&     os,
 
 void printClusterList(bsl::ostream& os, const ClusterList& clusterList)
 {
-    mwcu::OutStreamFormatSaver fmtSaver(os);
+    bmqu::OutStreamFormatSaver fmtSaver(os);
     os << "The following clusters are active:";
 
     for (bsl::vector<ClusterInfo>::const_iterator itCluster =
@@ -249,7 +249,7 @@ void printTunable(bsl::ostream& os, const Tunable& tunable)
 
 void printTunableList(bsl::ostream& os, const Tunables& tunables)
 {
-    mwcu::OutStreamFormatSaver fmtSaver(os);
+    bmqu::OutStreamFormatSaver fmtSaver(os);
 
     // Compute the longest tunable name, for pretty-alignment
     bsl::size_t longestName = 0;
@@ -296,8 +296,8 @@ void printPurgedQueues(bsl::ostream& os, const PurgedQueues& purgedQueueList)
 
     bsl::sort(queues.begin(), queues.end(), SortPurgeQueueResultByBytesDesc());
 
-    mwcu::MemOutStream stream;
-    mwcu::MemOutStream errorStream;
+    bmqu::MemOutStream stream;
+    bmqu::MemOutStream errorStream;
     bsls::Types::Int64 totalBytes    = 0;
     bsls::Types::Int64 totalMessages = 0;
 
@@ -312,9 +312,9 @@ void printPurgedQueues(bsl::ostream& os, const PurgedQueues& purgedQueueList)
         const PurgedQueueDetails& queue = it->queue();
         stream << bsl::endl
                << "  " << bsl::setfill(' ') << bsl::setw(10) << bsl::right
-               << mwcu::PrintUtil::prettyBytes(queue.numBytesPurged()) << "  "
+               << bmqu::PrintUtil::prettyBytes(queue.numBytesPurged()) << "  "
                << bsl::setfill(' ') << bsl::setw(10) << bsl::right
-               << mwcu::PrintUtil::prettyNumber(queue.numMessagesPurged())
+               << bmqu::PrintUtil::prettyNumber(queue.numMessagesPurged())
                << bsl::left << "  " << queue.appKey() << "  "
                << bsl::setfill(' ') << bsl::setw(16) << bsl::right
                << queue.appId() << bsl::left << "  " << queue.queueUri();
@@ -322,20 +322,12 @@ void printPurgedQueues(bsl::ostream& os, const PurgedQueues& purgedQueueList)
         totalMessages += queue.numMessagesPurged();
     }
 
-    os << "Purged " << mwcu::PrintUtil::prettyNumber(totalMessages)
+    os << "Purged " << bmqu::PrintUtil::prettyNumber(totalMessages)
        << " message(s) for a total of "
-       << mwcu::PrintUtil::prettyBytes(totalBytes) << " from " << queues.size()
+       << bmqu::PrintUtil::prettyBytes(totalBytes) << " from " << queues.size()
        << " queue(s):\n"
-       << "  "
-       << "  NumBytes"
-       << "  "
-       << "   NumMsgs"
-       << "  "
-       << "    AppKey"
-       << "  "
-       << "           AppId"
-       << "  "
-       << "QueueName" << stream.str();
+       << "  " << "  NumBytes" << "  " << "   NumMsgs" << "  " << "    AppKey"
+       << "  " << "           AppId" << "  " << "QueueName" << stream.str();
 
     if (!errorStream.str().empty()) {
         os << "\nErrors encountered: " << errorStream.str();
@@ -344,7 +336,7 @@ void printPurgedQueues(bsl::ostream& os, const PurgedQueues& purgedQueueList)
 
 void printQueueContents(bsl::ostream& os, const QueueContents& queueContents)
 {
-    mwcu::MemOutStream msgListing;
+    bmqu::MemOutStream msgListing;
     bsls::Types::Int64 totalBytes = 0;
 
     bsl::vector<Message>::const_iterator it =
@@ -355,7 +347,7 @@ void printQueueContents(bsl::ostream& os, const QueueContents& queueContents)
         totalBytes += it->sizeBytes();
         msgListing << bsl::setw(5) << sequenceNo << ": " << bsl::setw(32)
                    << it->guid() << "  " << bsl::setw(10)
-                   << mwcu::PrintUtil::prettyBytes(it->sizeBytes()) << "  "
+                   << bmqu::PrintUtil::prettyBytes(it->sizeBytes()) << "  "
                    << it->arrivalTimestamp() << "\n";
     }
 
@@ -371,8 +363,8 @@ void printQueueContents(bsl::ostream& os, const QueueContents& queueContents)
 
     os << "Printing " << numMessages << " message(s) ["
        << queueContents.offset() << "-" << endInterval << " / "
-       << mwcu::PrintUtil::prettyNumber(queueContents.totalQueueMessages())
-       << "] (total: " << mwcu::PrintUtil::prettyBytes(totalBytes) << ")\n"
+       << bmqu::PrintUtil::prettyNumber(queueContents.totalQueueMessages())
+       << "] (total: " << bmqu::PrintUtil::prettyBytes(totalBytes) << ")\n"
        << "       GUID                              Size        Timestamp "
           "(UTC)\n"
        << msgListing.str();
@@ -382,7 +374,7 @@ void printMessage(bsl::ostream& os, const Message& message)
 {
     os << "GUID                              Size        Timestamp (UTC)\n"
        << bsl::setw(32) << message.guid() << "  " << bsl::setw(10)
-       << mwcu::PrintUtil::prettyBytes(message.sizeBytes()) << "  "
+       << bmqu::PrintUtil::prettyBytes(message.sizeBytes()) << "  "
        << message.arrivalTimestamp();
 }
 
@@ -392,9 +384,9 @@ void printFileStoreSummary(bsl::ostream&           os,
                            int                     level,
                            int                     spacesPerLevel)
 {
-    using namespace mwcu::PrintUtil;
+    using namespace bmqu::PrintUtil;
 
-    os << indent(level, spacesPerLevel) << "PartitionId [" << partitionId
+    os << indent(level, spacesPerLevel) << "Partition [" << partitionId
        << "]:" << newlineAndIndent(level, spacesPerLevel) << "----------------"
        << newlineAndIndent(level + 1, spacesPerLevel)
        << "Primary Node: " << summary.primaryNodeDescription()
@@ -419,6 +411,8 @@ void printFileStoreSummary(bsl::ostream&           os,
     }
 
     const ActiveFileSet& activeFileSet = summary.activeFileSet();
+    BSLS_ASSERT_SAFE(activeFileSet.dataFile().sizeBytes() > 0);
+    BSLS_ASSERT_SAFE(activeFileSet.journalFile().sizeBytes() > 0);
     os << '\n'
        << newlineAndIndent(level + 1, spacesPerLevel)
        << "Active file set details: "
@@ -440,15 +434,21 @@ void printFileStoreSummary(bsl::ostream&           os,
        << " %). Outstanding bytes: "
        << prettyNumber(static_cast<bsls::Types::Int64>(
               activeFileSet.journalFile().outstandingBytes()))
-       << newlineAndIndent(level + 2, spacesPerLevel)
-       << "Qlist file size   (used/total): "
-       << prettyBytes(activeFileSet.qlistFile().positionBytes()) << " / "
-       << prettyBytes(activeFileSet.qlistFile().sizeBytes()) << "  ("
-       << ((activeFileSet.qlistFile().positionBytes() * 100) /
-           activeFileSet.qlistFile().sizeBytes())
-       << " %). Outstanding bytes: "
-       << prettyNumber(static_cast<bsls::Types::Int64>(
-              activeFileSet.qlistFile().outstandingBytes()));
+       << newlineAndIndent(level + 2, spacesPerLevel);
+
+    // QList will be deprecated when CSL mode with FSM workflow is enabled.
+    //
+    // TODO CSL Remove this code block
+    if (activeFileSet.qlistFile().sizeBytes() > 0) {
+        os << "Qlist file size   (used/total): "
+           << prettyBytes(activeFileSet.qlistFile().positionBytes()) << " / "
+           << prettyBytes(activeFileSet.qlistFile().sizeBytes()) << "  ("
+           << ((activeFileSet.qlistFile().positionBytes() * 100) /
+               activeFileSet.qlistFile().sizeBytes())
+           << " %). Outstanding bytes: "
+           << prettyNumber(static_cast<bsls::Types::Int64>(
+                  activeFileSet.qlistFile().outstandingBytes()));
+    }
 
     os << '\n'
        << newlineAndIndent(level + 1, spacesPerLevel)
@@ -482,9 +482,9 @@ void printClusterStorageSummary(bsl::ostream&                os,
 {
     bdlb::Print::indent(os, level, spacesPerLevel);
     os << "Storage Summary:"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "----------------"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Storage location: " << summary.clusterFileStoreLocation() << "\n\n";
 
     typedef bsl::vector<FileStore> FileStores;
@@ -493,13 +493,13 @@ void printClusterStorageSummary(bsl::ostream&                os,
          cit != fileStores.cend();
          ++cit) {
         if (cit->state() == FileStoreState::CLOSED) {
-            os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
-               << "PartitionId [" << cit->partitionId() << "]: NOT OPEN.";
+            os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+               << "Partition [" << cit->partitionId() << "]: NOT OPEN.";
             continue;  // CONTINUE
         }
         else if (cit->state() == FileStoreState::STOPPING) {
-            os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
-               << "PartitionId [" << cit->partitionId() << "]: STOPPING.";
+            os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+               << "Partition [" << cit->partitionId() << "]: STOPPING.";
             continue;  // CONTINUE
         }
 
@@ -519,22 +519,22 @@ void printClusterQueueHelper(bsl::ostream&             os,
 {
     os << "ClusterQueueHelper :\n"
        << "--------------------"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "cluster......................: " << clusterQueueHelper.clusterName()
        << " (" << Locality::toString(clusterQueueHelper.locality()) << ")"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "nbQueues.....................: " << clusterQueueHelper.numQueues()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "nbQueueKeys..................: "
        << clusterQueueHelper.numQueueKeys()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "nbPendingReopenQueueRequests.: "
        << clusterQueueHelper.numPendingReopenQueueRequests() << "\n";
 
     // Domains
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Domains :"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "---------";
 
     bsl::size_t                        maxDomainLength = 0;
@@ -549,7 +549,7 @@ void printClusterQueueHelper(bsl::ostream&             os,
     for (ClusterDomains::const_iterator cit = clusterDomains.cbegin();
          cit != clusterDomains.cend();
          ++cit) {
-        os << mwcu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
            << cit->name() << bsl::setw(maxDomainLength - cit->name().length())
            << bsl::setfill('.')
            << ": numAssignedQueues=" << cit->numAssignedQueues();
@@ -560,9 +560,9 @@ void printClusterQueueHelper(bsl::ostream&             os,
     }
 
     // Queues
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Queues :"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "--------";
 
     typedef bsl::vector<ClusterQueue> ClusterQueues;
@@ -571,20 +571,20 @@ void printClusterQueueHelper(bsl::ostream&             os,
          cit != clusterQueues.cend();
          ++cit) {
         // Queue URI
-        os << mwcu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
            << cit->uri();
 
         // Info
-        os << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "inFlightContexts.: " << cit->numInFlightContexts()
-           << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+           << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "assigned.........: " << bsl::boolalpha << cit->isAssigned()
-           << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+           << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "primaryAvailable..: " << bsl::boolalpha
            << cit->isPrimaryAvailable()
-           << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+           << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "id...............: " << bmqp::QueueId::QueueIdInt(cit->id())
-           << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+           << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "subIds...........: ";
 
         typedef bsl::vector<SubId> SubIds;
@@ -600,23 +600,23 @@ void printClusterQueueHelper(bsl::ostream&             os,
             }
         }
 
-        os << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "partitionId......: " << cit->partitionId();
         if (!cit->primaryNodeDescription().isNull()) {
             os << cit->primaryNodeDescription().value();
         }
-        os << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "key..............: " << cit->key()
-           << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+           << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "queue............: "
            << (cit->isCreated() ? "created" : "*NOT* created");
 
         // Contexts
-        os << mwcu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 3, spacesPerLevel)
            << "nbContext........: " << cit->contexts().size();
         for (size_t ctxId = 0; ctxId != cit->contexts().size(); ++ctxId) {
             const Context& context = cit->contexts()[ctxId];
-            os << mwcu::PrintUtil::newlineAndIndent(level + 4, spacesPerLevel)
+            os << bmqu::PrintUtil::newlineAndIndent(level + 4, spacesPerLevel)
                << "#" << (ctxId + 1) << ": "
                << "[handle parameters: " << context.queueHandleParametersJson()
                << "]";
@@ -629,32 +629,31 @@ void printResourceUsageMonitor(bsl::ostream&               os,
                                int                         level,
                                int                         spacesPerLevel)
 {
-    os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
-       << usageMonitor.state() << " "
-       << "[Messages (" << usageMonitor.messagesState()
-       << "): " << mwcu::PrintUtil::prettyNumber(usageMonitor.numMessages())
+    os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << usageMonitor.state() << " " << "[Messages ("
+       << usageMonitor.messagesState()
+       << "): " << bmqu::PrintUtil::prettyNumber(usageMonitor.numMessages())
        << " ("
-       << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+       << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
               usageMonitor.messagesLowWatermarkRatio() *
               usageMonitor.messagesCapacity()))
        << " - "
-       << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+       << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
               usageMonitor.messagesHighWatermarkRatio() *
               usageMonitor.messagesCapacity()))
        << " - "
-       << mwcu::PrintUtil::prettyNumber(usageMonitor.messagesCapacity())
-       << "), "
-       << "Bytes (" << usageMonitor.bytesState()
-       << "): " << mwcu::PrintUtil::prettyBytes(usageMonitor.numBytes())
+       << bmqu::PrintUtil::prettyNumber(usageMonitor.messagesCapacity())
+       << "), " << "Bytes (" << usageMonitor.bytesState()
+       << "): " << bmqu::PrintUtil::prettyBytes(usageMonitor.numBytes())
        << " ("
-       << mwcu::PrintUtil::prettyBytes(usageMonitor.bytesLowWatermarkRatio() *
+       << bmqu::PrintUtil::prettyBytes(usageMonitor.bytesLowWatermarkRatio() *
                                            usageMonitor.bytesCapacity(),
                                        2)
        << " - "
-       << mwcu::PrintUtil::prettyBytes(usageMonitor.bytesHighWatermarkRatio() *
+       << bmqu::PrintUtil::prettyBytes(usageMonitor.bytesHighWatermarkRatio() *
                                            usageMonitor.bytesCapacity(),
                                        2)
-       << " - " << mwcu::PrintUtil::prettyBytes(usageMonitor.bytesCapacity())
+       << " - " << bmqu::PrintUtil::prettyBytes(usageMonitor.bytesCapacity())
        << ")] ";
 }
 
@@ -663,18 +662,18 @@ void printQueueHandleSubStream(bsl::ostream&               os,
                                int                         level,
                                int                         spacesPerLevel)
 {
-    os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "subId .................: " << subStream.subId();
     if (!subStream.appId().isNull()) {
-        os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
            << "appId .................: " << subStream.appId().value();
     }
 
-    os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "Stream Parameters .....: " << subStream.parametersJson()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "UnconfirmedMonitors ...:"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "--------";
 
     for (size_t i = 0; i != subStream.unconfirmedMonitors().size(); ++i) {
@@ -685,9 +684,9 @@ void printQueueHandleSubStream(bsl::ostream&               os,
     }
 
     if (!subStream.numUnconfirmedMessages().isNull()) {
-        os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
            << "UnconfirmedMessages ...: "
-           << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+           << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                   subStream.numUnconfirmedMessages().value()));
     }
 
@@ -699,9 +698,9 @@ void printQueueHandle(bsl::ostream&      os,
                       int                level,
                       int                spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel)
        << "Handle Parameters .....: " << handle.parametersJson()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "IsClientClusterMember .: " << bsl::boolalpha
        << handle.isClientClusterMember();
 
@@ -719,10 +718,10 @@ void printQueueHandles(bsl::ostream&                   os,
                        int                             level,
                        int                             spacesPerLevel)
 {
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << handles.size() << " handles:\n";
     for (unsigned int idx = 1; idx <= handles.size(); ++idx) {
-        os << mwcu::PrintUtil::indent(level + 2, spacesPerLevel) << idx << ". "
+        os << bmqu::PrintUtil::indent(level + 2, spacesPerLevel) << idx << ". "
            << handles[idx - 1].clientDescription() << "\n";
         printQueueHandle(os, handles[idx - 1], level + 3, spacesPerLevel);
     }
@@ -733,16 +732,16 @@ void printQueueState(bsl::ostream&     os,
                      int               level,
                      int               spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel)
-       << "State:" << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel)
+       << "State:" << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "------"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "URI ...............: " << state.uri()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Handle Parameters .: " << state.handleParametersJson()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Stream Parameters .: " << state.streamParametersJson()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Id/Key ............: ";
 
     if (state.id() == bmqp::QueueId::k_UNASSIGNED_QUEUE_ID) {
@@ -756,17 +755,17 @@ void printQueueState(bsl::ostream&     os,
     }
 
     os << " ~ " << state.key()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "PartitionId .......: " << state.partitionId()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Storage ...........: ";
 
     if (!state.storage().isNull()) {
         const QueueStorage& storage = state.storage().value();
-        os << mwcu::PrintUtil::prettyNumber(
+        os << bmqu::PrintUtil::prettyNumber(
                   static_cast<bsls::Types::Int64>(storage.numMessages()))
-           << " messages, " << mwcu::PrintUtil::prettyBytes(storage.numBytes())
-           << mwcu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
+           << " messages, " << bmqu::PrintUtil::prettyBytes(storage.numBytes())
+           << bmqu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
            << "Num virtual storages: " << storage.virtualStorages().size();
 
         if (storage.virtualStorages().size()) {
@@ -779,7 +778,7 @@ void printQueueState(bsl::ostream&     os,
                 bdlb::Print::newlineAndIndent(os, level + 2, spacesPerLevel);
                 os << cit->appId() << " : [appKey: " << cit->appKey()
                    << ", numMessages: "
-                   << mwcu::PrintUtil::prettyNumber(
+                   << bmqu::PrintUtil::prettyNumber(
                           static_cast<bsls::Types::Int64>(cit->numMessages()))
                    << "]";
             }
@@ -789,7 +788,7 @@ void printQueueState(bsl::ostream&     os,
         os << "none";
     }
 
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Capacity Meter ....:";
     if (!state.capacityMeter().isNull()) {
         printCapacityMeter(os,
@@ -802,9 +801,9 @@ void printQueueState(bsl::ostream&     os,
     }
 
     os << "\n"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "QueueHandleCatalog:"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "-------------------";
     printQueueHandles(os, state.handles(), level + 1, spacesPerLevel);
     os << "\n";
@@ -816,8 +815,8 @@ void printMessageGroupIdManagerIndex(
     int                               level,
     int                               spacesPerLevel)
 {
-    os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel) << "Lru:"
-       << "\n";
+    os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << "Lru:" << "\n";
 
     {
         bslim::Printer printer(&os, level, spacesPerLevel);
@@ -832,7 +831,7 @@ void printMessageGroupIdManagerIndex(
             bsl::ostringstream key;
             bsl::ostringstream timeDelta;
             key << cit->clientDescription() << "#" << cit->msgGroupId();
-            mwcu::PrintUtil::prettyTimeInterval(
+            bmqu::PrintUtil::prettyTimeInterval(
                 timeDelta,
                 cit->lastSeenDeltaNanoseconds());
             printer.printAttribute(key.str().c_str(), timeDelta.str());
@@ -840,8 +839,7 @@ void printMessageGroupIdManagerIndex(
         printer.end();
     }
 
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "Handles:"
-       << "\n";
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "Handles:" << "\n";
     {
         bslim::Printer printer(&os, level, spacesPerLevel);
         printer.start();
@@ -866,18 +864,18 @@ void printMessageGroupIdHelper(
     int                         level,
     int                         spacesPerLevel)
 {
-    mwcu::OutStreamFormatSaver fmtSaver(os);
+    bmqu::OutStreamFormatSaver fmtSaver(os);
 
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel)
        << "MessageGroupIdManager:"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "timeout........: " << messageGroupIdHelper.timeoutNanoseconds()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "maxMsgGroupIds.: " << messageGroupIdHelper.maxMsgGroupIds()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "rebalance......: " << bsl::boolalpha
        << messageGroupIdHelper.isRebalanceOn()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "status.........: [";
 
     printMessageGroupIdManagerIndex(os,
@@ -885,7 +883,7 @@ void printMessageGroupIdHelper(
                                     level + 1,
                                     spacesPerLevel);
 
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "]";
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "]";
 }
 
 void printAppState(bsl::ostream&   os,
@@ -893,11 +891,11 @@ void printAppState(bsl::ostream&   os,
                    int             level,
                    int             spacesPerLevel)
 {
-    os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "Consumers .........: " << appState.numConsumers()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "RedeliveryList ....: " << appState.redeliveryListLength()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "RoundRobinRouter ..:\n";
 
     appState.roundRobinRouter().print(os, level + 1, spacesPerLevel);
@@ -908,13 +906,13 @@ void printFanoutQueueEngine(bsl::ostream&            os,
                             int                      level,
                             int                      spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel)
        << "FanoutQueueEngine (" << queueEngine.mode()
-       << "):" << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << "):" << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "-----------------";
 
     if (queueEngine.maxConsumers() != 0) {
-        os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
            << " (maxConsumers: " << queueEngine.maxConsumers() << ")";
     }
 
@@ -930,7 +928,7 @@ void printFanoutQueueEngine(bsl::ostream&            os,
     for (ConsumerStates::const_iterator cit = consumerStates.begin();
          cit != consumerStates.end();
          ++cit) {
-        os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
            << bsl::setw(maxAppIdLength) << bsl::setfill(' ') << bsl::left
            << cit->appId() << ": status=" << cit->status();
 
@@ -939,7 +937,7 @@ void printFanoutQueueEngine(bsl::ostream&            os,
                << cit->isAtEndOfStorage().value();
         }
 
-        os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
            << bsl::setw(maxAppIdLength) << bsl::setfill('-') << "-";
 
         printAppState(os, cit->appState(), level + 2, spacesPerLevel);
@@ -952,11 +950,11 @@ void printRelayQueueEngine(bsl::ostream&           os,
                            int                     level,
                            int                     spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "RelayQueueEngine:"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "RelayQueueEngine:"
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "-----------------";
 
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Num SubStreams ....: " << queueEngine.numSubstreams();
 
     if (queueEngine.numSubstreams()) {
@@ -965,7 +963,7 @@ void printRelayQueueEngine(bsl::ostream&           os,
         for (SubStreams::const_iterator cit = subStreams.cbegin();
              cit != subStreams.cend();
              ++cit) {
-            os << mwcu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
+            os << bmqu::PrintUtil::newlineAndIndent(level + 2, spacesPerLevel)
                << "[" << cit->appId() << "] - [" << cit->appKey()
                << "] : " << cit->numMessages();
         }
@@ -976,9 +974,9 @@ void printRelayQueueEngine(bsl::ostream&           os,
     for (AppStates::const_iterator cit = appStates.begin();
          cit != appStates.end();
          ++cit) {
-        os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
            << "App: " << cit->appId()
-           << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+           << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
            << "-----------------";
         printAppState(os, *cit, level + 2, spacesPerLevel);
     }
@@ -1010,8 +1008,8 @@ void printLocalQueue(bsl::ostream&     os,
                      int               level,
                      int               spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "LocalQueue:"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "LocalQueue:"
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "-----------\n";
     printQueueEngine(os, localQueue.queueEngine(), level + 1, spacesPerLevel);
 }
@@ -1021,7 +1019,7 @@ void printRemoteStream(bsl::ostream&           os,
                        int                     level,
                        int                     spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel)
        << "[Id: " << info.id() << ", state: " << info.state()
        << ", genCount: " << info.genCount() << "]\n";
 }
@@ -1030,29 +1028,28 @@ void printRemoteQueue(bsl::ostream&      os,
                       int                level,
                       int                spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "RemoteQueue:"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "RemoteQueue:"
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "------------\n";
 
-    os << mwcu::PrintUtil::indent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level + 1, spacesPerLevel)
        << "Pending PUTs .......................: "
        << remoteQueue.numPendingPuts() << " items\n";
-    os << mwcu::PrintUtil::indent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level + 1, spacesPerLevel)
        << "Pending CONFIRMs ...................: "
        << remoteQueue.numPendingConfirms() << " items\n";
-    os << mwcu::PrintUtil::indent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level + 1, spacesPerLevel)
        << "Has PUSH expiration timer scheduled : "
        << (remoteQueue.isPushExpirationTimerScheduled() ? "yes" : "no")
        << "\n";
 
-    os << mwcu::PrintUtil::indent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level + 1, spacesPerLevel)
        << "Upstream generation count ..........: "
        << remoteQueue.numUpstreamGeneration() << "\n";
 
     size_t num = remoteQueue.streams().size();
-    os << mwcu::PrintUtil::indent(level + 1, spacesPerLevel)
-       << "Streams ............................: "
-       << "\n";
+    os << bmqu::PrintUtil::indent(level + 1, spacesPerLevel)
+       << "Streams ............................: " << "\n";
 
     typedef bsl::vector<RemoteStreamInfo> Streams;
     const Streams&                        streams = remoteQueue.streams();
@@ -1094,23 +1091,23 @@ void printQueuesInfo(bsl::ostream&         os,
                      int                   level,
                      int                   spacesPerLevel)
 {
-    mwcu::OutStreamFormatSaver fmtSaver(os);
+    bmqu::OutStreamFormatSaver fmtSaver(os);
 
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "Queues"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel) << "------"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel);
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "Queues"
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel) << "------"
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel);
 
     typedef bsl::vector<StorageQueueInfo> QueuesInfo;
     const QueuesInfo&                     queues = queuesInfo.storages();
     os << "Num Queues: " << queues.size();
     if (!queues.empty()) {
-        os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
            << " QueueKey    Partition    Internal QueueId          QueueUri";
     }
 
     for (QueuesInfo::const_iterator cit = queues.begin(); cit != queues.end();
          ++cit) {
-        os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
            << cit->queueKey() << "       " << cit->partitionId()
            << "           " << bsl::setfill(' ') << bsl::setw(10)
            << bmqp::QueueId::QueueIdInt(cit->internalQueueId()) << "       "
@@ -1123,20 +1120,20 @@ void printPartitionsInfo(bsl::ostream&         os,
                          int                   level,
                          int                   spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "Partitions"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "Partitions"
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "----------";
 
     const bsl::vector<PartitionInfo>& partitions = partitionsInfo.partitions();
     for (unsigned int i = 0; i < partitions.size(); ++i) {
-        os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
            << "PartitionId: " << i
-           << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
-           << "Num Queues    :"
-           << " mapped (" << partitions[i].numQueuesMapped() << "),"
-           << " active (" << partitions[i].numActiveQueues() << ")";
+           << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+           << "Num Queues    :" << " mapped ("
+           << partitions[i].numQueuesMapped() << ")," << " active ("
+           << partitions[i].numActiveQueues() << ")";
 
-        os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel);
+        os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel);
         if (!partitions[i].primaryNode().isNull()) {
             os << "Primary Node   : " << partitions[i].primaryNode().value();
         }
@@ -1144,9 +1141,9 @@ void printPartitionsInfo(bsl::ostream&         os,
             os << "Primary Node   : "
                << "[ ** NONE ** ]";
         }
-        os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
            << "Primary LeaseId: " << partitions[i].primaryLeaseId()
-           << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+           << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
            << "Primary Status : " << partitions[i].primaryStatus();
     }
 }
@@ -1156,19 +1153,19 @@ void printElectorInfo(bsl::ostream&      os,
                       int                level,
                       int                spacesPerLevel)
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "Elector"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "Elector"
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "-------\n"
-       << mwcu::PrintUtil::indent(level, spacesPerLevel)
+       << bmqu::PrintUtil::indent(level, spacesPerLevel)
        << "Self State            : " << electorInfo.electorState()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "Leader Node           : " << electorInfo.leaderNode()
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "Leader Sequence Number: [ electorTerm = "
        << electorInfo.leaderMessageSequence().electorTerm()
        << " sequenceNumber = "
        << electorInfo.leaderMessageSequence().sequenceNumber() << " ]"
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "Leader Status         : " << electorInfo.leaderStatus();
 }
 
@@ -1177,17 +1174,17 @@ void printNodeStatuses(bsl::ostream&       os,
                        int                 level,
                        int                 spacesPerLevel)
 {
-    mwcu::OutStreamFormatSaver fmtSaver(os);
+    bmqu::OutStreamFormatSaver fmtSaver(os);
 
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "Nodes";
-    os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel) << "-----";
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "Nodes";
+    os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel) << "-----";
     typedef bsl::vector<ClusterNodeInfo> Nodes;
     const Nodes&                         nodes = nodeStatuses.nodes();
     for (Nodes::const_iterator cit = nodes.cbegin(); cit != nodes.cend();
          ++cit) {
-        os << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
            << cit->description();
-        os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel);
+        os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel);
         if (cit->isAvailable().isNull()) {
             os << "IsConnected: self";
         }
@@ -1195,11 +1192,11 @@ void printNodeStatuses(bsl::ostream&       os,
             os << "IsConnected: " << bsl::boolalpha
                << cit->isAvailable().value();
         }
-        os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+        os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
            << "Node Status: " << cit->status();
 
         if (cit->primaryForPartitionIds().size() > 0) {
-            os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+            os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
                << "Primary for partitions: [ ";
             for (unsigned int i = 0; i < cit->primaryForPartitionIds().size();
                  ++i) {
@@ -1224,14 +1221,14 @@ void printClusterStatus(bsl::ostream&        os,
     for (size_t i = 0; i < clusterStatus.name().size() + 5; ++i) {
         os << "-";
     }
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Cluster name  : " << clusterStatus.description();
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Cluster size  : " << clusterStatus.nodeStatuses().nodes().size()
        << " node(s)";
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Self Node     : " << clusterStatus.selfNodeDescription();
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Is Healthy    : " << (clusterStatus.isHealthy() ? "Yes" : "No");
 
     os << "\n\n";
@@ -1263,13 +1260,13 @@ void printClusterProxyStatus(bsl::ostream&             os,
                              int                       level,
                              int                       spacesPerLevel)
 {
-    mwcu::OutStreamFormatSaver fmtSaver(os);
+    bmqu::OutStreamFormatSaver fmtSaver(os);
 
     os << "Cluster\n"
        << "-------"
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Cluster name: " << clusterProxyStatus.description()
-       << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+       << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Active node : ";
 
     if (!clusterProxyStatus.activeNodeDescription().isNull()) {
@@ -1279,7 +1276,7 @@ void printClusterProxyStatus(bsl::ostream&             os,
         os << "* none *";
     }
 
-    os << mwcu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
+    os << bmqu::PrintUtil::newlineAndIndent(level + 1, spacesPerLevel)
        << "Is Healthy  : " << (clusterProxyStatus.isHealthy() ? "Yes" : "No")
        << "\n";
 
@@ -1424,6 +1421,27 @@ bsl::ostream& HumanPrinter::print(bsl::ostream& os,
     }
     else {
         BSLS_ASSERT_SAFE(false && "Unsupported result");
+    }
+    return os;
+}
+
+bsl::ostream&
+HumanPrinter::printResponses(bsl::ostream&            os,
+                             const RouteResponseList& responseList)
+{
+    typedef bsl::vector<BloombergLP::mqbcmd::RouteResponse>
+        RouteResponseVector;
+
+    RouteResponseVector responses = responseList.responses();
+
+    for (RouteResponseVector::const_iterator respIt = responses.begin();
+         respIt != responses.end();
+         ++respIt) {
+        os << "Response from node \"" << respIt->sourceNodeDescription()
+           << "\":";
+        os << bsl::endl;
+        os << respIt->response();
+        os << bsl::endl;
     }
     return os;
 }

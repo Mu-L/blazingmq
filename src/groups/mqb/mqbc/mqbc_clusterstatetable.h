@@ -17,22 +17,18 @@
 #ifndef INCLUDED_MQBC_CLUSTERSTATETABLE
 #define INCLUDED_MQBC_CLUSTERSTATETABLE
 
-//@PURPOSE: Provide a state table for the Cluster FSM.
-//
-//@CLASSES:
-//  mqbc::ClusterStateTableState:   Enum for state in the cluster state table.
-//  mqbc::ClusterStateTableEvent:   Enum for event in the cluster state table.
-//  mqbc::ClusterStateTableActions: Actions in the cluster state table.
-//  mqbc::ClusterStateTable:        State table for the Cluster FSM.
-//
-//@DESCRIPTION: 'mqbc::ClusterStateTable' is a state table for the Cluster FSM.
-//
-/// Thread Safety
-///-------------
-// The 'mqbc::ClusterStateTable' object is not thread safe.
+/// @file mqbc_clusterstatetable.h
+///
+/// @brief Provide a state table for the Cluster FSM.
+///
+/// @bbref{mqbc::ClusterStateTable} is a state table for the Cluster FSM.
+///
+/// Thread Safety                              {#mqbc_clusterstatetable_thread}
+/// =============
+///
+/// The @bbref{mqbc::ClusterStateTable} object is not thread safe.
 
 // MQB
-
 #include <mqbu_statetable.h>
 
 // BDE
@@ -51,9 +47,9 @@ namespace mqbc {
 /// This struct defines the type of state in the cluster state table.
 struct ClusterStateTableState {
     // TYPES
-    enum Enum {
-        // Enumeration used to distinguish among different type of state
 
+    /// Enumeration used to distinguish among different type of state.
+    enum Enum {
         e_UNKNOWN          = 0,
         e_FOL_HEALING      = 1,
         e_LDR_HEALING_STG1 = 2,
@@ -78,7 +74,7 @@ struct ClusterStateTableState {
     /// negative, format the entire output on one line, suppressing all but
     /// the initial indentation (as governed by `level`).  See `toAscii` for
     /// what constitutes the string representation of a
-    /// `ClusterStateTableState::Enum` value.
+    /// @bbref{ClusterStateTableState::Enum} value.
     static bsl::ostream& print(bsl::ostream&                stream,
                                ClusterStateTableState::Enum value,
                                int                          level = 0,
@@ -116,9 +112,9 @@ bsl::ostream& operator<<(bsl::ostream&                stream,
 /// This struct defines the type of event in the cluster state table.
 struct ClusterStateTableEvent {
     // TYPES
-    enum Enum {
-        // Enumeration used to distinguish among different type of event
 
+    /// Enumeration used to distinguish among different type of event.
+    enum Enum {
         e_SLCT_LDR               = 0,
         e_SLCT_FOL               = 1,
         e_FOL_LSN_RQST           = 2,
@@ -157,7 +153,7 @@ struct ClusterStateTableEvent {
     /// negative, format the entire output on one line, suppressing all but
     /// the initial indentation (as governed by `level`).  See `toAscii` for
     /// what constitutes the string representation of a
-    /// `ClusterStateTableEvent::Enum` value.
+    /// @bbref{ClusterStateTableEvent::Enum} value.
     static bsl::ostream& print(bsl::ostream&                stream,
                                ClusterStateTableEvent::Enum value,
                                int                          level = 0,
@@ -215,6 +211,8 @@ class ClusterStateTableActions {
     virtual void do_triggerWatchDog(const ARGS& args) = 0;
 
     virtual void do_applyCSLSelf(const ARGS& args) = 0;
+
+    virtual void do_initializeQueueKeyInfoMap(const ARGS& args) = 0;
 
     virtual void do_sendFollowerLSNRequests(const ARGS& args) = 0;
 
@@ -275,6 +273,8 @@ class ClusterStateTableActions {
     void do_stopWatchDog_cancelRequests(const ARGS& args);
 
     void do_stopWatchDog_cancelRequests_reapplyEvent(const ARGS& args);
+
+    void do_stopWatchDog_initializeQueueKeyInfoMap(const ARGS& args);
 
     void do_stopWatchDog_cleanupLSNs_cancelRequests(const ARGS& args);
 
@@ -395,7 +395,10 @@ class ClusterStateTable
                 FOL_CSL_RQST,
                 sendFollowerClusterStateResponse,
                 FOL_HEALING);
-        CST_CFG(FOL_HEALING, CSL_CMT_SUCCESS, stopWatchDog, FOL_HEALED);
+        CST_CFG(FOL_HEALING,
+                CSL_CMT_SUCCESS,
+                stopWatchDog_initializeQueueKeyInfoMap,
+                FOL_HEALED);
         CST_CFG(FOL_HEALING, CSL_CMT_FAIL, triggerWatchDog, UNKNOWN);
         CST_CFG(FOL_HEALING,
                 RST_UNKNOWN,
@@ -509,7 +512,10 @@ class ClusterStateTable
                 REGISTRATION_RQST,
                 storeFollowerLSNs_sendRegistrationResponse,
                 LDR_HEALING_STG2);
-        CST_CFG(LDR_HEALING_STG2, CSL_CMT_SUCCESS, stopWatchDog, LDR_HEALED);
+        CST_CFG(LDR_HEALING_STG2,
+                CSL_CMT_SUCCESS,
+                stopWatchDog_initializeQueueKeyInfoMap,
+                LDR_HEALED);
         CST_CFG(LDR_HEALING_STG2, CSL_CMT_FAIL, triggerWatchDog, UNKNOWN);
         CST_CFG(LDR_HEALING_STG2,
                 RST_UNKNOWN,
@@ -622,6 +628,14 @@ void ClusterStateTableActions<
     do_stopWatchDog(args);
     do_cancelRequests(args);
     do_reapplyEvent(args);
+}
+
+template <typename ARGS>
+void ClusterStateTableActions<ARGS>::do_stopWatchDog_initializeQueueKeyInfoMap(
+    const ARGS& args)
+{
+    do_stopWatchDog(args);
+    do_initializeQueueKeyInfoMap(args);
 }
 
 template <typename ARGS>

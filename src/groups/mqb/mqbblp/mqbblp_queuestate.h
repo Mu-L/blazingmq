@@ -17,12 +17,11 @@
 #ifndef INCLUDED_MQBBLP_QUEUESTATE
 #define INCLUDED_MQBBLP_QUEUESTATE
 
-//@PURPOSE: Provide a value-semantic type holding the state of a queue.
-//
-//@CLASSES:
-//  mqbblp::QueueState: value-semantic type holding the state of a queue.
-//
-//@DESCRIPTION: TBD:
+/// @file mqbblp_queuestate.h
+///
+/// @brief Provide a value-semantic type holding the state of a queue.
+///
+/// @todo Document component.
 
 // MQB
 
@@ -62,9 +61,6 @@ namespace mqbcmd {
 class QueueState;
 }
 namespace mqbi {
-class AppKeyGenerator;
-}
-namespace mqbi {
 class Storage;
 }
 namespace mqbi {
@@ -79,11 +75,10 @@ namespace mqbblp {
 // class QueueState
 // ================
 
-/// value-semantic type holding the state of a queue
+/// Value-semantic type holding the state of a queue.
 class QueueState {
   public:
     // TYPES
-    typedef bslma::ManagedPtr<mqbi::Storage> StorageMp;
 
     /// `SubQueuesParameters` is an alias for a map of QueueStreamParameters
     /// (subQueueId) -> queueStreamParameters
@@ -102,85 +97,66 @@ class QueueState {
                                bmqp_ctrlmsg::QueueHandleParameters>
         SubQueuesHandleParameters;
 
-    typedef mwcc::Array<bsl::shared_ptr<QueueEngineUtil_AppState>,
+    typedef bmqc::Array<bsl::shared_ptr<QueueEngineUtil_AppState>,
                         bmqp::Protocol::k_SUBID_ARRAY_STATIC_LEN>
         SubQueues;
 
   private:
     // DATA
+
+    /// The queue associated to this state.
     mqbi::Queue* d_queue_p;
-    // The queue associated to this state.
 
+    /// The URI of the queue associated to this state.
     bmqt::Uri d_uri;
-    // The URI of the queue associated to
-    // this state.
 
+    /// A description of the queue associated to this state.
     bsl::string d_description;
-    // A description of the queue
-    // associated to this state.
 
+    /// Upstream id of the queue associated to this state.
     unsigned int d_id;
-    // Upstream id of the queue associated
-    // to this state.
 
+    /// QueueKey of the queue associated to this state.
     mqbu::StorageKey d_key;
-    // QueueKey of the queue associated to
-    // this state.
 
+    /// Aggregated parameters of all currently opened queueHandles to the queue
+    /// associated to this state.
     bmqp_ctrlmsg::QueueHandleParameters d_handleParameters;
-    // Aggregated parameters of all
-    // currently opened queueHandles to the
-    // queue associated to this state.
 
     SubQueuesParameters d_subQueuesParametersMap;
 
+    /// Cumulative values per AppId.
     SubQueuesHandleParameters d_subQueuesHandleParameters;
-    // cumulative values per AppId.
 
+    /// PartitionId affected to the queue associated to this state.
     int d_partitionId;
-    // PartitionId affected to the queue
-    // associated to this state.
 
+    /// Domain the queue associated to this state belongs to.
     mqbi::Domain* d_domain_p;
-    // Domain the queue associated to this
-    // state belongs to.
 
+    /// Storage manager to use.
     mqbi::StorageManager* d_storageManager_p;
-    // Storage manager to use.
 
-    mqbi::AppKeyGenerator* d_appKeyGenerator_p;
-    // App key generator to use.
+    const mqbi::ClusterResources d_resources;
 
-    bdlbb::BlobBufferFactory* d_blobBufferFactory_p;
-    // BlobBufferFactory to use.
-
-    bdlmt::EventScheduler* d_scheduler_p;
-    // EventScheduler to use.
-
+    /// Thread pool used for any standalone work that can be offloaded to any
+    /// non-dispatcher threads.
     bdlmt::FixedThreadPool* d_miscWorkThreadPool_p;
-    // Thread pool used for any standalone
-    // work that can be  offloaded to any
-    // non-dispatcher threads.
 
-    StorageMp d_storage_mp;
-    // Storage used by the queue associated
-    // to this state.
+    /// Storage used by the queue associated to this state.
+    bsl::shared_ptr<mqbi::Storage> d_storage_sp;
 
+    /// Dispatcher Client Data of the queue associated to this state.
     mqbi::DispatcherClientData d_dispatcherClientData;
-    // Dispatcher Client Data of the queue
-    // associated to this state.
 
-    mqbstat::QueueStatsDomain d_stats;
-    // Statistics of the queue associated
-    // to this state.
+    /// Statistics of the queue associated to this state.
+    bsl::shared_ptr<mqbstat::QueueStatsDomain> d_stats_sp;
 
+    /// The routing configuration for this queue.
     bmqp_ctrlmsg::RoutingConfiguration d_routingConfig;
-    // The routing configuration for this
-    // queue.
 
+    /// The throttling thresholds and delay values for poison messages.
     mqbcfg::MessageThrottleConfig d_messageThrottleConfig;
-    // The throttling thresholds and delay
-    // values for poison messages
 
     QueueHandleCatalog d_handleCatalog;
 
@@ -201,32 +177,30 @@ class QueueState {
 
     // CREATORS
 
-    /// Create a new `QueueState` associated to the specified `queue` and
-    /// having the specified `uri`, `id`, `key`, `partitionId` and `domain`.
-    /// Use the specified `allocator` for any memory allocations.
-    QueueState(mqbi::Queue*            queue,
-               const bmqt::Uri&        uri,
-               unsigned int            id,
-               const mqbu::StorageKey& key,
-               int                     partitionId,
-               mqbi::Domain*           domain,
-               bslma::Allocator*       allocator);
+    /// Create a new 'QueueState' associated to the specified 'queue' and
+    /// having the specified 'uri', 'id', 'key', 'partitionId', 'domain', and
+    /// 'resources'.  Use the specified 'allocator' for any memory allocations.
+    QueueState(mqbi::Queue*                 queue,
+               const bmqt::Uri&             uri,
+               unsigned int                 id,
+               const mqbu::StorageKey&      key,
+               int                          partitionId,
+               mqbi::Domain*                domain,
+               const mqbi::ClusterResources resources,
+               bslma::Allocator*            allocator);
 
     /// Destructor
     ~QueueState();
 
     // MANIPULATORS
-    QueueState& setBlobBufferFactory(bdlbb::BlobBufferFactory* value);
-    QueueState& setEventScheduler(bdlmt::EventScheduler* scheduler);
     QueueState& setMiscWorkThreadPool(bdlmt::FixedThreadPool* threadPool);
     QueueState& setDescription(const bslstl::StringRef& value);
     QueueState& setDomain(mqbi::Domain* value);
     QueueState& setId(unsigned int value);
     QueueState& setKey(const mqbu::StorageKey& key);
     QueueState& setPartitionId(int value);
-    QueueState& setStorage(StorageMp& value);
+    QueueState& setStorage(const bsl::shared_ptr<mqbi::Storage>& value);
     QueueState& setStorageManager(mqbi::StorageManager* value);
-    QueueState& setAppKeyGenerator(mqbi::AppKeyGenerator* value);
     QueueState&
     setRoutingConfig(const bmqp_ctrlmsg::RoutingConfiguration& routingConfig);
     QueueState& setMessageThrottleConfig(
@@ -250,9 +224,8 @@ class QueueState {
     bool removeUpstreamParameters(
         unsigned int subQueueId = bmqp::QueueId::k_DEFAULT_SUBQUEUE_ID);
 
-    /// Return a reference offering modifiable access to the corresponding
-    /// attribute.
-    mqbstat::QueueStatsDomain& stats();
+    /// Set the corresponding attribute to the specified `stats`.
+    void setStats(const bsl::shared_ptr<mqbstat::QueueStatsDomain>& stats);
 
     /// Add read, write, and admin counters from the specified `params` to
     /// cumulative values per queue and per appId.
@@ -282,6 +255,9 @@ class QueueState {
     /// Return reference to the structures for the queue engine routing.
     Routers::QueueRoutingContext& routingContext();
 
+    /// Update the stats to the current values in the handleParamaters
+    void updateStats();
+
     // ACCESSORS
 
     /// Return true if the queue has upstream parameters for the specified
@@ -291,26 +267,30 @@ class QueueState {
         bmqp_ctrlmsg::StreamParameters* value,
         unsigned int subQueueId = bmqp::QueueId::k_DEFAULT_SUBQUEUE_ID) const;
 
-    bdlbb::BlobBufferFactory*                  blobBufferFactory() const;
-    bdlmt::EventScheduler*                     scheduler() const;
-    bdlmt::FixedThreadPool*                    miscWorkThreadPool() const;
-    const bsl::string&                         description() const;
-    const mqbi::DispatcherClientData&          dispatcherClientData() const;
-    mqbi::Domain*                              domain() const;
-    unsigned int                               id() const;
-    const mqbu::StorageKey&                    key() const;
-    const QueueHandleCatalog&                  handleCatalog() const;
-    const bmqp_ctrlmsg::QueueHandleParameters& handleParameters() const;
+    bdlbb::BlobBufferFactory*                    blobBufferFactory() const;
+    bdlmt::EventScheduler*                       scheduler() const;
+    mqbi::ClusterResources::BlobSpPool*          blobSpPool() const;
+    const bsl::optional<bdlma::ConcurrentPool*>& pushElementsPool() const;
+    bdlmt::FixedThreadPool*                      miscWorkThreadPool() const;
+    const bsl::string&                           description() const;
+    const mqbi::DispatcherClientData&            dispatcherClientData() const;
+    mqbi::Domain*                                domain() const;
+    unsigned int                                 id() const;
+    const mqbu::StorageKey&                      key() const;
+    const QueueHandleCatalog&                    handleCatalog() const;
+    const bmqp_ctrlmsg::QueueHandleParameters&   handleParameters() const;
 
     int                                       partitionId() const;
     mqbi::Queue*                              queue() const;
     mqbi::Storage*                            storage() const;
     mqbi::StorageManager*                     storageManager() const;
-    mqbi::AppKeyGenerator*                    appKeyGenerator() const;
-    bool                                      isCSLModeEnabled() const;
     const bmqp_ctrlmsg::RoutingConfiguration& routingConfig() const;
     const mqbcfg::MessageThrottleConfig&      messageThrottleConfig() const;
     const bmqt::Uri&                          uri() const;
+
+    /// Return a reference offering non-modifiable access to the shared pointer
+    /// to the QueueStatsDomain.
+    const bsl::shared_ptr<mqbstat::QueueStatsDomain>& stats() const;
 
     /// Print to the specified `out` object the internal details about this
     /// queue state.
@@ -322,7 +302,8 @@ class QueueState {
 
     /// Return `true` if the specified `storage` is compatible with the
     /// current configuration, or `false` otherwise.
-    bool isStorageCompatible(const StorageMp& storageMp) const;
+    bool
+    isStorageCompatible(const bsl::shared_ptr<mqbi::Storage>& storageSp) const;
 
     /// Return `true` if the configuration for this queue requires
     /// at-most-once semantics or `false` otherwise.
@@ -354,19 +335,6 @@ class QueueState {
 // ----------------
 
 // MANIPULATORS
-inline QueueState&
-QueueState::setBlobBufferFactory(bdlbb::BlobBufferFactory* value)
-{
-    d_blobBufferFactory_p = value;
-    return *this;
-}
-
-inline QueueState&
-QueueState::setEventScheduler(bdlmt::EventScheduler* scheduler)
-{
-    d_scheduler_p = scheduler;
-    return *this;
-}
 
 inline QueueState&
 QueueState::setMiscWorkThreadPool(bdlmt::FixedThreadPool* threadPool)
@@ -405,21 +373,16 @@ inline QueueState& QueueState::setPartitionId(int value)
     return *this;
 }
 
-inline QueueState& QueueState::setStorage(StorageMp& value)
+inline QueueState&
+QueueState::setStorage(const bsl::shared_ptr<mqbi::Storage>& value)
 {
-    d_storage_mp = value;
+    d_storage_sp = value;
     return *this;
 }
 
 inline QueueState& QueueState::setStorageManager(mqbi::StorageManager* value)
 {
     d_storageManager_p = value;
-    return *this;
-}
-
-inline QueueState& QueueState::setAppKeyGenerator(mqbi::AppKeyGenerator* value)
-{
-    d_appKeyGenerator_p = value;
     return *this;
 }
 
@@ -487,9 +450,10 @@ QueueState::getUpstreamParameters(bmqp_ctrlmsg::StreamParameters* value,
     return true;
 }
 
-inline mqbstat::QueueStatsDomain& QueueState::stats()
+inline void
+QueueState::setStats(const bsl::shared_ptr<mqbstat::QueueStatsDomain>& stats)
 {
-    return d_stats;
+    d_stats_sp = stats;
 }
 
 inline void
@@ -498,7 +462,7 @@ QueueState::adopt(const bsl::shared_ptr<QueueEngineUtil_AppState>& app)
     unsigned int upstreamSubQueueId = app->upstreamSubQueueId();
 
     if (upstreamSubQueueId == bmqp::QueueId::k_UNASSIGNED_SUBQUEUE_ID) {
-        upstreamSubQueueId = d_subStreams.size();
+        upstreamSubQueueId = static_cast<unsigned int>(d_subStreams.size());
         app->setUpstreamSubQueueId(upstreamSubQueueId);
     }
 
@@ -524,12 +488,23 @@ inline Routers::QueueRoutingContext& QueueState::routingContext()
 // ACCESSORS
 inline bdlbb::BlobBufferFactory* QueueState::blobBufferFactory() const
 {
-    return d_blobBufferFactory_p;
+    return d_resources.bufferFactory();
 }
 
 inline bdlmt::EventScheduler* QueueState::scheduler() const
 {
-    return d_scheduler_p;
+    return d_resources.scheduler();
+}
+
+inline mqbi::ClusterResources::BlobSpPool* QueueState::blobSpPool() const
+{
+    return d_resources.blobSpPool();
+}
+
+inline const bsl::optional<bdlma::ConcurrentPool*>&
+QueueState::pushElementsPool() const
+{
+    return d_resources.pushElementsPool();
 }
 
 inline bdlmt::FixedThreadPool* QueueState::miscWorkThreadPool() const
@@ -592,17 +567,12 @@ inline mqbi::Queue* QueueState::queue() const
 
 inline mqbi::Storage* QueueState::storage() const
 {
-    return d_storage_mp.get();
+    return d_storage_sp.get();
 }
 
 inline mqbi::StorageManager* QueueState::storageManager() const
 {
     return d_storageManager_p;
-}
-
-inline mqbi::AppKeyGenerator* QueueState::appKeyGenerator() const
-{
-    return d_appKeyGenerator_p;
 }
 
 inline const bmqp_ctrlmsg::RoutingConfiguration&
@@ -622,9 +592,11 @@ inline const bmqt::Uri& QueueState::uri() const
     return d_uri;
 }
 
-inline bool QueueState::isCSLModeEnabled() const
+inline const bsl::shared_ptr<mqbstat::QueueStatsDomain>&
+QueueState::stats() const
 {
-    return d_domain_p->cluster()->isCSLModeEnabled();
+    BSLS_ASSERT_SAFE(d_stats_sp);
+    return d_stats_sp;
 }
 
 inline const QueueState::SubQueues& QueueState::subQueues() const

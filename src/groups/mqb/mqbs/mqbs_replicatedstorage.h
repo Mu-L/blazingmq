@@ -72,13 +72,14 @@ class ReplicatedStorage : public mqbi::Storage {
                                       unsigned int                 refCount,
                                       const DataStoreRecordHandle& handle) = 0;
 
-    /// Process the CONFIRM record having the specified `guid` and `appKey`
-    /// and use the specified `handle` to retrieve the confirm record from
-    /// the underlying persistent store.  Note that `appKey` can be null.
+    /// Process the CONFIRM record having the specified `guid`, `appKey`, and
+    /// `reason`.  Use the specified `handle` to retrieve the confirm record
+    /// from the underlying persistent store.  Note that `appKey` can be null.
     /// Also note that this routine is supposed to be invoked at replica
     /// nodes, and the record will not be replicated to peer nodes.
     virtual void processConfirmRecord(const bmqt::MessageGUID&     guid,
                                       const mqbu::StorageKey&      appKey,
+                                      ConfirmReason::Enum          reason,
                                       const DataStoreRecordHandle& handle) = 0;
 
     /// Process the DELETION having the specified `guid`.  Note that this
@@ -97,9 +98,21 @@ class ReplicatedStorage : public mqbi::Storage {
     /// replica nodes, and the record will not be replicated to peer nodes.
     virtual void purge(const mqbu::StorageKey& appKey) = 0;
 
+    /// Notify the storage of node role set to primary
+    virtual void setPrimary() = 0;
+
+    /// Calculate offsets of all Apps (after recovery) in the data stream.
+    /// An App offset is the number of messages older than the App.
+    virtual void calibrate() = 0;
+
+    // ACCESSORS
+
     /// Return a non-modifiable list of handles of all QUEUEOP records
     /// associated with this storage.
     virtual const RecordHandles& queueOpRecordHandles() const = 0;
+
+    // Return 'true' if the storage is of the strong consistency
+    virtual bool isStrongConsistency() const = 0;
 };
 
 // ============================================================================

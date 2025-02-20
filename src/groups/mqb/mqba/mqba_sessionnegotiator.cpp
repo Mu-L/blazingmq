@@ -23,9 +23,9 @@
 // mode waits for incoming connection; when one is established, it will
 // schedule a read with a short timeout ('k_NEGOTIATION_READTIMEOUT' below).
 // If a valid negotiation message is received, it will reply with its identity
-// and create a session.  If either the read timesout, the received negotiation
-// message is invalid, or the received identity is marked as blacklisted, the
-// negotiation will fail and the connection will be closed.
+// and create a session.  If either the read times out, the received
+// negotiation message is invalid, or the received identity is marked as not
+// allowed, the negotiation will fail and the connection will be closed.
 //
 /// Session creation logic
 ///----------------------
@@ -80,13 +80,12 @@
 #include <bmqp_schemaeventbuilder.h>
 #include <bmqscm_version.h>
 
-// MWC
-#include <mwcio_channelutil.h>
-#include <mwcio_tcpendpoint.h>
-#include <mwcst_statcontext.h>
-#include <mwcsys_time.h>
-#include <mwcu_blob.h>
-#include <mwcu_memoutstream.h>
+#include <bmqio_channelutil.h>
+#include <bmqio_tcpendpoint.h>
+#include <bmqst_statcontext.h>
+#include <bmqsys_time.h>
+#include <bmqu_blob.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <ball_log.h>
@@ -133,7 +132,9 @@ void loadBrokerIdentity(bmqp_ctrlmsg::ClientIdentity* identity,
         .append(";")
         .append(bmqp::HighAvailabilityFeatures::k_FIELD_NAME)
         .append(":")
-        .append(bmqp::HighAvailabilityFeatures::k_GRACEFUL_SHUTDOWN);
+        .append(bmqp::HighAvailabilityFeatures::k_GRACEFUL_SHUTDOWN)
+        .append(",")
+        .append(bmqp::HighAvailabilityFeatures::k_GRACEFUL_SHUTDOWN_V2);
 
     if (shouldBroadcastToProxies) {
         features.append(",").append(
@@ -146,6 +147,17 @@ void loadBrokerIdentity(bmqp_ctrlmsg::ClientIdentity* identity,
             .append(bmqp::MessagePropertiesFeatures::k_FIELD_NAME)
             .append(":")
             .append(bmqp::MessagePropertiesFeatures::k_MESSAGE_PROPERTIES_EX);
+
+        const mqbcfg::AppConfig& theConfig = mqbcfg::BrokerConfig::get();
+
+        if (theConfig.brokerVersion() == 999999 ||
+            (theConfig.configureStream() &&
+             theConfig.advertiseSubscriptions())) {
+            features.append(";")
+                .append(bmqp::SubscriptionsFeatures::k_FIELD_NAME)
+                .append(":")
+                .append(bmqp::SubscriptionsFeatures::k_CONFIGURE_STREAM);
+        }
     }
 
     identity->protocolVersion() = bmqp::Protocol::k_VERSION;
@@ -168,14 +180,17 @@ void loadBrokerIdentity(bmqp_ctrlmsg::ClientIdentity* identity,
 {
     bool shouldExtendMessageProperties = false;
 
-    if (mqbcfg::BrokerConfig::get().brokerVersion() == 999999) {
+    // TODO: make this unconditional.  Currently, 'V2' is controlled by config
+    // as a means to prevent SDK from generating 'V2'.
+    // Regardless of SDK, brokers now decompress MPs and send ConfigureStream.
+
+    const mqbcfg::AppConfig& theConfig = mqbcfg::BrokerConfig::get();
+    if (theConfig.brokerVersion() == 999999) {
         // Always advertise v2 (EX) support in test build (developer workflow,
         // CI, Jenkins, etc).
         shouldExtendMessageProperties = true;
     }
-    else if (mqbcfg::BrokerConfig::get()
-                 .messagePropertiesV2()
-                 .advertiseV2Support()) {
+    else if (theConfig.messagePropertiesV2().advertiseV2Support()) {
         // In non test build (i.e., dev and non-dev deployments, advertise v2
         // (EX) support only if configured like that.
 
@@ -193,7 +208,7 @@ void loadBrokerIdentity(bmqp_ctrlmsg::ClientIdentity* identity,
 /// Load in the specified `out` the short description representing the
 /// specified `identity` from the specified `peerChannel`.  The format is as
 /// follow:
-///    tskName:pid.sessionId[@hostId]
+///    tskName:pid.sessionId[\@hostId]
 /// Where:
 ///  - tskName   : the task name, without any optional leading path
 ///  - pid       : the pid of the task
@@ -205,9 +220,9 @@ void loadBrokerIdentity(bmqp_ctrlmsg::ClientIdentity* identity,
 ///                not.
 void loadSessionDescription(bsl::string*                        out,
                             const bmqp_ctrlmsg::ClientIdentity& identity,
-                            const mwcio::Channel&               peerChannel)
+                            const bmqio::Channel&               peerChannel)
 {
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
 
     // Task Name
     bsl::string baseName;
@@ -235,7 +250,7 @@ void loadSessionDescription(bsl::string*                        out,
 
     ntsa::Ipv4Address ipv4Address(static_cast<bsl::uint32_t>(peerAddress));
     ntsa::IpAddress   ipAddress(ipv4Address);
-    if (!mwcio::ChannelUtil::isLocalHost(ipAddress)) {
+    if (!bmqio::ChannelUtil::isLocalHost(ipAddress)) {
         os << "@" << identity.hostName();
     }
 
@@ -247,7 +262,7 @@ void loadSessionDescription(bsl::string*                        out,
 // class SessionNegotiator
 // -----------------------
 
-void SessionNegotiator::readCallback(const mwcio::Status&        status,
+void SessionNegotiator::readCallback(const bmqio::Status&        status,
                                      int*                        numNeeded,
                                      bdlbb::Blob*                blob,
                                      const NegotiationContextSp& context)
@@ -269,7 +284,7 @@ void SessionNegotiator::readCallback(const mwcio::Status&        status,
                    << context->d_channelSp->peerUri() << "']";
 
     bsl::shared_ptr<mqbnet::Session> session;
-    mwcu::MemOutStream               errStream;
+    bmqu::MemOutStream               errStream;
 
     if (!status) {
         errStream << "Read error: " << status;
@@ -281,11 +296,11 @@ void SessionNegotiator::readCallback(const mwcio::Status&        status,
     }
 
     bdlbb::Blob inBlob;
-    int         rc = mwcio::ChannelUtil::handleRead(&inBlob, numNeeded, blob);
+    int         rc = bmqio::ChannelUtil::handleRead(&inBlob, numNeeded, blob);
     if (rc != 0) {
         // This indicates a non recoverable error...
         errStream << "Unrecoverable read error:\n"
-                  << mwcu::BlobStartHexDumper(blob);
+                  << bmqu::BlobStartHexDumper(blob);
         bsl::string error(errStream.str().data(), errStream.str().length());
         context->d_negotiationCb((rc * 10) + rc_UNRECOVERABLE_READ_ERROR,
                                  error,
@@ -372,7 +387,7 @@ void SessionNegotiator::readCallback(const mwcio::Status&        status,
 
         initiateOutboundNegotiation(context);
         return;  // RETURN
-    }            // break;
+    }  // break;
     default: {
         errStream << "Invalid negotiation message received (unknown type): "
                   << context->d_negotiationMessage;
@@ -410,14 +425,14 @@ int SessionNegotiator::decodeNegotiationMessage(
     if (!event.isValid()) {
         errorDescription << "Invalid negotiation message received "
                          << "(packet is not a valid BlazingMQ event):\n"
-                         << mwcu::BlobStartHexDumper(&blob);
+                         << bmqu::BlobStartHexDumper(&blob);
         return rc_INVALID_MESSAGE;  // RETURN
     }
 
     if (!event.isControlEvent()) {
         errorDescription << "Invalid negotiation message received "
                          << "(packet is not a ControlEvent):\n"
-                         << mwcu::BlobStartHexDumper(&blob);
+                         << bmqu::BlobStartHexDumper(&blob);
         return rc_NOT_CONTROL_EVENT;  // RETURN
     }
 
@@ -426,7 +441,7 @@ int SessionNegotiator::decodeNegotiationMessage(
     if (rc != 0) {
         errorDescription << "Invalid negotiation message received (failed "
                          << "decoding ControlEvent): [rc: " << rc << "]:\n"
-                         << mwcu::BlobStartHexDumper(&blob);
+                         << bmqu::BlobStartHexDumper(&blob);
         return rc_INVALID_CONTROL_EVENT;  // RETURN
     }
 
@@ -478,6 +493,7 @@ SessionNegotiator::onClientIdentityMessage(bsl::ostream& errorDescription,
     const int clientVersion = clientIdentity.sdkVersion();
     const bmqp_ctrlmsg::ClientLanguage::Value& sdkLanguage =
         clientIdentity.sdkLanguage();
+    const mqbcfg::AppConfig& appConfig = mqbcfg::BrokerConfig::get();
 
     if (checkIsUnsupportedSdkVersion(*context)) {
         response.result().category() =
@@ -487,7 +503,7 @@ SessionNegotiator::onClientIdentityMessage(bsl::ostream& errorDescription,
         const int minVersion = mqbu::SDKVersionUtil::minSdkVersionSupported(
             sdkLanguage);
 
-        mwcu::MemOutStream os;
+        bmqu::MemOutStream os;
         os << "Client is using an unsupported version of libbmq "
            << "(minimum supported version: " << minVersion
            << ", client version: " << clientVersion << ").";
@@ -500,7 +516,7 @@ SessionNegotiator::onClientIdentityMessage(bsl::ostream& errorDescription,
         response.isDeprecatedSdk()   = checkIsDeprecatedSdkVersion(*context);
     }
     response.protocolVersion() = bmqp::Protocol::k_VERSION;
-    response.brokerVersion()   = mqbcfg::BrokerConfig::get().brokerVersion();
+    response.brokerVersion()   = appConfig.brokerVersion();
 
     const bsl::string& clusterName = clientIdentity.clusterName();
 
@@ -546,14 +562,17 @@ SessionNegotiator::onClientIdentityMessage(bsl::ostream& errorDescription,
     else {
         bool shouldExtendMessageProperties = false;
 
-        if (mqbcfg::BrokerConfig::get().brokerVersion() == 999999) {
+        // TODO: make this unconditional.  Currently, 'V2' is controlled by
+        // config as a means to prevent SDK from generating 'V2'.
+        // Regardless of SDK, brokers now decompress MPs and send
+        // ConfigureStream.
+
+        if (appConfig.brokerVersion() == 999999) {
             // Always advertise v2 (EX) support in test build (developer
             // workflow, CI, Jenkins, etc).
             shouldExtendMessageProperties = true;
         }
-        else if (mqbcfg::BrokerConfig::get()
-                     .messagePropertiesV2()
-                     .advertiseV2Support()) {
+        else if (appConfig.messagePropertiesV2().advertiseV2Support()) {
             // In non test build (i.e., dev and non-dev deployments, advertise
             // v2 (EX) support only if configured like that *and* if the SDK
             // version is the configured one.
@@ -569,20 +588,31 @@ SessionNegotiator::onClientIdentityMessage(bsl::ostream& errorDescription,
                            shouldExtendMessageProperties);
     }
 
-    int rc = sendNegotiationMessage(errorDescription,
-                                    negotiationResponse,
-                                    context);
-    if (rc != 0) {
-        return session;  // RETURN
-    }
-
-    // Create the session
+    // Create the session.  That also calculates 'maxMissedHeartbeats'
     bsl::string description;
     loadSessionDescription(&description,
                            clientIdentity,
                            *(context->d_channelSp.get()));
 
     createSession(errorDescription, &session, context, description);
+
+    // Communicate heartbeat settings.  Currently, only for SDK use
+    const mqbcfg::NetworkInterfaces& niConfig = appConfig.networkInterfaces();
+
+    response.maxMissedHeartbeats() =
+        context->d_negotiatorContext_p->maxMissedHeartbeat();
+
+    if (niConfig.tcpInterface().has_value()) {
+        response.heartbeatIntervalMs() =
+            niConfig.tcpInterface().value().heartbeatIntervalMs();
+    }
+
+    int rc = sendNegotiationMessage(errorDescription,
+                                    negotiationResponse,
+                                    context);
+    if (rc != 0) {
+        session.reset();
+    }
 
     return session;
 }
@@ -611,7 +641,7 @@ SessionNegotiator::onBrokerResponseMessage(bsl::ostream& errorDescription,
     }
 
     // Resolve 'hostName' of the brokerIdentity
-    mwcio::TCPEndpoint endpoint(context->d_channelSp->peerUri());
+    bmqio::TCPEndpoint endpoint(context->d_channelSp->peerUri());
     brokerResponse.brokerIdentity().hostName() = endpoint.host();
 
     bsl::string description;
@@ -666,9 +696,9 @@ int SessionNegotiator::sendNegotiationMessage(
     // Build connection response event
     bdlma::LocalSequentialAllocator<2048> localAllocator(d_allocator_p);
 
-    bmqp::SchemaEventBuilder builder(d_bufferFactory_p,
-                                     &localAllocator,
-                                     encodingType);
+    bmqp::SchemaEventBuilder builder(d_blobSpPool_p,
+                                     encodingType,
+                                     &localAllocator);
 
     int rc = builder.setMessage(message, bmqp::EventType::e_CONTROL);
     if (rc != 0) {
@@ -678,8 +708,8 @@ int SessionNegotiator::sendNegotiationMessage(
     }
 
     // Send response event
-    mwcio::Status status;
-    context->d_channelSp->write(&status, builder.blob());
+    bmqio::Status status;
+    context->d_channelSp->write(&status, *builder.blob());
     if (!status) {
         errorDescription << "Failed sending NegotiationMessage "
                          << "[status: " << status << ", message: " << message
@@ -707,7 +737,9 @@ void SessionNegotiator::createSession(bsl::ostream& errorDescription,
         negoMsg.isClientIdentityValue()
             ? negoMsg.clientIdentity()
             : negoMsg.brokerResponse().brokerIdentity();
-    const mqbcfg::AppConfig& brkrCfg = mqbcfg::BrokerConfig::get();
+    const mqbcfg::AppConfig&         brkrCfg  = mqbcfg::BrokerConfig::get();
+    const mqbcfg::NetworkInterfaces& niConfig = brkrCfg.networkInterfaces();
+    int                              maxMissedHeartbeats = 0;
 
     if (context->d_connectionType == ConnectionType::e_ADMIN) {
         mqba::AdminSession* session = new (*d_allocator_p)
@@ -716,7 +748,6 @@ void SessionNegotiator::createSession(bsl::ostream& errorDescription,
                          description,
                          d_dispatcher_p,
                          d_blobSpPool_p,
-                         d_bufferFactory_p,
                          d_scheduler_p,
                          d_adminCb,
                          d_allocator_p);
@@ -725,9 +756,9 @@ void SessionNegotiator::createSession(bsl::ostream& errorDescription,
     }
     else if (context->d_connectionType == ConnectionType::e_CLIENT) {
         // Create a dedicated stats subcontext for this client
-        mwcst::StatContextConfiguration statContextCfg(description);
+        bmqst::StatContextConfiguration statContextCfg(description);
         statContextCfg.storeExpiredSubcontextValues(true);
-        bslma::ManagedPtr<mwcst::StatContext> statContext =
+        bslma::ManagedPtr<bmqst::StatContext> statContext =
             d_statContext_p->addSubcontext(statContextCfg);
 
         mqba::ClientSession* session = new (*d_allocator_p)
@@ -748,13 +779,11 @@ void SessionNegotiator::createSession(bsl::ostream& errorDescription,
         // Configure heartbeat
         if (negoMsg.clientIdentity().clientType() ==
             bmqp_ctrlmsg::ClientType::E_TCPCLIENT) {
-            context->d_negotiatorContext_p->setMaxMissedHeartbeat(
-                brkrCfg.networkInterfaces().heartbeats().client());
+            maxMissedHeartbeats = niConfig.heartbeats().client();
         }
         else if (negoMsg.clientIdentity().clientType() ==
                  bmqp_ctrlmsg::ClientType::E_TCPBROKER) {
-            context->d_negotiatorContext_p->setMaxMissedHeartbeat(
-                brkrCfg.networkInterfaces().heartbeats().downstreamBroker());
+            maxMissedHeartbeats = niConfig.heartbeats().downstreamBroker();
         }
 
         const bsl::string& clusterName = peerIdentity.clusterName();
@@ -798,14 +827,14 @@ void SessionNegotiator::createSession(bsl::ostream& errorDescription,
         // Configure heartbeat
         if (clusterNode->cluster()->selfNodeId() ==
             mqbnet::Cluster::k_INVALID_NODE_ID) {
-            context->d_negotiatorContext_p->setMaxMissedHeartbeat(
-                brkrCfg.networkInterfaces().heartbeats().upstreamBroker());
+            maxMissedHeartbeats = niConfig.heartbeats().upstreamBroker();
         }
         else {
-            context->d_negotiatorContext_p->setMaxMissedHeartbeat(
-                brkrCfg.networkInterfaces().heartbeats().clusterPeer());
+            maxMissedHeartbeats = niConfig.heartbeats().clusterPeer();
         }
     }
+
+    context->d_negotiatorContext_p->setMaxMissedHeartbeat(maxMissedHeartbeats);
 }
 
 bool SessionNegotiator::checkIsDeprecatedSdkVersion(
@@ -867,7 +896,7 @@ bool SessionNegotiator::checkIsUnsupportedSdkVersion(
 // CREATORS
 SessionNegotiator::SessionNegotiator(bdlbb::BlobBufferFactory* bufferFactory,
                                      mqbi::Dispatcher*         dispatcher,
-                                     mwcst::StatContext*       statContext,
+                                     bmqst::StatContext*       statContext,
                                      BlobSpPool*               blobSpPool,
                                      bdlmt::EventScheduler*    scheduler,
                                      bslma::Allocator*         allocator)
@@ -891,7 +920,7 @@ SessionNegotiator::~SessionNegotiator()
 void SessionNegotiator::scheduleRead(const NegotiationContextSp& context)
 {
     // Schedule a TimedRead
-    mwcio::Status status;
+    bmqio::Status status;
     context->d_channelSp->read(
         &status,
         bmqp::Protocol::k_PACKET_MIN_SIZE,
@@ -906,7 +935,7 @@ void SessionNegotiator::scheduleRead(const NegotiationContextSp& context)
     //       replace it by the channel shared_ptr (inside the context)
 
     if (!status) {
-        mwcu::MemOutStream errStream;
+        bmqu::MemOutStream errStream;
         errStream << "Read failed while negotiating: " << status;
         bsl::string error(errStream.str().data(), errStream.str().length());
         context->d_negotiationCb(-1,
@@ -933,7 +962,7 @@ void SessionNegotiator::initiateOutboundNegotiation(
                        context->d_clusterName,
                        nodeId);
 
-    mwcu::MemOutStream errStream;
+    bmqu::MemOutStream errStream;
 
     int rc = sendNegotiationMessage(errStream, negotiationMessage, context);
     if (rc != 0) {
@@ -950,7 +979,7 @@ void SessionNegotiator::initiateOutboundNegotiation(
 
 void SessionNegotiator::negotiate(
     mqbnet::NegotiatorContext*               context,
-    const bsl::shared_ptr<mwcio::Channel>&   channel,
+    const bsl::shared_ptr<bmqio::Channel>&   channel,
     const mqbnet::Negotiator::NegotiationCb& negotiationCb)
 {
     // Create a NegotiationContext for that connection
@@ -1011,7 +1040,7 @@ void SessionNegotiator::negotiate(
             negotiationContext->d_isReversed     = true;
             negotiationContext->d_connectionType = ConnectionType::e_CLIENT;
 
-            mwcu::MemOutStream errStream;
+            bmqu::MemOutStream errStream;
             int                rc = sendNegotiationMessage(errStream,
                                             negotiationMessage,
                                             negotiationContext);

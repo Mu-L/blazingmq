@@ -17,17 +17,14 @@
 #ifndef INCLUDED_MQBC_CLUSTERDATA
 #define INCLUDED_MQBC_CLUSTERDATA
 
-//@PURPOSE: Provide a VST representing the non-persistent state of a cluster.
-//
-//@CLASSES:
-//  mqbc::ClusterDataIdentity:      VST for the identity of a cluster
-//  mqbc::ClusterData:              VST for non-persistent state of a cluster
-//
-//@DESCRIPTION: 'mqbc::ClusterData' is a value-semantic type representing the
-// non-persistent state of a cluster.
+/// @file mqbc_clusterdata.h
+///
+/// @brief Provide a VST representing the non-persistent state of a cluster.
+///
+/// @bbref{mqbc::ClusterData} is a value-semantic type representing the
+/// non-persistent state of a cluster.
 
 // MQB
-
 #include <mqbc_clustermembership.h>
 #include <mqbc_controlmessagetransmitter.h>
 #include <mqbc_electorinfo.h>
@@ -44,11 +41,9 @@
 // BMQ
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_requestmanager.h>
-
-// MWC
-#include <mwcst_statcontext.h>
-#include <mwcu_atomicstate.h>
-#include <mwcu_memoutstream.h>
+#include <bmqst_statcontext.h>
+#include <bmqu_atomicstate.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -65,6 +60,7 @@
 #include <bslma_managedptr.h>
 #include <bslma_usesbslmaallocator.h>
 #include <bslmf_nestedtraitdeclaration.h>
+#include <bsls_keyword.h>
 #include <bsls_types.h>
 
 namespace BloombergLP {
@@ -79,49 +75,30 @@ class ClusterDataIdentity {
   private:
     // DATA
 
-    // from mqbblp::ClusterState
-    bslma::Allocator* d_allocator_p;
-    // Allocator to use
-
+    /// Name of the cluster
     bsl::string d_name;
-    // Name of the cluster
 
+    /// Description of the cluster.
     bsl::string d_description;
-    // Description of the cluster
 
+    /// Information sent to the primary node of a queue while sending a
+    /// `clusterOpenQueue` request to that node.
     bmqp_ctrlmsg::ClientIdentity d_identity;
-    // Information sent to the primary node of
-    // a queue while sending a clusterOpenQueue
-    // request to that node
 
   public:
-    // TRAITS
-    BSLMF_NESTED_TRAIT_DECLARATION(ClusterDataIdentity,
-                                   bslma::UsesBslmaAllocator)
-
     // CREATORS
 
-    /// Create a `mqbc::ClusterDataIdentity` with the specified `name`,
-    /// `identity` and `selfNode` values.  Use the optionally specified
-    /// `allocator` for any memory allocation.
+    /// Create a @bbref{mqbc::ClusterDataIdentity} with the specified `name`,
+    /// `description` and `identity`.
     ClusterDataIdentity(const bsl::string&                  name,
-                        const bmqp_ctrlmsg::ClientIdentity& identity,
-                        bslma::Allocator*                   allocator = 0);
-
-    // MANIPULATORS
-    ClusterDataIdentity& setName(const bsl::string& value);
-    ClusterDataIdentity& setDescription(const bsl::string& value);
-
-    /// Set the corresponding member to the specified `value` and return a
-    /// reference offering modifiable access to this object.
-    ClusterDataIdentity&
-    setIdentity(const bmqp_ctrlmsg::ClientIdentity& value);
+                        const bsl::string&                  description,
+                        const bmqp_ctrlmsg::ClientIdentity& identity);
 
     // ACCESSORS
-    const bsl::string& name() const;
-    const bsl::string& description() const;
 
     /// Return the value of the corresponding member of this object.
+    const bsl::string&                  name() const;
+    const bsl::string&                  description() const;
     const bmqp_ctrlmsg::ClientIdentity& identity() const;
 };
 
@@ -143,9 +120,9 @@ class ClusterData {
         BlobSpPool;
 
     typedef bdlcc::SharedObjectPool<
-        mwcu::AtomicState,
+        bmqu::AtomicState,
         bdlcc::ObjectPoolFunctors::DefaultCreator,
-        bdlcc::ObjectPoolFunctors::Reset<mwcu::AtomicState> >
+        bdlcc::ObjectPoolFunctors::Reset<bmqu::AtomicState> >
         StateSpPool;
 
     /// Type of the RequestManager used by the cluster.
@@ -158,74 +135,71 @@ class ClusterData {
                                         bmqp_ctrlmsg::ControlMessage>
         MultiRequestManagerType;
 
-    typedef bslma::ManagedPtr<mwcst::StatContext> StatContextMp;
+    typedef bslma::ManagedPtr<bmqst::StatContext> StatContextMp;
 
     /// Map of stat context names to StatContext pointers
-    typedef bsl::unordered_map<bsl::string, mwcst::StatContext*>
+    typedef bsl::unordered_map<bsl::string, bmqst::StatContext*>
         StatContextsMap;
 
   private:
     // DATA
 
+    /// Allocator to use.
     bslma::Allocator* d_allocator_p;
-    // Allocator to use
 
-    bdlmt::EventScheduler* d_scheduler_p;
-    // EventScheduler to use
+    const mqbi::ClusterResources d_resources;
 
-    bdlbb::BlobBufferFactory* d_bufferFactory_p;
-    // Blob buffer factory to use
-
-    BlobSpPool* d_blobSpPool_p;  // from mqbblp::Cluster
-                                 // Pool of shared pointers to blob to use
-
+    /// Dispatcher client data associated to this session.
     mqbi::DispatcherClientData d_dispatcherClientData;
-    // Dispatcher client data associated to this
-    // session
 
+    /// Cluster configuration to use.
     mqbcfg::ClusterDefinition d_clusterConfig;
-    // Cluster configuration to use
 
+    /// Cluster proxy configuration to use.
+    mqbcfg::ClusterProxyDefinition d_clusterProxyConfig;
+
+    /// Elector information.
     ElectorInfo d_electorInfo;
-    // Elector information
 
+    /// The membership information of the cluster.
     ClusterMembership d_membership;
-    // The membership information of the cluster
 
-    ClusterDataIdentity d_identity;
-    // The identity of the cluster
+    /// The identity of the cluster.
+    const ClusterDataIdentity d_identity;
 
+    /// Associated cluster.
     mqbi::Cluster* d_cluster_p;
-    // Associated cluster
 
+    /// Control message transmitter to use.
     ControlMessageTransmitter d_messageTransmitter;
-    // Control message transmitter to use
 
+    /// Request manager to use.
     RequestManagerType d_requestManager;
-    // Request manager to use
 
+    /// MultiRequest manager to use.
     MultiRequestManagerType d_multiRequestManager;
-    // MultiRequest manager to use
 
-    mqbi::DomainFactory* d_domainFactory_p;  // from mqbblp::Cluster
-                                             // Domain factory to use
+    /// Domain factory to use (from @bbref{mqbblp::Cluster}).
+    mqbi::DomainFactory* d_domainFactory_p;
 
     mqbnet::TransportManager* d_transportManager_p;
 
+    /// Object encapsulating the statistics recorded for this cluster.
     mqbstat::ClusterStats d_stats;
-    // Object encapsulating the statistics
-    // recorded for this cluster
 
+    /// Top-level `StatContext` pointer for all nodes of this cluster.
     StatContextMp d_clusterNodesStatContext_mp;
-    // Top level StatContext pointer for all
-    // nodes of this cluster
 
     StateSpPool d_stateSpPool;
 
+    /// Thread pool used for any standalone work that can be offloaded to any
+    /// non-dispatcher therads.
     bdlmt::FixedThreadPool d_miscWorkThreadPool;
-    // Thread pool used for any standalone
-    // work that can be offloaded to any
-    // non-dispatcher threads.
+
+  private:
+    // NOT IMPLEMENTED
+    ClusterData(const ClusterData&) BSLS_KEYWORD_DELETED;
+    ClusterData& operator=(const ClusterData&) BSLS_KEYWORD_DELETED;
 
   public:
     // TRAITS
@@ -233,33 +207,41 @@ class ClusterData {
 
     // CREATORS
 
-    /// Create a `mqbc::ClusterData` with the specified `name`, `scheduler`,
-    /// `bufferFactory`, `blobSpPool`, `clusterConfig`, `netCluster`,
-    /// `cluster`, `clustersStatContext` and `statContexts` values.  Use the
-    /// specified `allocator` for any memory allocation.
-    ClusterData(const bslstl::StringRef&           name,
-                bdlmt::EventScheduler*             scheduler,
-                bdlbb::BlobBufferFactory*          bufferFactory,
-                BlobSpPool*                        blobSpPool,
-                const mqbcfg::ClusterDefinition&   clusterConfig,
-                bslma::ManagedPtr<mqbnet::Cluster> netCluster,
-                mqbi::Cluster*                     cluster,
-                mqbi::DomainFactory*               domainFactory,
-                mqbnet::TransportManager*          transportManager,
-                mwcst::StatContext*                clustersStatContext,
-                const StatContextsMap&             statContexts,
-                bslma::Allocator*                  allocator);
+    /// Create a `mqbc::ClusterData` with the specified `name`, `resources`,
+    /// `clusterConfig`, `clusterProxyConfig`, `netCluster`, `cluster`,
+    /// `clustersStatContext` and `statContexts` values.  Use the specified
+    /// `allocator` for any memory allocation.
+    ClusterData(const bslstl::StringRef&              name,
+                const mqbi::ClusterResources&         resources,
+                const mqbcfg::ClusterDefinition&      clusterConfig,
+                const mqbcfg::ClusterProxyDefinition& clusterProxyConfig,
+                bslma::ManagedPtr<mqbnet::Cluster>    netCluster,
+                mqbi::Cluster*                        cluster,
+                mqbi::DomainFactory*                  domainFactory,
+                mqbnet::TransportManager*             transportManager,
+                bmqst::StatContext*                   clustersStatContext,
+                const StatContextsMap&                statContexts,
+                bslma::Allocator*                     allocator);
 
     // MANIPULATORS
 
+    /// Get a modifiable reference to this object's event scheduler.
+    bdlmt::EventScheduler& scheduler();
+
+    /// Get a modifiable reference to this object's buffer factory.
+    bdlbb::BlobBufferFactory& bufferFactory();
+
     /// Get a modifiable reference to this object's blobSpPool.
-    BlobSpPool* blobSpPool();
+    BlobSpPool& blobSpPool();
 
     /// Get a modifiable reference to this object's dispatcherClientData.
     mqbi::DispatcherClientData& dispatcherClientData();
 
-    /// Get a modifiable reference to this object's clusterConfig.
+    /// Get a modifiable reference to this object's cluster config.
     mqbcfg::ClusterDefinition& clusterConfig();
+
+    /// Get a modifiable reference to this object's cluster proxy config.
+    mqbcfg::ClusterProxyDefinition& clusterProxyConfig();
 
     /// Get a modifiable reference to this object's elector information.
     ElectorInfo& electorInfo();
@@ -267,11 +249,8 @@ class ClusterData {
     /// Get a modifiable reference to this object's cluster membership.
     ClusterMembership& membership();
 
-    /// Get a modifiable reference to this object's cluster identity.
-    ClusterDataIdentity& identity();
-
     /// Get a modifiable reference to this object's cluster.
-    mqbi::Cluster* cluster();
+    mqbi::Cluster& cluster();
 
     /// Get a modifiable reference to this object's messageTransmitter.
     ControlMessageTransmitter& messageTransmitter();
@@ -285,7 +264,8 @@ class ClusterData {
     /// Get a modifiable reference to this object's domainFactory.
     mqbi::DomainFactory* domainFactory();
 
-    mqbnet::TransportManager* transportManager() const;
+    /// Get a modifiable reference to this object's transportManager.
+    mqbnet::TransportManager& transportManager();
 
     /// Get a modifiable reference to this object's cluster stats.
     mqbstat::ClusterStats& stats();
@@ -293,21 +273,24 @@ class ClusterData {
     /// Get a modifiable reference to this object's clusterNodesStatContext.
     StatContextMp& clusterNodesStatContext();
 
-    StateSpPool* stateSpPool();
+    /// Get a modifiable reference to this object's stateSpPool.
+    StateSpPool& stateSpPool();
+
+    /// Get a modifiable reference to this object's miscWorkThreadPool.
+    bdlmt::FixedThreadPool& miscWorkThreadPool();
 
     // ACCESSORS
-    bdlmt::EventScheduler*            scheduler() const;
-    bdlbb::BlobBufferFactory*         bufferFactory() const;
-    const mqbi::DispatcherClientData& dispatcherClientData() const;
-    const mqbcfg::ClusterDefinition&  clusterConfig() const;
-    const ElectorInfo&                electorInfo() const;
-    const ClusterMembership&          membership() const;
-    const ClusterDataIdentity&        identity() const;
-    const mqbi::Cluster*              cluster() const;
-    const StatContextMp&              clusterNodesStatContext() const;
 
     /// Return the value of the corresponding member of this object.
-    bdlmt::FixedThreadPool* miscWorkThreadPool();
+    const mqbi::ClusterResources&         resources() const;
+    const mqbi::DispatcherClientData&     dispatcherClientData() const;
+    const mqbcfg::ClusterDefinition&      clusterConfig() const;
+    const mqbcfg::ClusterProxyDefinition& clusterProxyConfig() const;
+    const ElectorInfo&                    electorInfo() const;
+    const ClusterMembership&              membership() const;
+    const ClusterDataIdentity&            identity() const;
+    const mqbi::Cluster&                  cluster() const;
+    const StatContextMp&                  clusterNodesStatContext() const;
 };
 
 // ============================================================================
@@ -321,42 +304,13 @@ class ClusterData {
 // CREATORS
 inline ClusterDataIdentity::ClusterDataIdentity(
     const bsl::string&                  name,
-    const bmqp_ctrlmsg::ClientIdentity& identity,
-    bslma::Allocator*                   allocator)
-: d_allocator_p(bslma::Default::allocator(allocator))
-, d_name(name)
-, d_description(allocator)
+    const bsl::string&                  description,
+    const bmqp_ctrlmsg::ClientIdentity& identity)
+: d_name(name)
+, d_description(description)
 , d_identity(identity)
 {
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(d_allocator_p);
-
-    bdlma::LocalSequentialAllocator<256> localAllocator(d_allocator_p);
-    mwcu::MemOutStream                   os(&localAllocator);
-    os << "Cluster (" << d_name << ")";
-    d_description.assign(os.str().data(), os.str().length());
-}
-
-// MANIPULATORS
-inline ClusterDataIdentity&
-ClusterDataIdentity::setName(const bsl::string& value)
-{
-    d_name = value;
-    return *this;
-}
-
-inline ClusterDataIdentity&
-ClusterDataIdentity::setDescription(const bsl::string& value)
-{
-    d_description = value;
-    return *this;
-}
-
-inline ClusterDataIdentity&
-ClusterDataIdentity::setIdentity(const bmqp_ctrlmsg::ClientIdentity& value)
-{
-    d_identity = value;
-    return *this;
+    // NOTHING
 }
 
 // ACCESSORS
@@ -381,9 +335,19 @@ ClusterDataIdentity::identity() const
 // -----------------
 
 // MANIPULATORS
-inline ClusterData::BlobSpPool* ClusterData::blobSpPool()
+inline bdlmt::EventScheduler& ClusterData::scheduler()
 {
-    return d_blobSpPool_p;
+    return *d_resources.scheduler();
+}
+
+inline bdlbb::BlobBufferFactory& ClusterData::bufferFactory()
+{
+    return *d_resources.bufferFactory();
+}
+
+inline ClusterData::BlobSpPool& ClusterData::blobSpPool()
+{
+    return *d_resources.blobSpPool();
 }
 
 inline mqbi::DispatcherClientData& ClusterData::dispatcherClientData()
@@ -396,6 +360,11 @@ inline mqbcfg::ClusterDefinition& ClusterData::clusterConfig()
     return d_clusterConfig;
 }
 
+inline mqbcfg::ClusterProxyDefinition& ClusterData::clusterProxyConfig()
+{
+    return d_clusterProxyConfig;
+}
+
 inline ElectorInfo& ClusterData::electorInfo()
 {
     return d_electorInfo;
@@ -406,14 +375,9 @@ inline ClusterMembership& ClusterData::membership()
     return d_membership;
 }
 
-inline ClusterDataIdentity& ClusterData::identity()
+inline mqbi::Cluster& ClusterData::cluster()
 {
-    return d_identity;
-}
-
-inline mqbi::Cluster* ClusterData::cluster()
-{
-    return d_cluster_p;
+    return *d_cluster_p;
 }
 
 inline ControlMessageTransmitter& ClusterData::messageTransmitter()
@@ -436,9 +400,9 @@ inline mqbi::DomainFactory* ClusterData::domainFactory()
     return d_domainFactory_p;
 }
 
-inline mqbnet::TransportManager* ClusterData::transportManager() const
+inline mqbnet::TransportManager& ClusterData::transportManager()
 {
-    return d_transportManager_p;
+    return *d_transportManager_p;
 }
 
 inline mqbstat::ClusterStats& ClusterData::stats()
@@ -451,17 +415,23 @@ inline ClusterData::StatContextMp& ClusterData::clusterNodesStatContext()
     return d_clusterNodesStatContext_mp;
 }
 
+inline ClusterData::StateSpPool& ClusterData::stateSpPool()
+{
+    return d_stateSpPool;
+}
+
+inline bdlmt::FixedThreadPool& ClusterData::miscWorkThreadPool()
+{
+    return d_miscWorkThreadPool;
+}
+
 // ACCESSORS
-inline bdlmt::EventScheduler* ClusterData::scheduler() const
+inline const mqbi::ClusterResources& ClusterData::resources() const
 {
-    return d_scheduler_p;
+    return d_resources;
 }
 
-inline bdlbb::BlobBufferFactory* ClusterData::bufferFactory() const
-{
-    return d_bufferFactory_p;
-}
-
+// ACCESSORS
 inline const mqbi::DispatcherClientData&
 ClusterData::dispatcherClientData() const
 {
@@ -471,6 +441,12 @@ ClusterData::dispatcherClientData() const
 inline const mqbcfg::ClusterDefinition& ClusterData::clusterConfig() const
 {
     return d_clusterConfig;
+}
+
+inline const mqbcfg::ClusterProxyDefinition&
+ClusterData::clusterProxyConfig() const
+{
+    return d_clusterProxyConfig;
 }
 
 inline const ElectorInfo& ClusterData::electorInfo() const
@@ -488,25 +464,15 @@ inline const ClusterDataIdentity& ClusterData::identity() const
     return d_identity;
 }
 
-inline const mqbi::Cluster* ClusterData::cluster() const
+inline const mqbi::Cluster& ClusterData::cluster() const
 {
-    return d_cluster_p;
+    return *d_cluster_p;
 }
 
 inline const ClusterData::StatContextMp&
 ClusterData::clusterNodesStatContext() const
 {
     return d_clusterNodesStatContext_mp;
-}
-
-inline ClusterData::StateSpPool* ClusterData::stateSpPool()
-{
-    return &d_stateSpPool;
-}
-
-inline bdlmt::FixedThreadPool* ClusterData::miscWorkThreadPool()
-{
-    return &d_miscWorkThreadPool;
 }
 
 }  // close package namespace

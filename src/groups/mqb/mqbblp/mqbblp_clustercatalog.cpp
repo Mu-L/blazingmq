@@ -26,12 +26,11 @@
 #include <mqbnet_negotiator.h>
 #include <mqbnet_transportmanager.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_printutil.h>
-#include <mwcu_stringutil.h>
+#include <bmqsys_time.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_printutil.h>
+#include <bmqu_stringutil.h>
 
 // BDE
 #include <baljsn_decoder.h>
@@ -49,10 +48,6 @@
 
 namespace BloombergLP {
 namespace mqbblp {
-
-namespace {
-const char k_LOG_CATEGORY[] = "MQBBLP.CLUSTERCATALOG";
-}  // close unnamed namespace
 
 // --------------------
 // class ClusterCatalog
@@ -157,6 +152,18 @@ int ClusterCatalog::createCluster(bsl::ostream& errorDescription,
         // 1. Fetch the cluster definition
         const mqbcfg::ClusterDefinition& clusterDefinition =
             *clusterDefinitionIter;
+        if (clusterDefinition.clusterAttributes().isFSMWorkflow() !=
+            clusterDefinition.clusterAttributes().isCSLModeEnabled()) {
+            // CSL and FSM must be both true or both false, other combinations
+            // are not supported
+            errorDescription
+                << "Cluster ('" << name << "') has incompatible CSL ("
+                << clusterDefinition.clusterAttributes().isCSLModeEnabled()
+                << ") and FSM ("
+                << clusterDefinition.clusterAttributes().isFSMWorkflow()
+                << ") modes, not creating cluster.";
+            return (rc * 10) + rc_FETCH_DEFINITION_FAILED;  // RETURN
+        }
 
         // 2. Create the mqbnet::Cluster
         rc = createNetCluster(errorDescription,
@@ -179,12 +186,12 @@ int ClusterCatalog::createCluster(bsl::ostream& errorDescription,
                     netCluster,
                     d_statContexts,
                     d_domainFactory_p,
-                    d_scheduler_p,
                     d_dispatcher_p,
-                    d_blobSpPool_p,
-                    d_bufferFactory_p,
                     d_transportManager_p,
-                    clusterAllocator);
+                    &d_stopRequestsManager,
+                    d_resources,
+                    clusterAllocator,
+                    d_adminCb);
 
         info.d_cluster_sp.reset(cluster, clusterAllocator);
         info.d_eventProcessor_p = cluster;
@@ -198,6 +205,8 @@ int ClusterCatalog::createCluster(bsl::ostream& errorDescription,
 
         if (proxyDefinitionIter ==
             d_clustersDefinition.proxyClusters().end()) {
+            errorDescription << "Fetch proxy definition failed for cluster: '"
+                             << name << "'";
             return rc_FETCH_DEFINITION_FAILED;  // RETURN
         }
 
@@ -219,11 +228,10 @@ int ClusterCatalog::createCluster(bsl::ostream& errorDescription,
                          clusterProxyDefinition,
                          netCluster,
                          d_statContexts,
-                         d_scheduler_p,
-                         d_bufferFactory_p,
-                         d_blobSpPool_p,
                          d_dispatcher_p,
                          d_transportManager_p,
+                         &d_stopRequestsManager,
+                         d_resources,
                          clusterAllocator);
 
         info.d_cluster_sp.reset(cluster, clusterAllocator);
@@ -257,6 +265,10 @@ int ClusterCatalog::startCluster(bsl::ostream&  errorDescription,
     // contention on the IO (which potentially could lead to negotiation time
     // out), we don't want (and don't have) to start the Cluster under the
     // mutex locked.
+
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(cluster);
+
     int rc = cluster->start(errorDescription);
 
     if (rc != 0) {
@@ -350,20 +362,15 @@ int ClusterCatalog::initiateReversedClusterConnectionsImp(
     return rc;
 }
 
-ClusterCatalog::ClusterCatalog(bdlmt::EventScheduler*    scheduler,
-                               mqbi::Dispatcher*         dispatcher,
-                               mqbnet::TransportManager* transportManager,
-                               const StatContextsMap&    statContexts,
-                               bdlbb::BlobBufferFactory* bufferFactory,
-                               BlobSpPool*               blobSpPool,
-                               bslma::Allocator*         allocator)
+ClusterCatalog::ClusterCatalog(mqbi::Dispatcher*             dispatcher,
+                               mqbnet::TransportManager*     transportManager,
+                               const StatContextsMap&        statContexts,
+                               const mqbi::ClusterResources& resources,
+                               bslma::Allocator*             allocator)
 : d_allocator_p(allocator)
 , d_allocators(d_allocator_p)
 , d_isStarted(false)
-, d_scheduler_p(scheduler)
 , d_dispatcher_p(dispatcher)
-, d_bufferFactory_p(bufferFactory)
-, d_blobSpPool_p(blobSpPool)
 , d_transportManager_p(transportManager)
 , d_domainFactory_p(0)
 , d_clustersDefinition(d_allocator_p)
@@ -373,9 +380,17 @@ ClusterCatalog::ClusterCatalog(bdlmt::EventScheduler*    scheduler,
 , d_reversedClusterConnections(d_allocator_p)
 , d_clusters(d_allocator_p)
 , d_statContexts(statContexts)
+, d_resources(resources)
+, d_adminCb()
+, d_requestManager(bmqp::EventType::e_CONTROL,
+                   resources.blobSpPool(),
+                   resources.scheduler(),
+                   false,  // lateResponseMode
+                   d_allocator_p)
+, d_stopRequestsManager(&d_requestManager, d_allocator_p)
 {
     // PRECONDITIONS
-    BSLS_ASSERT_SAFE(scheduler->clockType() ==
+    BSLS_ASSERT_SAFE(d_resources.scheduler()->clockType() ==
                      bsls::SystemClockType::e_MONOTONIC);
 }
 
@@ -386,7 +401,7 @@ ClusterCatalog::~ClusterCatalog()
                     "stop() must be called before destroying this object");
 }
 
-int ClusterCatalog::loadBrokerClusterConfig(bsl::ostream& errorDescription)
+int ClusterCatalog::loadBrokerClusterConfig(bsl::ostream&)
 {
     // executed by the *MAIN* thread
 
@@ -410,7 +425,7 @@ int ClusterCatalog::loadBrokerClusterConfig(bsl::ostream& errorDescription)
     }
 
     bsl::ifstream      configStream(configFilename.c_str());
-    mwcu::MemOutStream configParameters;
+    bmqu::MemOutStream configParameters;
     configParameters << configStream.rdbuf();
 
     if (!configStream || !configParameters) {
@@ -419,6 +434,7 @@ int ClusterCatalog::loadBrokerClusterConfig(bsl::ostream& errorDescription)
         return rc_CONFIG_READ_ERROR * 10 +
                rc_BROKER_CLUSTER_CONFIG_LOADFAILURE;  // RETURN
     }
+    configStream.close();
 
     // 2. Decode the JSON stream
     baljsn::Decoder            decoder;
@@ -478,14 +494,14 @@ int ClusterCatalog::loadBrokerClusterConfig(bsl::ostream& errorDescription)
             BALL_LOG_OUTPUT_STREAM << "  I am *NOT* member of any cluster.";
         }
         else {
-            mwcu::Printer<bsl::unordered_set<bsl::string> > printer(
+            bmqu::Printer<bsl::unordered_set<bsl::string> > printer(
                 &d_myClusters);
             BALL_LOG_OUTPUT_STREAM
                 << "  I am a member of the following clusters: " << printer;
         }
 
         if (!d_myReverseClusters.empty()) {
-            mwcu::Printer<bsl::unordered_set<bsl::string> > printer(
+            bmqu::Printer<bsl::unordered_set<bsl::string> > printer(
                 &d_myReverseClusters);
             BALL_LOG_OUTPUT_STREAM
                 << "\n  The following clusters will remote connect to me '"
@@ -498,7 +514,7 @@ int ClusterCatalog::loadBrokerClusterConfig(bsl::ostream& errorDescription)
             for (size_t i = 0; i < d_reversedClusterConnections.size(); ++i) {
                 const mqbcfg::ReversedClusterConnection& clusterConnection =
                     d_reversedClusterConnections[i];
-                mwcu::Printer<bsl::vector<mqbcfg::ClusterNodeConnection> >
+                bmqu::Printer<bsl::vector<mqbcfg::ClusterNodeConnection> >
                     printer(&clusterConnection.connections());
                 BALL_LOG_OUTPUT_STREAM << "\n    '" << clusterConnection.name()
                                        << "': " << printer;
@@ -506,7 +522,7 @@ int ClusterCatalog::loadBrokerClusterConfig(bsl::ostream& errorDescription)
         }
 
         if (!d_myVirtualClusters.empty()) {
-            mwcu::Printer<bsl::unordered_map<bsl::string, int> > printer(
+            bmqu::Printer<bsl::unordered_map<bsl::string, int> > printer(
                 &d_myVirtualClusters);
             BALL_LOG_OUTPUT_STREAM
                 << "\n  I am a member of the following VIRTUAL clusters: "
@@ -606,6 +622,9 @@ ClusterCatalog::getCluster(bsl::shared_ptr<mqbi::Cluster>* out,
     //       deleter, so that the cluster can be destroyed once no longer used
     //       (with eventually a small TTL).
 
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(out);
+
     bmqp_ctrlmsg::Status status;
     status.category() = bmqp_ctrlmsg::StatusCategory::E_SUCCESS;
     status.code()     = 0;
@@ -630,7 +649,7 @@ ClusterCatalog::getCluster(bsl::shared_ptr<mqbi::Cluster>* out,
     }
 
     bsl::shared_ptr<mqbi::Cluster> cluster;
-    mwcu::MemOutStream             errorDesc;
+    bmqu::MemOutStream             errorDesc;
     int rc = createCluster(errorDesc, &cluster, name);
     if (rc != 0) {
         status.category() = bmqp_ctrlmsg::StatusCategory::E_REFUSED;
@@ -767,7 +786,7 @@ int ClusterCatalog::processCommand(mqbcmd::ClustersResult*        result,
         connection.connections().push_back(nodeConnection);
         connectionArray.push_back(connection);
 
-        mwcu::MemOutStream os;
+        bmqu::MemOutStream os;
         int rc = initiateReversedClusterConnectionsImp(os, connectionArray);
         if (rc != 0) {
             result->makeError().message() = os.str() +
@@ -788,7 +807,7 @@ int ClusterCatalog::processCommand(mqbcmd::ClustersResult*        result,
             const ClustersMapIter it = d_clusters.find(
                 command.cluster().name());
             if (it == d_clusters.end()) {
-                mwcu::MemOutStream os;
+                bmqu::MemOutStream os;
                 os << "cluster '" << command.cluster().name()
                    << "' not found !";
                 result->makeError().message() = os.str();
@@ -818,7 +837,7 @@ int ClusterCatalog::processCommand(mqbcmd::ClustersResult*        result,
         }
     }
 
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << "Unknown command '" << command << "'";
     result->makeError().message() = os.str();
     return -1;

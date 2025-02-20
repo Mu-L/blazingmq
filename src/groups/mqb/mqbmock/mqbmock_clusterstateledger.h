@@ -73,10 +73,6 @@ class ClusterStateLedger : public mqbc::ClusterStateLedger {
     bslma::Allocator* d_allocator_p;
     // Allocator used to supply memory.
 
-    bool d_isFirstLeaderAdvisory;
-    // Flag to indicate whether this is the first leader
-    // advisory.
-
     bool d_isOpen;
     // Flag to indicate open/close status of this object.
 
@@ -186,9 +182,6 @@ class ClusterStateLedger : public mqbc::ClusterStateLedger {
     int apply(const bdlbb::Blob&   record,
               mqbnet::ClusterNode* source) BSLS_KEYWORD_OVERRIDE;
 
-    void
-    setIsFirstLeaderAdvisory(bool isFirstLeaderAdvisory) BSLS_KEYWORD_OVERRIDE;
-
     /// Set the commit callback to the specified `value`.
     void setCommitCb(const CommitCb& value) BSLS_KEYWORD_OVERRIDE;
 
@@ -246,27 +239,14 @@ inline bool ClusterStateLedger::isSelfLeader() const
 
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(
-        d_clusterData_p->cluster()->dispatcher()->inDispatcherThread(
-            d_clusterData_p->cluster()));
+        d_clusterData_p->cluster().dispatcher()->inDispatcherThread(
+            &d_clusterData_p->cluster()));
 
     return d_clusterData_p->electorInfo().isSelfLeader();
 }
 
 // MANIPULATORS
 //   (virtual mqbc::ClusterStateLedger)
-inline void
-ClusterStateLedger::setIsFirstLeaderAdvisory(bool isFirstLeaderAdvisory)
-{
-    // executed by the *CLUSTER DISPATCHER* thread
-
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(
-        d_clusterData_p->cluster()->dispatcher()->inDispatcherThread(
-            d_clusterData_p->cluster()));
-
-    d_isFirstLeaderAdvisory = isFirstLeaderAdvisory;
-}
-
 inline void ClusterStateLedger::setCommitCb(const CommitCb& value)
 {
     d_commitCb = value;
@@ -279,8 +259,8 @@ inline void ClusterStateLedger::_setPauseCommitCb(bool value)
 
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(
-        d_clusterData_p->cluster()->dispatcher()->inDispatcherThread(
-            d_clusterData_p->cluster()));
+        d_clusterData_p->cluster().dispatcher()->inDispatcherThread(
+            &d_clusterData_p->cluster()));
 
     d_pauseCommitCb = value;
 }
@@ -293,8 +273,8 @@ inline bool ClusterStateLedger::isOpen() const
 
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(
-        d_clusterData_p->cluster()->dispatcher()->inDispatcherThread(
-            d_clusterData_p->cluster()));
+        d_clusterData_p->cluster().dispatcher()->inDispatcherThread(
+            &d_clusterData_p->cluster()));
 
     return d_isOpen;
 }
@@ -307,8 +287,8 @@ ClusterStateLedger::_uncommittedAdvisories() const
 
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(
-        d_clusterData_p->cluster()->dispatcher()->inDispatcherThread(
-            d_clusterData_p->cluster()));
+        d_clusterData_p->cluster().dispatcher()->inDispatcherThread(
+            &d_clusterData_p->cluster()));
 
     return d_uncommittedAdvisories;
 }

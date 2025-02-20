@@ -30,8 +30,7 @@
 #include <bmqp_queueid.h>
 #include <bmqt_queueflags.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bsl_iostream.h>
@@ -53,7 +52,7 @@ Queue::Queue(mqbi::Domain* domain, bslma::Allocator* allocator)
 , d_hasMultipleSubStreams(false)
 , d_handleParameters(allocator)
 , d_streamParameters(allocator)
-, d_stats()
+, d_stats_sp(0)
 , d_domain_p(domain)
 , d_dispatcher_p(0)
 , d_queueEngine_p(0)
@@ -62,13 +61,14 @@ Queue::Queue(mqbi::Domain* domain, bslma::Allocator* allocator)
 {
     BSLS_ASSERT_SAFE(d_uri.isValid());
 
-    mwcu::MemOutStream ss(allocator);
+    bmqu::MemOutStream ss(allocator);
     ss << "|mock-queue|" << d_uri.asString();
     d_description.assign(ss.str());
 
     // Initialize stats
     if (domain) {
-        d_stats.initialize(d_uri, domain, allocator);
+        d_stats_sp.createInplace(allocator, allocator);
+        d_stats_sp->initialize(d_uri, domain);
     }
 }
 
@@ -239,9 +239,10 @@ mqbi::QueueEngine* Queue::queueEngine()
     return d_queueEngine_p;
 }
 
-mqbstat::QueueStatsDomain* Queue::stats()
+inline void
+Queue::setStats(const bsl::shared_ptr<mqbstat::QueueStatsDomain>& stats)
 {
-    return &d_stats;
+    d_stats_sp = stats;
 }
 
 bsls::Types::Int64
@@ -251,6 +252,11 @@ Queue::countUnconfirmed(BSLS_ANNOTATION_UNUSED unsigned int subId)
     return 0;
 }
 
+void Queue::stopPushing()
+{
+    // NOT IMPLENTED
+}
+
 void Queue::onPushMessage(
     BSLS_ANNOTATION_UNUSED const bmqt::MessageGUID& msgGUID,
     BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<bdlbb::Blob>& appData,
@@ -258,7 +264,8 @@ void Queue::onPushMessage(
     BSLS_ANNOTATION_UNUSED const bmqp::MessagePropertiesInfo&
                                  hasMessageProperties,
     BSLS_ANNOTATION_UNUSED       bmqt::CompressionAlgorithmType::Enum
-                                 compressionAlgorithmType)
+                                 compressionAlgorithmType,
+    BSLS_ANNOTATION_UNUSED bool  isOutOfOrder)
 {
     // NOTHING
 }
@@ -347,7 +354,8 @@ void Queue::onLostUpstream()
 }
 
 void Queue::onOpenUpstream(BSLS_ANNOTATION_UNUSED bsls::Types::Uint64 genCount,
-                           BSLS_ANNOTATION_UNUSED unsigned int subQueueId)
+                           BSLS_ANNOTATION_UNUSED unsigned int subQueueId,
+                           BSLS_ANNOTATION_UNUSED bool         isWriterOnly)
 {
     // NOTHING
 }
@@ -381,16 +389,10 @@ int Queue::processCommand(mqbcmd::QueueResult*        result,
                           const mqbcmd::QueueCommand& command)
 {
     mqbcmd::Error      error = result->makeError();
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << "MockQueue::processCommand " << command << " not implemented!";
     error.message() = os.str();
     return -1;
-}
-
-void Queue::purge(BSLS_ANNOTATION_UNUSED mqbcmd::PurgeQueueResult* queueResult,
-                  BSLS_ANNOTATION_UNUSED const bsl::string& appId)
-{
-    // NOT IMPLENTED
 }
 
 // MANIPULATORS
@@ -464,6 +466,12 @@ mqbi::Domain* Queue::domain() const
 mqbi::Storage* Queue::storage() const
 {
     return d_storage_p;
+}
+
+const bsl::shared_ptr<mqbstat::QueueStatsDomain>& Queue::stats() const
+{
+    BSLS_ASSERT_SAFE(d_stats_sp);
+    return d_stats_sp;
 }
 
 int Queue::partitionId() const

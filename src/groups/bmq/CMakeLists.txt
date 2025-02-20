@@ -9,8 +9,6 @@ endif()
 add_library(bmq)
 set_property(TARGET bmq PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-target_compile_definitions(bmq PRIVATE "MWC_INTERNAL_USAGE")
-
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|(Apple)?Clang")
   target_compile_options(bmq PRIVATE "-msse4.2")
 endif()
@@ -28,9 +26,35 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|(Apple)?Clang")
   set_property(SOURCE "bmqp/test/bmqp_messageproperties.t.cpp"
     APPEND
     PROPERTY COMPILE_FLAGS "-Wno-self-assign-overloaded")
+
+  set_property(SOURCE "bmqc/bmqc_array.t.cpp"
+    APPEND
+    PROPERTY COMPILE_FLAGS "-Wno-self-assign-overloaded")
+  set_property(SOURCE "bmqc/bmqc_monitoredqueue.cpp"
+    APPEND
+    PROPERTY COMPILE_FLAGS "-Wno-unused-macros")
+  set_property(SOURCE "bmqu/bmqu_weakmemfn.t.cpp"
+    APPEND
+    PROPERTY COMPILE_FLAGS "-Wno-ignored-qualifiers")
 endif()
 
-target_bmq_style_uor( bmq PRIVATE_PACKAGES bmqimp bmqp bmqeval )
+set(BMQ_PRIVATE_PACKAGES
+  bmqimp
+  bmqp
+  bmqeval
+  bmqc
+  bmqex
+  bmqio
+  bmqma
+  bmqst
+  bmqstm
+  bmqsys
+  bmqtsk
+  bmqtst
+  bmqu
+  bmqvt
+)
+target_bmq_style_uor( bmq PRIVATE_PACKAGES ${BMQ_PRIVATE_PACKAGES} )
 
 if(CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
   # Search homebrewed keg-only versions of Bison and Flex on macOS.
@@ -74,13 +98,10 @@ target_sources(bmqeval-iface
                ${BISON_SimpleEvaluatorParser_OUTPUTS}
                ${FLEX_SimpleEvaluatorScanner_OUTPUTS})
 
-target_include_directories(bmqeval-iface PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${FLEX_INCLUDE_DIRS})
-if(NOT CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
-  target_link_libraries(bmq PUBLIC "${FLEX_LIBRARIES}")
-endif()
+target_include_directories(bmqeval-iface SYSTEM PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${FLEX_INCLUDE_DIRS})
 
 target_include_directories(bmqeval_simpleevaluator.t
                            PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 
-target_link_libraries(bmqeval_simpleevaluator.t PUBLIC bmq "${FLEX_LIBRARIES}" benchmark)
+target_link_libraries(bmqeval_simpleevaluator.t PUBLIC bmq benchmark)
 

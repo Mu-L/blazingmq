@@ -28,10 +28,9 @@
 #include <bmqp_queueid.h>
 #include <bmqp_queueutil.h>
 
-// MWC
-#include <mwcu_blob.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
+#include <bmqu_blob.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bsl_iostream.h>
@@ -117,12 +116,18 @@ bdld::Datum Routers::MessagePropertiesReader::get(const bsl::string& name,
                                                   bslma::Allocator*  allocator)
 {
     if (d_isDirty) {
-        if (d_currentMessage_p && d_currentMessage_p->appData()) {
-            int rc = d_schemaLearner.read(
-                d_schemaLearnerContext,
-                &d_properties,
-                d_currentMessage_p->attributes().messagePropertiesInfo(),
-                *d_currentMessage_p->appData());
+        if (!d_appData) {
+            if (d_currentMessage_p && d_currentMessage_p->appData()) {
+                d_appData = d_currentMessage_p->appData();
+                d_messagePropertiesInfo =
+                    d_currentMessage_p->attributes().messagePropertiesInfo();
+            }
+        }
+        if (d_appData) {
+            int rc = d_schemaLearner.read(d_schemaLearnerContext,
+                                          &d_properties,
+                                          d_messagePropertiesInfo,
+                                          *d_appData);
             if (rc != 0) {
                 BALL_LOG_TRACE << "Failed to read message schema [rc: " << rc
                                << "]";
@@ -137,14 +142,33 @@ bdld::Datum Routers::MessagePropertiesReader::get(const bsl::string& name,
 void Routers::MessagePropertiesReader::next(
     const mqbi::StorageIterator* currentMessage)
 {
-    if (currentMessage == d_currentMessage_p) {
+    if (currentMessage == d_currentMessage_p && currentMessage) {
         return;  // RETURN
     }
+    // Not loading mqbi::StorageIterator::appData to check equality
 
-    d_properties.clear();
+    clear();
 
     d_currentMessage_p = currentMessage;
-    d_isDirty          = true;
+}
+
+void Routers::MessagePropertiesReader::clear()
+{
+    d_properties.clear();
+
+    d_currentMessage_p = 0;
+    d_appData.reset();
+    d_isDirty = true;
+}
+
+void Routers::MessagePropertiesReader::next(
+    const bsl::shared_ptr<bdlbb::Blob>& appData,
+    const bmqp::MessagePropertiesInfo&  messagePropertiesInfo)
+{
+    clear();
+
+    d_appData               = appData;
+    d_messagePropertiesInfo = messagePropertiesInfo;
 }
 
 // ==========================
@@ -175,8 +199,8 @@ bool Routers::Expression::evaluate()
 bool Routers::PriorityGroup::evaluate(
     BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<bdlbb::Blob>& data)
 {
-    const Expressions::SharedItem it         = d_itId->value().d_itExpression;
-    Expression&                   expression = it->value();
+    const Expressions::SharedItem& it         = d_itId->value().d_itExpression;
+    Expression&                    expression = it->value();
 
     return expression.evaluate();
 }
@@ -288,7 +312,8 @@ void Routers::AppContext::load(
 
             if (!itGroup) {
                 const mqbcfg::AppConfig& brkrCfg = mqbcfg::BrokerConfig::get();
-                if (brkrCfg.brokerVersion() == bmqp::Protocol::k_DEV_VERSION) {
+                if (brkrCfg.brokerVersion() == bmqp::Protocol::k_DEV_VERSION ||
+                    brkrCfg.configureStream()) {
                     // This must be the same as in
                     // 'ClusterQueueHelper::sendConfigureQueueRequest'
 
@@ -355,18 +380,18 @@ void Routers::AppContext::load(
     }
 }
 
-size_t Routers::AppContext::finalize()
+unsigned int Routers::AppContext::finalize()
 {
-    size_t count = 0;
+    d_priorityCount = 0;
 
     clean();
 
     for (Priorities::iterator itPriority = d_priorities.begin();
          itPriority != d_priorities.end();) {
-        Priority&                 level       = itPriority->second;
-        int                       priority    = itPriority->first;
-        Subscribers&              subscribers = level.d_subscribers;
-        Subscriber::Subscriptions remove(d_allocator_p);
+        Priority&                   level       = itPriority->second;
+        BSLA_MAYBE_UNUSED const int priority    = itPriority->first;
+        Subscribers&                subscribers = level.d_subscribers;
+        Subscriber::Subscriptions   remove(d_allocator_p);
 
         for (Subscribers::const_iterator itSubscriber = subscribers.begin();
              itSubscriber != subscribers.end();
@@ -392,7 +417,8 @@ size_t Routers::AppContext::finalize()
                     subscription.d_itGroup;
                 PriorityGroup& group = itGroup->value();
 
-                const bmqp_ctrlmsg::ConsumerInfo& ci = subscription.d_ci;
+                BSLA_MAYBE_UNUSED const bmqp_ctrlmsg::ConsumerInfo& ci =
+                    subscription.d_ci;
 
                 BSLS_ASSERT_SAFE(priority == ci.consumerPriority());
 
@@ -416,7 +442,7 @@ size_t Routers::AppContext::finalize()
                     group.d_highestSubscriptions.emplace_back(&subscription);
 
                     level.d_count += n;
-                    count += n;
+                    d_priorityCount += n;
                 }
                 else {
                     // This 'subscription' has the 'expression' which is used
@@ -433,7 +459,7 @@ size_t Routers::AppContext::finalize()
         }
     }
 
-    return count;
+    return d_priorityCount;
 }
 
 void Routers::AppContext::registerSubscriptions()
@@ -575,18 +601,18 @@ void Routers::AppContext::reset()
 
 Routers::Result Routers::AppContext::selectConsumer(
     const Visitor&               visitor,
-    const mqbi::StorageIterator* currentMessage)
+    const mqbi::StorageIterator* currentMessage,
+    unsigned int                 subscriptionId)
 {
     BSLS_ASSERT_SAFE(currentMessage);
-
-    unsigned int sId = currentMessage->subscriptionId();
 
     PriorityGroup* group = 0;
     d_queue.d_evaluationContext.setPropertiesReader(d_queue.d_preader.get());
     ScopeExit scope(d_queue, currentMessage);
 
-    if (sId != bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID) {
-        SubscriptionIds::SharedItem itId = d_queue.d_groupIds.find(sId);
+    if (subscriptionId != bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID) {
+        SubscriptionIds::SharedItem itId = d_queue.d_groupIds.find(
+            subscriptionId);
 
         if (itId) {
             // Use already selected existing Group
@@ -802,8 +828,8 @@ void Routers::RoundRobin::print(bsl::ostream& os,
                                 int           level,
                                 int           spacesPerLevel) const
 {
-    os << mwcu::PrintUtil::indent(level, spacesPerLevel) << "Consumers: "
-       << mwcu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
+    os << bmqu::PrintUtil::indent(level, spacesPerLevel) << "Consumers: "
+       << bmqu::PrintUtil::newlineAndIndent(level, spacesPerLevel)
        << "-----------------";
 
     for (Priorities::const_iterator itPriority = d_priorities.begin();
@@ -825,22 +851,22 @@ void Routers::RoundRobin::print(bsl::ostream& os,
                  ++it) {
                 const Subscription& subscription = *it;
 
-                os << mwcu::PrintUtil::newlineAndIndent(level + 1,
+                os << bmqu::PrintUtil::newlineAndIndent(level + 1,
                                                         spacesPerLevel)
                    << "priority .........: "
                    << subscription.d_ci.consumerPriorityCount()
-                   << mwcu::PrintUtil::newlineAndIndent(level + 1,
+                   << bmqu::PrintUtil::newlineAndIndent(level + 1,
                                                         spacesPerLevel)
                    << "count ............: "
                    << subscription.d_ci.consumerPriorityCount()
-                   << mwcu::PrintUtil::newlineAndIndent(level + 1,
+                   << bmqu::PrintUtil::newlineAndIndent(level + 1,
                                                         spacesPerLevel)
                    << "expression .......:"
                    << subscription.d_itGroup->value()
                           .d_itId->value()
                           .d_itExpression->key()
                           .text()
-                   << mwcu::PrintUtil::newlineAndIndent(level + 1,
+                   << bmqu::PrintUtil::newlineAndIndent(level + 1,
                                                         spacesPerLevel)
                    << "client---- .......:"
                    << subscriber.d_itConsumer->key()->client()->description();

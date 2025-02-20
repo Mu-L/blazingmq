@@ -17,22 +17,21 @@
 #ifndef INCLUDED_MQBBLP_CLUSTERSTATEMANAGER
 #define INCLUDED_MQBBLP_CLUSTERSTATEMANAGER
 
-//@PURPOSE: Provide a mechanism to manage the state of a cluster.
-//
-//@CLASSES:
-//  mqbblp::ClusterStateManager: Mechanism to manage the state of a cluster.
-//
-//@DESCRIPTION: 'mqbblp::ClusterStateManager' is a mechanism to manage the
-// state of a cluster.
-//
-/// Thread Safety
-///-------------
-// The 'mqbblp::ClusterStateManager' object is not thread safe and should
-// always be manipulated from the associated cluster's dispatcher thread,
-// unless explicitly documented in a method's contract.
+/// @file mqbblp_clusterstatemanager.h
+///
+/// @brief Provide a mechanism to manage the state of a cluster.
+///
+/// @bbref{mqbblp::ClusterStateManager} is a mechanism to manage the state of a
+/// cluster.
+///
+/// Thread Safety                          {#mqbblp_clusterstatemanager_thread}
+/// =============
+///
+/// The @bbref{mqbblp::ClusterStateManager} object is not thread safe and
+/// should always be manipulated from the associated cluster's dispatcher
+/// thread, unless explicitly documented in a method's contract.
 
 // MQB
-
 #include <mqbc_clusterdata.h>
 #include <mqbc_clustermembership.h>
 #include <mqbc_clusterstate.h>
@@ -44,10 +43,8 @@
 #include <mqbnet_multirequestmanager.h>
 #include <mqbu_storagekey.h>
 
-// MWC
-#include <mwcma_countingallocatorstore.h>
-
 // BMQ
+#include <bmqma_countingallocatorstore.h>
 #include <bmqp_ctrlmsg_messages.h>
 
 // BDE
@@ -83,8 +80,9 @@ namespace mqbblp {
 // class ClusterStateManager
 // =========================
 
-class ClusterStateManager : public mqbc::ClusterStateObserver,
-                            public mqbi::ClusterStateManager {
+class ClusterStateManager BSLS_KEYWORD_FINAL
+: public mqbc::ClusterStateObserver,
+  public mqbi::ClusterStateManager {
   private:
     // CLASS-SCOPE CATEGORY
     BALL_LOG_SET_CLASS_CATEGORY("MQBBLP.CLUSTERSTATEMANAGER");
@@ -114,8 +112,8 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
 
     typedef bsl::vector<QueueAdvisoryAndSource> QueueAdvisories;
 
-    typedef mqbc::ClusterStateQueueInfo::AppIdInfo  AppIdInfo;
-    typedef mqbc::ClusterStateQueueInfo::AppIdInfos AppIdInfos;
+    typedef mqbc::ClusterStateQueueInfo::AppInfo  AppInfo;
+    typedef mqbc::ClusterStateQueueInfo::AppInfos AppInfos;
 
     typedef mqbc::ClusterState::UriToQueueInfoMap      UriToQueueInfoMap;
     typedef mqbc::ClusterState::UriToQueueInfoMapCIter UriToQueueInfoMapCIter;
@@ -123,49 +121,41 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
 
   private:
     // DATA
-    bslma::Allocator* d_allocator_p;
-    // Allocator to use
 
-    mwcma::CountingAllocatorStore d_allocators;
-    // Allocator store to spawn new
-    // allocators for sub-components
+    /// Allocator to use.
+    bslma::Allocator* d_allocator_p;
+
+    /// Allocator store to spawn new allocators for sub-components.
+    bmqma::CountingAllocatorStore d_allocators;
 
     bool d_isStarted;
 
+    /// Cluster configuration to use.
     const mqbcfg::ClusterDefinition& d_clusterConfig;
-    // Cluster configuration to use
 
     mqbi::Cluster* d_cluster_p;
 
+    /// Transient cluster data.
     mqbc::ClusterData* d_clusterData_p;
-    // Transient cluster data
 
+    /// Cluster's state.
     mqbc::ClusterState* d_state_p;
-    // Cluster's state.
 
+    /// Underlying cluster state ledger.
+    ///
+    /// @note At this time, it's notified of cluster state events, but does not
+    ///       serve as the "single source of truth".
     ClusterStateLedgerMp d_clusterStateLedger_mp;
-    // Underlying cluster state ledger.
-    //
-    // NOTE: At this time, it's notified of
-    // cluster state events, but does not
-    // server as the "single source of
-    // truth"
 
     mqbi::StorageManager* d_storageManager_p;
 
     bool d_isFirstLeaderAdvisory;
 
+    /// List of queue advisories which were received when self node was
+    /// starting, and will be processed once this node transitions to
+    /// AVAILABLE.  A queue advisory can be either an assignment or an
+    /// un-assignment msg.
     QueueAdvisories d_bufferedQueueAdvisories;
-    // List of queue advisories which were
-    // received when self node was
-    // starting, and will be processed once
-    // this node transitions to AVAILABLE.
-    // A queue advisory can be either an
-    // assignment or an un-assignment msg.
-
-    QueueAssigningCb d_queueAssigningCb;
-
-    QueueUnassigningCb d_queueUnassigningCb;
 
     AfterPartitionPrimaryAssignmentCb d_afterPartitionPrimaryAssignmentCb;
 
@@ -240,7 +230,7 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void onPartitionPrimaryAssignment(
+    void onPartitionPrimaryAssignment(
         int                                partitionId,
         mqbnet::ClusterNode*               primary,
         unsigned int                       leaseId,
@@ -289,51 +279,41 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual int start(bsl::ostream& errorDescription) BSLS_KEYWORD_OVERRIDE;
+    int start(bsl::ostream& errorDescription) BSLS_KEYWORD_OVERRIDE;
 
     /// Stop this instance.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void stop() BSLS_KEYWORD_OVERRIDE;
+    void stop() BSLS_KEYWORD_OVERRIDE;
 
     /// Set the storage manager to the specified `value`.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void
-    setStorageManager(mqbi::StorageManager* value) BSLS_KEYWORD_OVERRIDE;
+    void setStorageManager(mqbi::StorageManager* value) BSLS_KEYWORD_OVERRIDE;
 
-    /// Set the queue assigning callback to the specified `value`.
-    virtual void
-    setQueueAssigningCb(const QueueAssigningCb& value) BSLS_KEYWORD_OVERRIDE;
-
-    virtual void setQueueUnassigningCb(const QueueUnassigningCb& value)
-        BSLS_KEYWORD_OVERRIDE;
-    // Set the queue unassigning callback to the specified 'value'.
-
-    virtual void setAfterPartitionPrimaryAssignmentCb(
+    /// Set the after partition primary assignment callback to the specified
+    /// `value`.
+    void setAfterPartitionPrimaryAssignmentCb(
         const AfterPartitionPrimaryAssignmentCb& value) BSLS_KEYWORD_OVERRIDE;
-    // Set the after partition primary assignment callback to the specified
-    // 'value'.
 
     /// Set the primary for the specified `partitionId` to be the specified
     /// `primary` with the specified `leaseId`.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void
-    setPrimary(int                  partitionId,
-               unsigned int         leaseId,
-               mqbnet::ClusterNode* primary) BSLS_KEYWORD_OVERRIDE;
+    void setPrimary(int                  partitionId,
+                    unsigned int         leaseId,
+                    mqbnet::ClusterNode* primary) BSLS_KEYWORD_OVERRIDE;
 
     /// Set the primary status of the specified `partitionId` to the
     /// specified `status`.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void setPrimaryStatus(int partitionId,
-                                  bmqp_ctrlmsg::PrimaryStatus::Value status)
+    void setPrimaryStatus(int                                partitionId,
+                          bmqp_ctrlmsg::PrimaryStatus::Value status)
         BSLS_KEYWORD_OVERRIDE;
 
     /// Mark the specified `partitions` as orphaned partitions, due to the
@@ -341,9 +321,8 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void
-    markOrphan(const bsl::vector<int>& partitions,
-               mqbnet::ClusterNode*    primary) BSLS_KEYWORD_OVERRIDE;
+    void markOrphan(const bsl::vector<int>& partitions,
+                    mqbnet::ClusterNode*    primary) BSLS_KEYWORD_OVERRIDE;
 
     /// Assign an available node to each partition which is currently
     /// orphan or is assigned to a node which is not available, and load the
@@ -352,9 +331,8 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void assignPartitions(
-        bsl::vector<bmqp_ctrlmsg::PartitionPrimaryInfo>* partitions)
-        BSLS_KEYWORD_OVERRIDE;
+    void assignPartitions(bsl::vector<bmqp_ctrlmsg::PartitionPrimaryInfo>*
+                              partitions) BSLS_KEYWORD_OVERRIDE;
 
     /// Perform the actual assignment of the queue represented by the
     /// specified `uri` for a cluster member queue, that is assign it a
@@ -367,7 +345,7 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual QueueAssignmentResult::Enum
+    QueueAssignmentResult::Enum
     assignQueue(const bmqt::Uri&      uri,
                 bmqp_ctrlmsg::Status* status = 0) BSLS_KEYWORD_OVERRIDE;
 
@@ -378,19 +356,18 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void registerQueueInfo(const bmqt::Uri&        uri,
-                                   int                     partitionId,
-                                   const mqbu::StorageKey& queueKey,
-                                   const AppIdInfos&       appIdInfos,
-                                   bool forceUpdate) BSLS_KEYWORD_OVERRIDE;
+    void registerQueueInfo(const bmqt::Uri&        uri,
+                           int                     partitionId,
+                           const mqbu::StorageKey& queueKey,
+                           const AppInfos&         appIdInfos,
+                           bool forceUpdate) BSLS_KEYWORD_OVERRIDE;
 
     /// Unassign the queue in the specified `advisory` by applying the
     /// advisory to the cluster state ledger owned by this object.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void
-    unassignQueue(const bmqp_ctrlmsg::QueueUnassignedAdvisory& advisory)
+    void unassignQueue(const bmqp_ctrlmsg::QueueUnassignedAdvisory& advisory)
         BSLS_KEYWORD_OVERRIDE;
 
     /// Send the current cluster state to follower nodes.  If the specified
@@ -405,7 +382,7 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void sendClusterState(
+    void sendClusterState(
         bool                 sendPartitionPrimaryInfo,
         bool                 sendQueuesInfo,
         mqbnet::ClusterNode* node = 0,
@@ -418,32 +395,30 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void
-    registerAppId(const bsl::string&  appId,
-                  const mqbi::Domain* domain) BSLS_KEYWORD_OVERRIDE;
+    void registerAppId(const bsl::string&  appId,
+                       const mqbi::Domain* domain) BSLS_KEYWORD_OVERRIDE;
 
     /// Unregister the specified `appId` for all queues in the specified
     /// `domain`.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void
-    unregisterAppId(const bsl::string&  appId,
-                    const mqbi::Domain* domain) BSLS_KEYWORD_OVERRIDE;
+    void unregisterAppId(const bsl::string&  appId,
+                         const mqbi::Domain* domain) BSLS_KEYWORD_OVERRIDE;
 
     /// Invoked when a newly elected (i.e. passive) leader node initiates a
     /// sync with followers before transitioning to active leader.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void initiateLeaderSync(bool wait) BSLS_KEYWORD_OVERRIDE;
+    void initiateLeaderSync(bool wait) BSLS_KEYWORD_OVERRIDE;
 
     /// Process the specified leader-sync-state-query `message` from the
     /// specified `source`.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void processLeaderSyncStateQuery(
+    void processLeaderSyncStateQuery(
         const bmqp_ctrlmsg::ControlMessage& message,
         mqbnet::ClusterNode*                source) BSLS_KEYWORD_OVERRIDE;
 
@@ -452,7 +427,7 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void processLeaderSyncDataQuery(
+    void processLeaderSyncDataQuery(
         const bmqp_ctrlmsg::ControlMessage& message,
         mqbnet::ClusterNode*                source) BSLS_KEYWORD_OVERRIDE;
 
@@ -461,16 +436,16 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void processFollowerLSNRequest(
-        const bmqp_ctrlmsg::ControlMessage& message,
-        mqbnet::ClusterNode*                source) BSLS_KEYWORD_OVERRIDE;
+    void processFollowerLSNRequest(const bmqp_ctrlmsg::ControlMessage& message,
+                                   mqbnet::ClusterNode*                source)
+        BSLS_KEYWORD_OVERRIDE;
 
     /// Process the specified follower-cluster-state-request `message` from
     /// the specified `source`.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void processFollowerClusterStateRequest(
+    void processFollowerClusterStateRequest(
         const bmqp_ctrlmsg::ControlMessage& message,
         mqbnet::ClusterNode*                source) BSLS_KEYWORD_OVERRIDE;
 
@@ -479,28 +454,28 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void processRegistrationRequest(
+    void processRegistrationRequest(
         const bmqp_ctrlmsg::ControlMessage& message,
         mqbnet::ClusterNode*                source) BSLS_KEYWORD_OVERRIDE;
 
-    /// Process the specified `event`.
+    /// Process the specified cluster state `event`.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void processClusterStateEvent(
+    void processClusterStateEvent(
         const mqbi::DispatcherClusterStateEvent& event) BSLS_KEYWORD_OVERRIDE;
 
     /// Process any queue assignment and unassignment advisory messages
     /// which were received while self node was starting.  Behavior is
     /// undefined unless self node has transitioned to AVAILABLE.
-    virtual void processBufferedQueueAdvisories() BSLS_KEYWORD_OVERRIDE;
+    void processBufferedQueueAdvisories() BSLS_KEYWORD_OVERRIDE;
 
     /// Process the queue assignment in the specified `request`, received
     /// from the specified `requester`.  Return the queue assignment result.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void processQueueAssignmentRequest(
+    void processQueueAssignmentRequest(
         const bmqp_ctrlmsg::ControlMessage& request,
         mqbnet::ClusterNode*                requester) BSLS_KEYWORD_OVERRIDE;
 
@@ -514,7 +489,7 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     /// TODO_CSL: This is the current workflow which we should be able to
     /// remove after the new workflow via
     /// ClusterQueueHelper::onQueueAssigned() is stable.
-    virtual void
+    void
     processQueueAssignmentAdvisory(const bmqp_ctrlmsg::ControlMessage& message,
                                    mqbnet::ClusterNode*                source,
                                    bool delayed = false) BSLS_KEYWORD_OVERRIDE;
@@ -528,7 +503,7 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     /// TODO_CSL: This is the current workflow which we should be able to
     /// remove after the new workflow via
     /// ClusterQueueHelper::onQueueUnassigned() is stable.
-    virtual void processQueueUnassignedAdvisory(
+    void processQueueUnassignedAdvisory(
         const bmqp_ctrlmsg::ControlMessage& message,
         mqbnet::ClusterNode*                source) BSLS_KEYWORD_OVERRIDE;
 
@@ -542,7 +517,7 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     /// TODO_CSL: This is the current workflow which we should be able to
     /// remove after the new workflow via
     /// ClusterQueueHelper::onQueueUnassigned() is stable.
-    virtual void processQueueUnAssignmentAdvisory(
+    void processQueueUnAssignmentAdvisory(
         const bmqp_ctrlmsg::ControlMessage& message,
         mqbnet::ClusterNode*                source,
         bool delayed = false) BSLS_KEYWORD_OVERRIDE;
@@ -552,7 +527,7 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void processPartitionPrimaryAdvisory(
+    void processPartitionPrimaryAdvisory(
         const bmqp_ctrlmsg::ControlMessage& message,
         mqbnet::ClusterNode*                source) BSLS_KEYWORD_OVERRIDE;
 
@@ -561,41 +536,39 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void
+    void
     processLeaderAdvisory(const bmqp_ctrlmsg::ControlMessage& message,
                           mqbnet::ClusterNode* source) BSLS_KEYWORD_OVERRIDE;
 
     /// Process the shutdown event.
     ///
     /// THREAD: Executed by any thread.
-    virtual void processShutdownEvent() BSLS_KEYWORD_OVERRIDE;
+    void processShutdownEvent() BSLS_KEYWORD_OVERRIDE;
 
     /// Invoked when the specified `node` becomes unavailable.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void
-    onNodeUnavailable(mqbnet::ClusterNode* node) BSLS_KEYWORD_OVERRIDE;
+    void onNodeUnavailable(mqbnet::ClusterNode* node) BSLS_KEYWORD_OVERRIDE;
 
     /// Invoked when this node is stopping.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void onNodeStopping() BSLS_KEYWORD_OVERRIDE;
+    void onNodeStopping() BSLS_KEYWORD_OVERRIDE;
 
     /// Invoked when this node is stopped.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual void onNodeStopped() BSLS_KEYWORD_OVERRIDE;
+    void onNodeStopped() BSLS_KEYWORD_OVERRIDE;
 
     // ACCESSORS
     //   (virtual: mqbi::ClusterStateManager)
-    virtual bool isFirstLeaderAdvisory() const BSLS_KEYWORD_OVERRIDE;
+    bool isFirstLeaderAdvisory() const BSLS_KEYWORD_OVERRIDE;
 
     /// Return the cluster state managed by this instacne.
-    virtual const mqbc::ClusterState*
-    clusterState() const BSLS_KEYWORD_OVERRIDE;
+    const mqbc::ClusterState* clusterState() const BSLS_KEYWORD_OVERRIDE;
 
     /// Invoked to perform validation of CSL's contents (on disk) against
     /// the "real" cluster state.  Logs a descriptive error message if
@@ -605,14 +578,14 @@ class ClusterStateManager : public mqbc::ClusterStateObserver,
     /// dispatcher thread.
     ///
     /// TBD: This is mostly temporary, used in phase I of integrating CSL.
-    virtual void validateClusterStateLedger() const BSLS_KEYWORD_OVERRIDE;
+    void validateClusterStateLedger() const BSLS_KEYWORD_OVERRIDE;
 
     /// Load into the specified `out` the latest ledger LSN associated with
     /// this cluster node.  Return 0 on success, and a non-zero error code
     /// on failure.  Note that this involves iteration over the entire
     /// ledger which can be an expensive operation. This is necessary to
     /// give the latest LSN from the ledger.
-    virtual int latestLedgerLSN(bmqp_ctrlmsg::LeaderMessageSequence* out) const
+    int latestLedgerLSN(bmqp_ctrlmsg::LeaderMessageSequence* out) const
         BSLS_KEYWORD_OVERRIDE;
 };
 
@@ -633,7 +606,7 @@ inline mqbi::Dispatcher* ClusterStateManager::dispatcher()
 // PRIVATE ACCESSORS
 inline bool ClusterStateManager::isLocal() const
 {
-    return d_clusterData_p->cluster()->isLocal();
+    return d_clusterData_p->cluster().isLocal();
 }
 
 inline const mqbi::Dispatcher* ClusterStateManager::dispatcher() const
@@ -646,18 +619,6 @@ inline const mqbi::Dispatcher* ClusterStateManager::dispatcher() const
 inline void ClusterStateManager::setStorageManager(mqbi::StorageManager* value)
 {
     d_storageManager_p = value;
-}
-
-inline void
-ClusterStateManager::setQueueAssigningCb(const QueueAssigningCb& value)
-{
-    d_queueAssigningCb = value;
-}
-
-inline void
-ClusterStateManager::setQueueUnassigningCb(const QueueUnassigningCb& value)
-{
-    d_queueUnassigningCb = value;
 }
 
 inline void ClusterStateManager::setAfterPartitionPrimaryAssignmentCb(

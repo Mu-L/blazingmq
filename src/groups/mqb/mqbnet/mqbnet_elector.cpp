@@ -22,10 +22,9 @@
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_schemaeventbuilder.h>
 
-// MWC
-#include <mwcio_status.h>
-#include <mwcsys_threadutil.h>
-#include <mwcsys_time.h>
+#include <bmqio_status.h>
+#include <bmqsys_threadutil.h>
+#include <bmqsys_time.h>
 
 // BDE
 #include <bdlb_print.h>
@@ -142,7 +141,7 @@ bool ElectorIOEventType::fromAscii(ElectorIOEventType::Enum* out,
 #define CHECKVALUE(M)                                                         \
     if (bdlb::String::areEqualCaseless(toAscii(ElectorIOEventType::e_##M),    \
                                        str.data(),                            \
-                                       str.length())) {                       \
+                                       static_cast<int>(str.length()))) {     \
         *out = ElectorIOEventType::e_##M;                                     \
         return true;                                                          \
     }
@@ -206,7 +205,7 @@ bool ElectorTimerEventType::fromAscii(ElectorTimerEventType::Enum* out,
 #define CHECKVALUE(M)                                                         \
     if (bdlb::String::areEqualCaseless(toAscii(ElectorTimerEventType::e_##M), \
                                        str.data(),                            \
-                                       str.length())) {                       \
+                                       static_cast<int>(str.length()))) {     \
         *out = ElectorTimerEventType::e_##M;                                  \
         return true;                                                          \
     }
@@ -266,7 +265,7 @@ bool ElectorState::fromAscii(ElectorState::Enum*      out,
 #define CHECKVALUE(M)                                                         \
     if (bdlb::String::areEqualCaseless(toAscii(ElectorState::e_##M),          \
                                        str.data(),                            \
-                                       str.length())) {                       \
+                                       static_cast<int>(str.length()))) {     \
         *out = ElectorState::e_##M;                                           \
         return true;                                                          \
     }
@@ -471,7 +470,7 @@ void ElectorStateMachine::applyLeaderHeartbeatEventToFollower(
             d_leaderNodeId            = sourceNodeId;
             d_tentativeLeaderNodeId   = k_INVALID_NODE_ID;
             d_reason                  = ElectorTransitionReason::e_NONE;
-            d_lastLeaderHeartbeatTime = mwcsys::Time::highResolutionTimer();
+            d_lastLeaderHeartbeatTime = bmqsys::Time::highResolutionTimer();
             d_scoutingInfo.reset();
 
             // Indicate elector to schedule a recurring heart beat check event,
@@ -488,7 +487,7 @@ void ElectorStateMachine::applyLeaderHeartbeatEventToFollower(
         if (sourceNodeId == d_leaderNodeId) {
             // This follower already knows about this leader
             BSLS_ASSERT_SAFE(k_INVALID_NODE_ID == d_tentativeLeaderNodeId);
-            d_lastLeaderHeartbeatTime = mwcsys::Time::highResolutionTimer();
+            d_lastLeaderHeartbeatTime = bmqsys::Time::highResolutionTimer();
 
             // No state change
             return;  // RETURN
@@ -502,7 +501,7 @@ void ElectorStateMachine::applyLeaderHeartbeatEventToFollower(
             d_tentativeLeaderNodeId   = k_INVALID_NODE_ID;
             d_leaderNodeId            = sourceNodeId;
             d_reason                  = ElectorTransitionReason::e_NONE;
-            d_lastLeaderHeartbeatTime = mwcsys::Time::highResolutionTimer();
+            d_lastLeaderHeartbeatTime = bmqsys::Time::highResolutionTimer();
             d_scoutingInfo.reset();
 
             // Indicate elector to schedule a recurring heart beat check event,
@@ -568,7 +567,7 @@ void ElectorStateMachine::applyLeaderHeartbeatEventToFollower(
     d_leaderNodeId            = sourceNodeId;
     d_term                    = term;
     d_reason                  = ElectorTransitionReason::e_NONE;
-    d_lastLeaderHeartbeatTime = mwcsys::Time::highResolutionTimer();
+    d_lastLeaderHeartbeatTime = bmqsys::Time::highResolutionTimer();
     d_scoutingInfo.reset();
 
     // Indicate elector to schedule a recurring heart beat check event, and to
@@ -618,7 +617,7 @@ void ElectorStateMachine::applyLeaderHeartbeatEventToCandidate(
     d_tentativeLeaderNodeId   = k_INVALID_NODE_ID;
     d_leaderNodeId            = sourceNodeId;
     d_reason                  = ElectorTransitionReason::e_NONE;
-    d_lastLeaderHeartbeatTime = mwcsys::Time::highResolutionTimer();
+    d_lastLeaderHeartbeatTime = bmqsys::Time::highResolutionTimer();
 
     // Indicate elector to schedule a recurring heart beat check event.
     out->setTimer(ElectorTimerEventType::e_HEARTBEAT_CHECK_TIMER);
@@ -666,7 +665,7 @@ void ElectorStateMachine::applyLeaderHeartbeatEventToLeader(
     d_term                    = term;
     d_tentativeLeaderNodeId   = k_INVALID_NODE_ID;
     d_leaderNodeId            = sourceNodeId;
-    d_lastLeaderHeartbeatTime = mwcsys::Time::highResolutionTimer();
+    d_lastLeaderHeartbeatTime = bmqsys::Time::highResolutionTimer();
     d_reason                  = ElectorTransitionReason::e_NONE;
     // TBD: specify 'e_LEADER_PREEMPTED' as the reason, instead of 'e_NONE' ?
 
@@ -728,7 +727,7 @@ void ElectorStateMachine::applyElectionProposalEventToFollower(
     d_term                    = term;
     d_tentativeLeaderNodeId   = sourceNodeId;
     d_leaderNodeId            = k_INVALID_NODE_ID;
-    d_lastLeaderHeartbeatTime = mwcsys::Time::highResolutionTimer();
+    d_lastLeaderHeartbeatTime = bmqsys::Time::highResolutionTimer();
     d_scoutingInfo.reset();
 }
 
@@ -764,7 +763,7 @@ void ElectorStateMachine::applyElectionProposalEventToCandidate(
     d_leaderNodeId            = k_INVALID_NODE_ID;
     d_tentativeLeaderNodeId   = sourceNodeId;
     d_reason                  = ElectorTransitionReason::e_ELECTION_PREEMPTED;
-    d_lastLeaderHeartbeatTime = mwcsys::Time::highResolutionTimer();
+    d_lastLeaderHeartbeatTime = bmqsys::Time::highResolutionTimer();
     d_supporters.clear();
 
     // Indicate state change.
@@ -1428,7 +1427,7 @@ void ElectorStateMachine::applyHeartbeatCheckTimerEvent(
 
     BSLS_ASSERT(d_supporters.empty());
 
-    bsls::Types::Int64 currTime = mwcsys::Time::highResolutionTimer();
+    bsls::Types::Int64 currTime = bmqsys::Time::highResolutionTimer();
     if ((currTime - d_lastLeaderHeartbeatTime) < d_leaderInactivityInterval) {
         // Received heart beat from leader within the configured time interval.
         // No state change.
@@ -1608,9 +1607,10 @@ void ElectorStateMachine::enable(int selfId,
         return;  // RETURN
     }
 
+    // DO NOT set `d_term` to 0 because the Elector could have started with a
+    // non-zero initial term.
     d_state                    = ElectorState::e_FOLLOWER;
     d_reason                   = ElectorTransitionReason::e_STARTED;
-    d_term                     = 0;
     d_quorum                   = quorum;
     d_numTotalPeers            = numTotalPeers;
     d_selfId                   = selfId;
@@ -1940,7 +1940,7 @@ void Elector::scheduleTimer(ElectorTimerEventType::Enum type)
 
     switch (type) {
     case ElectorTimerEventType::e_INITIAL_WAIT_TIMER: {
-        bsls::TimeInterval after(mwcsys::Time::nowMonotonicClock());
+        bsls::TimeInterval after(bmqsys::Time::nowMonotonicClock());
         after.addMilliseconds(d_config.initialWaitTimeoutMs());
 
         d_scheduler.scheduleEvent(
@@ -1956,7 +1956,7 @@ void Elector::scheduleTimer(ElectorTimerEventType::Enum type)
 
         int randomMs = bsl::rand() % (d_config.maxRandomWaitTimeoutMs() + 1);
 
-        bsls::TimeInterval after(mwcsys::Time::nowMonotonicClock());
+        bsls::TimeInterval after(bmqsys::Time::nowMonotonicClock());
         after.addMilliseconds(randomMs);
 
         d_scheduler.scheduleEvent(
@@ -1967,7 +1967,7 @@ void Elector::scheduleTimer(ElectorTimerEventType::Enum type)
 
     case ElectorTimerEventType::e_ELECTION_RESULT_TIMER: {
         // Schedule election timer
-        bsls::TimeInterval after(mwcsys::Time::nowMonotonicClock());
+        bsls::TimeInterval after(bmqsys::Time::nowMonotonicClock());
         after.addMilliseconds(d_config.electionResultTimeoutMs());
 
         d_scheduler.scheduleEvent(
@@ -1999,7 +1999,7 @@ void Elector::scheduleTimer(ElectorTimerEventType::Enum type)
     } break;  // BREAK
 
     case ElectorTimerEventType::e_SCOUTING_RESULT_TIMER: {
-        bsls::TimeInterval after(mwcsys::Time::nowMonotonicClock());
+        bsls::TimeInterval after(bmqsys::Time::nowMonotonicClock());
         after.addMilliseconds(d_config.scoutingResultTimeoutMs());
 
         d_scheduler.scheduleEvent(
@@ -2078,7 +2078,9 @@ void Elector::emitIOEvent(const ElectorStateMachineOutput& output)
     // 'emitIOEvent' is currently always called while 'd_lock' is held, but
     // that's an implementation side effect, not part of contract.  That's why
     // we create the builder on stack instead of making it a class member.
-    bmqp::SchemaEventBuilder builder(d_bufferFactory_p, d_allocator_p);
+    bmqp::SchemaEventBuilder builder(d_blobSpPool_p,
+                                     bmqp::EncodingType::e_BER,
+                                     d_allocator_p);
 
     int rc = builder.setMessage(message, bmqp::EventType::e_ELECTOR);
     if (0 != rc) {
@@ -2089,7 +2091,7 @@ void Elector::emitIOEvent(const ElectorStateMachineOutput& output)
     }
 
     // Retrieve the encoded event
-    const bdlbb::Blob& blob = builder.blob();
+    const bsl::shared_ptr<bdlbb::Blob> blob = builder.blob();
     if (k_ALL_NODES_ID == output.destination()) {
         // Broadcast to cluster, using the unicast channel to ensure ordering
         // of events
@@ -2201,10 +2203,10 @@ Elector::Elector(mqbcfg::ElectorConfig&      config,
                  mqbi::Cluster*              cluster,
                  const ElectorStateCallback& callback,
                  bsls::Types::Uint64         initialTerm,
-                 bdlbb::BlobBufferFactory*   bufferFactory,
+                 BlobSpPool*                 blobSpPool_p,
                  bslma::Allocator*           allocator)
 : d_allocator_p(allocator)
-, d_bufferFactory_p(bufferFactory)
+, d_blobSpPool_p(blobSpPool_p)
 , d_cluster_p(cluster)
 , d_netCluster_p(0)
 , d_config(config)
@@ -2223,7 +2225,7 @@ Elector::Elector(mqbcfg::ElectorConfig&      config,
 , d_previousEventAge(0)  // first state transition's age will be 1
 {
     BSLS_ASSERT_SAFE(d_allocator_p);
-    BSLS_ASSERT_SAFE(d_bufferFactory_p);
+    BSLS_ASSERT_SAFE(d_blobSpPool_p);
     BSLS_ASSERT_SAFE(d_cluster_p);
     BSLS_ASSERT_SAFE(d_callback);
 
@@ -2232,13 +2234,13 @@ Elector::Elector(mqbcfg::ElectorConfig&      config,
 
     d_state.setTerm(initialTerm);
 
-    if (mwcsys::ThreadUtil::k_SUPPORT_THREAD_NAME) {
+    if (bmqsys::ThreadUtil::k_SUPPORT_THREAD_NAME) {
         // Per scheduler's contract, it's ok to schedule events before its
         // started.
 
         d_scheduler.scheduleEvent(
             bsls::TimeInterval(0, 0),  // now
-            bdlf::BindUtil::bind(&mwcsys::ThreadUtil::setCurrentThreadName,
+            bdlf::BindUtil::bind(&bmqsys::ThreadUtil::setCurrentThreadName,
                                  "bmqSchedElec"));
     }
 }
@@ -2335,7 +2337,7 @@ int Elector::start()
                                 // is enabled
 
     // Schedule initial wait timer and return success
-    bsls::TimeInterval after(mwcsys::Time::nowMonotonicClock());
+    bsls::TimeInterval after(bmqsys::Time::nowMonotonicClock());
     after.addMilliseconds(d_config.initialWaitTimeoutMs());
 
     d_scheduler.scheduleEvent(
@@ -2459,7 +2461,7 @@ int Elector::processCommand(mqbcmd::ElectorResult*        electorResult,
         if (bdlb::StringRefUtil::areEqualCaseless(tunable.name(), "QUORUM")) {
             if (!tunable.value().isTheIntegerValue() ||
                 tunable.value().theInteger() < 0) {
-                mwcu::MemOutStream output;
+                bmqu::MemOutStream output;
                 output << "The QUORUM tunable must be a non-negative integer, "
                           "but instead the following was specified: "
                        << tunable.value();
@@ -2481,14 +2483,14 @@ int Elector::processCommand(mqbcmd::ElectorResult*        electorResult,
             return 0;  // RETURN
         }
 
-        mwcu::MemOutStream output;
+        bmqu::MemOutStream output;
         output << "Unknown tunable name '" << tunable.name() << "'";
         electorResult->makeError();
         electorResult->error().message() = output.str();
         return -1;  // RETURN
     }
     else if (command.isGetTunableValue()) {
-        const bsl::string& tunable = command.getTunable();
+        const bsl::string& tunable = command.getTunable().name();
         if (bdlb::StringRefUtil::areEqualCaseless(tunable, "QUORUM")) {
             mqbcmd::Tunable& tunableObj = electorResult->makeTunable();
             tunableObj.name()           = "Quorum";
@@ -2496,7 +2498,7 @@ int Elector::processCommand(mqbcmd::ElectorResult*        electorResult,
             return 0;  // RETURN
         }
 
-        mwcu::MemOutStream output;
+        bmqu::MemOutStream output;
         output << "Unsupported tunable '" << tunable << "': Issue the "
                << "LIST_TUNABLES command for the list of supported tunables.";
         electorResult->makeError();
@@ -2514,7 +2516,7 @@ int Elector::processCommand(mqbcmd::ElectorResult*        electorResult,
         return 0;  // RETURN
     }
 
-    mwcu::MemOutStream output;
+    bmqu::MemOutStream output;
     output << "Unknown command '" << command << "'";
     electorResult->makeError();
     electorResult->error().message() = output.str();

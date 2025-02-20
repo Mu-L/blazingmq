@@ -17,8 +17,8 @@
 #include <bmqp_compression.h>
 
 #include <bmqscm_version.h>
-// MWC
-#include <mwcu_blob.h>
+
+#include <bmqu_blob.h>
 
 // BDE
 #include <bdlbb_blobutil.h>
@@ -67,7 +67,7 @@ struct ZLib {
 
     // CLASS METHODS
 
-    /// Return a buffer sufficient to hold the the specified number of
+    /// Return a buffer sufficient to hold the specified number of
     /// `items`, each having the specified `size`, using the specified
     /// `opaque` casted to a `bslma::Allocator *` to supply memory.
     static void*
@@ -170,14 +170,14 @@ bool ZLib::advanceInput(bdlbb::BlobBuffer* inBuffer,
 
         ++(*index);
         *inBuffer        = input.buffer(*index);
-        stream->avail_in = mwcu::BlobUtil::bufferSize(input, *index);
+        stream->avail_in = bmqu::BlobUtil::bufferSize(input, *index);
         stream->next_in  = reinterpret_cast<unsigned char*>(inBuffer->data());
     }
     else {
         // Advance the 'next_in' pointer to the next region of unconsumed data
         // in the buffer.
 
-        const ptrdiff_t offset = mwcu::BlobUtil::bufferSize(input, *index) -
+        const ptrdiff_t offset = bmqu::BlobUtil::bufferSize(input, *index) -
                                  stream->avail_in;
         stream->next_in = reinterpret_cast<unsigned char*>(inBuffer->data() +
                                                            offset);

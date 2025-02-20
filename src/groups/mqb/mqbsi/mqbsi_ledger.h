@@ -39,12 +39,12 @@
 #include <mqbsi_log.h>
 #include <mqbu_storagekey.h>
 
-// MWC
-#include <mwcu_blob.h>
+#include <bmqu_blob.h>
 
 // BDE
 #include <bdlb_nullablevalue.h>
 #include <bdlbb_blob.h>
+#include <bdlmt_eventscheduler.h>
 #include <bsl_functional.h>
 #include <bsl_memory.h>
 #include <bsl_string.h>
@@ -56,6 +56,12 @@
 #include <bsls_types.h>
 
 namespace BloombergLP {
+
+// FORWARD DECLARATIONS
+namespace bdlmt {
+class EventScheduler;
+}
+
 namespace mqbsi {
 
 // =====================
@@ -295,6 +301,8 @@ class LedgerConfig {
     bsl::shared_ptr<mqbsi::LogIdGenerator> d_logIdGenerator_sp;
     // Pointer to generator of log ids.
 
+    bdlmt::EventScheduler* d_scheduler_p;
+
     ExtractLogIdCb d_extractLogIdCallback;
     // Callback invoked to extract the ID
     // of a log.
@@ -336,6 +344,7 @@ class LedgerConfig {
     setLogFactory(const bsl::shared_ptr<mqbsi::LogFactory>& value);
     LedgerConfig&
     setLogIdGenerator(const bsl::shared_ptr<mqbsi::LogIdGenerator>& value);
+    LedgerConfig& setScheduler(bdlmt::EventScheduler* value);
     LedgerConfig& setExtractLogIdCallback(const ExtractLogIdCb& value);
     LedgerConfig& setValidateLogCallback(const ValidateLogCb& value);
     LedgerConfig& setRolloverCallback(const OnRolloverCb& value);
@@ -353,6 +362,7 @@ class LedgerConfig {
     bool                   keepOldLogs() const;
     mqbsi::LogFactory*     logFactory() const;
     mqbsi::LogIdGenerator* logIdGenerator() const;
+    bdlmt::EventScheduler* scheduler() const;
     const ExtractLogIdCb&  extractLogIdCallback() const;
     const ValidateLogCb&   validateLogCallback() const;
     const OnRolloverCb&    rolloverCallback() const;
@@ -450,8 +460,8 @@ class Ledger {
                             int             length) = 0;
     virtual int writeRecord(LedgerRecordId*           recordId,
                             const bdlbb::Blob&        record,
-                            const mwcu::BlobPosition& offset,
-                            int                       length) = 0;
+                            const bmqu::BlobPosition& offset,
+                            int                       length)             = 0;
 
     /// Write the specified `section` of the specified `record` into this
     /// ledger and load into `recordId` an identifier which can be used to
@@ -460,7 +470,7 @@ class Ledger {
     /// adjust the total outstanding number of bytes if successful.
     virtual int writeRecord(LedgerRecordId*          recordId,
                             const bdlbb::Blob&       record,
-                            const mwcu::BlobSection& section) = 0;
+                            const bmqu::BlobSection& section) = 0;
 
     /// Flush any cached data in this ledger to the underlying storage
     /// mechanism, and return 0 on success, or a non-zero value on error.

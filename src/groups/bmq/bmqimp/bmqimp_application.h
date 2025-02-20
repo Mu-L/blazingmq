@@ -40,20 +40,20 @@
 #include <bmqimp_eventqueue.h>
 #include <bmqimp_negotiatedchannelfactory.h>
 #include <bmqp_ctrlmsg_messages.h>
+#include <bmqp_heartbeatmonitor.h>
 #include <bmqt_sessionoptions.h>
 
-// MWC
-#include <mwcio_channel.h>
-#include <mwcio_channelfactory.h>
-#include <mwcio_ntcchannelfactory.h>
-#include <mwcio_reconnectingchannelfactory.h>
-#include <mwcio_resolvingchannelfactory.h>
-#include <mwcio_statchannelfactory.h>
-#include <mwcma_countingallocator.h>
-#include <mwcma_countingallocatorstore.h>
-#include <mwcst_basictableinfoprovider.h>
-#include <mwcst_statcontext.h>
-#include <mwcst_table.h>
+#include <bmqio_channel.h>
+#include <bmqio_channelfactory.h>
+#include <bmqio_ntcchannelfactory.h>
+#include <bmqio_reconnectingchannelfactory.h>
+#include <bmqio_resolvingchannelfactory.h>
+#include <bmqio_statchannelfactory.h>
+#include <bmqma_countingallocator.h>
+#include <bmqma_countingallocatorstore.h>
+#include <bmqst_basictableinfoprovider.h>
+#include <bmqst_statcontext.h>
+#include <bmqst_table.h>
 
 // BDE
 #include <ball_log.h>
@@ -79,54 +79,60 @@ namespace bmqimp {
 
 /// Top level object to manipulate a session with bmqbrkr
 class Application {
-  private:
-    // PRIVATE TYPES
-    typedef bslma::ManagedPtr<mwcio::ChannelFactory::OpHandle>
-        ChannelFactoryOpHandleMp;
+  public:
+    // PUBLIC TYPES
+    typedef bmqp::BlobPoolUtil::BlobSpPool BlobSpPool;
+    typedef bmqp::BlobPoolUtil::BlobSpPoolSp BlobSpPoolSp;
 
   private:
+    // PRIVATE TYPES
+    typedef bslma::ManagedPtr<bmqio::ChannelFactory::OpHandle>
+        ChannelFactoryOpHandleMp;
+
     // CLASS-SCOPE CATEGORY
     BALL_LOG_SET_CLASS_CATEGORY("BMQIMP.APPLICATION");
 
-  private:
     // DATA
-    mwcst::StatContext d_allocatorStatContext;
+    bmqst::StatContext d_allocatorStatContext;
     // Stat context for counting allocators
 
-    mwcma::CountingAllocator d_allocator;
+    bmqma::CountingAllocator d_allocator;
     // Counting allocator
 
-    mwcma::CountingAllocatorStore d_allocators;
+    bmqma::CountingAllocatorStore d_allocators;
     // Allocator store to spawn new
     // allocators for sub-components
 
-    mwcst::StatContext d_rootStatContext;
+    bmqst::StatContext d_rootStatContext;
     // Top level stat context for all stats
 
-    bslma::ManagedPtr<mwcst::StatContext> d_channelsStatContext_mp;
+    bslma::ManagedPtr<bmqst::StatContext> d_channelsStatContext_mp;
     // Top level stat context for channels
 
     bmqt::SessionOptions d_sessionOptions;
     // Options to configure this
     // application
 
-    mwcst::Table d_channelsTable;
+    bmqst::Table d_channelsTable;
 
-    mwcu::BasicTableInfoProvider d_channelsTip;
+    bmqst::BasicTableInfoProvider d_channelsTip;
 
     bdlbb::PooledBlobBufferFactory d_blobBufferFactory;
     // Factory for blob buffers
 
+    /// Shared pointer to the pool of shared pointers to blobs.
+    BlobSpPoolSp d_blobSpPool_sp;
+
     bdlmt::EventScheduler d_scheduler;
     // Scheduler
 
-    mwcio::NtcChannelFactory d_channelFactory;
+    bmqio::NtcChannelFactory d_channelFactory;
 
-    mwcio::ResolvingChannelFactory d_resolvingChannelFactory;
+    bmqio::ResolvingChannelFactory d_resolvingChannelFactory;
 
-    mwcio::ReconnectingChannelFactory d_reconnectingChannelFactory;
+    bmqio::ReconnectingChannelFactory d_reconnectingChannelFactory;
 
-    mwcio::StatChannelFactory d_statChannelFactory;
+    bmqio::StatChannelFactory d_statChannelFactory;
 
     NegotiatedChannelFactory d_negotiatedChannelFactory;
 
@@ -154,29 +160,33 @@ class Application {
     // the snapshot was performed on the
     // Counting Allocators context
 
+    /// Scheduler handle of the recurring event to monitor channels heartbeats.
+    bdlmt::EventSchedulerRecurringEventHandle d_heartbeatSchedulerHandle;
+
   private:
     // PRIVATE MANIPULATORS
     void onChannelDown(const bsl::string&   peerUri,
-                       const mwcio::Status& status);
+                       const bmqio::Status& status);
 
     void onChannelWatermark(const bsl::string&                peerUri,
-                            mwcio::ChannelWatermarkType::Enum type);
+                            bmqio::ChannelWatermarkType::Enum type);
 
-    void readCb(const mwcio::Status&                   status,
-                int*                                   numNeeded,
-                bdlbb::Blob*                           blob,
-                const bsl::shared_ptr<mwcio::Channel>& channel);
+    void readCb(const bmqio::Status&                           status,
+                int*                                           numNeeded,
+                bdlbb::Blob*                                   blob,
+                const bsl::shared_ptr<bmqio::Channel>&         channel,
+                const bsl::shared_ptr<bmqp::HeartbeatMonitor>& monitor);
 
     void channelStateCallback(const bsl::string&                     endpoint,
-                              mwcio::ChannelFactoryEvent::Enum       event,
-                              const mwcio::Status&                   status,
-                              const bsl::shared_ptr<mwcio::Channel>& channel);
+                              bmqio::ChannelFactoryEvent::Enum       event,
+                              const bmqio::Status&                   status,
+                              const bsl::shared_ptr<bmqio::Channel>& channel);
 
     /// Create and return the statContext to be used for tracking stats of
     /// the specified `channel` obtained from the specified `handle`.
-    bslma::ManagedPtr<mwcst::StatContext> channelStatContextCreator(
-        const bsl::shared_ptr<mwcio::Channel>&                  channel,
-        const bsl::shared_ptr<mwcio::StatChannelFactoryHandle>& handle);
+    bslma::ManagedPtr<bmqst::StatContext> channelStatContextCreator(
+        const bsl::shared_ptr<bmqio::Channel>&                  channel,
+        const bsl::shared_ptr<bmqio::StatChannelFactoryHandle>& handle);
 
     /// Method to call after the broker session has been stopped (whether
     /// sync or async), for cleanup of application.
@@ -206,6 +216,19 @@ class Application {
     stateCb(bmqimp::BrokerSession::State::Enum    oldState,
             bmqimp::BrokerSession::State::Enum    newState,
             bmqimp::BrokerSession::FsmEvent::Enum event);
+
+    /// Recurring scheduler event to check for all `heartbeat-enabled`
+    /// channels : this will send a heartbeat if no data has been received
+    /// on a given channel, or proactively reset the channel if too many
+    /// heartbeats have been missed.
+    void onHeartbeatSchedulerEvent(
+        const bsl::shared_ptr<bmqio::Channel>&         channel,
+        const bsl::shared_ptr<bmqp::HeartbeatMonitor>& monitor);
+    bsl::shared_ptr<bmqp::HeartbeatMonitor>
+    createMonitor(const bsl::shared_ptr<bmqio::Channel>& channel);
+    void startHeartbeat(const bsl::shared_ptr<bmqio::Channel>&         channel,
+                        const bsl::shared_ptr<bmqp::HeartbeatMonitor>& monitor);
+    void stopHeartbeat();
 
   private:
     // NOT IMPLEMENTED
@@ -250,17 +273,14 @@ class Application {
     /// of this `Application`.
     const bmqt::SessionOptions& sessionOptions() const;
 
-    /// Return `true` if the the application is started, `false` otherwise.
+    /// Return `true` if the application is started, `false` otherwise.
     bool isStarted() const;
 
     // MANIPULATORS
 
-    /// Return a pointer to the blob buffer factory used by this instance.
-    /// Note that lifetime of the pointed-to buffer factory is bound by this
-    /// instance.
-    bdlbb::BlobBufferFactory* bufferFactory();
-
-    // MANIPULATORS
+    /// Return a pointer to the blob shared pointer pool used by this instance.
+    /// Note that lifetime of the pointed-to pool is bound by this instance.
+    BlobSpPool* blobSpPool();
 
     /// Start the session and the session pool. Return 0 on success or a
     /// non-zero negative code otherwise.  Calling start on an already
@@ -321,9 +341,9 @@ inline bool Application::isStarted() const
             state == bmqimp::BrokerSession::State::e_RECONNECTING);
 }
 
-inline bdlbb::BlobBufferFactory* Application::bufferFactory()
+inline Application::BlobSpPool* Application::blobSpPool()
 {
-    return &d_blobBufferFactory;
+    return d_blobSpPool_sp.get();
 }
 
 }  // close package namespace

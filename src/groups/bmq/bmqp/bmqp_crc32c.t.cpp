@@ -17,12 +17,11 @@
 #include <bmqp_crc32c.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_printutil.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bdlbb_blobutil.h>
@@ -247,7 +246,7 @@ static void printTableRows(bsl::ostream&                   out,
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(headerCols.size() == 4);
 
-    mwcu::OutStreamFormatSaver fmtSaver(out);
+    bmqu::OutStreamFormatSaver fmtSaver(out);
 
     out << bsl::right << bsl::fixed;
 
@@ -309,7 +308,7 @@ static void test1_breathingTest()
 //   Basic functionality
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     {
         PV("BUFFER");
@@ -331,9 +330,9 @@ static void test1_breathingTest()
         crc32cHWSerial = bmqp::Crc32c_Impl::calculateHardwareSerial(buffer,
                                                                     length);
 
-        ASSERT_EQ(crc32cDefault, expectedCrc);
-        ASSERT_EQ(crc32cSoftware, expectedCrc);
-        ASSERT_EQ(crc32cHWSerial, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cHWSerial, expectedCrc);
     }
 
     {
@@ -353,9 +352,9 @@ static void test1_breathingTest()
         /// Hardware Serial
         crc32cHWSerial = bmqp::Crc32c_Impl::calculateHardwareSerial(0, 0);
 
-        ASSERT_EQ(crc32cDef, expectedCrc);
-        ASSERT_EQ(crc32cSW, expectedCrc);
-        ASSERT_EQ(crc32cHWSerial, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cDef, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cSW, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cHWSerial, expectedCrc);
     }
 
     {
@@ -378,9 +377,9 @@ static void test1_breathingTest()
         crc32cHWSerial = bmqp::Crc32c_Impl::calculateHardwareSerial(buffer,
                                                                     length);
 
-        ASSERT_EQ(crc32cDefault, expectedCrc);
-        ASSERT_EQ(crc32cSoftware, expectedCrc);
-        ASSERT_EQ(crc32cHWSerial, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cHWSerial, expectedCrc);
 
         // Compute value for whole buffer
         length         = strlen(buffer);
@@ -399,9 +398,9 @@ static void test1_breathingTest()
         crc32cHWSerial = bmqp::Crc32c_Impl::calculateHardwareSerial(buffer,
                                                                     length);
 
-        ASSERT_EQ(crc32cDefault, expectedCrc);
-        ASSERT_EQ(crc32cSoftware, expectedCrc);
-        ASSERT_EQ(crc32cHWSerial, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cHWSerial, expectedCrc);
 
         // Now specify length 0 and pass the previous crc and expect the
         // previous crc to be the result.
@@ -422,9 +421,9 @@ static void test1_breathingTest()
                                                                     length,
                                                                     prevCrc);
 
-        ASSERT_EQ(crc32cDefault, expectedCrc);
-        ASSERT_EQ(crc32cSoftware, expectedCrc);
-        ASSERT_EQ(crc32cHWSerial, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cHWSerial, expectedCrc);
     }
 
     {
@@ -468,9 +467,9 @@ static void test1_breathingTest()
             restLength,
             crc32cHWSerial);
 
-        ASSERT_EQ(crc32cDefault, expectedCrc);
-        ASSERT_EQ(crc32cSoftware, expectedCrc);
-        ASSERT_EQ(crc32cHWSerial, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc);
+        BMQTST_ASSERT_EQ(crc32cHWSerial, expectedCrc);
     }
 }
 
@@ -492,7 +491,7 @@ static void test2_calculateOnBuffer()
 //   both the default and software flavors for calculating CRC32-C.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("CALCULATE CRC32-C ON BUFFER");
+    bmqtst::TestHelper::printTestName("CALCULATE CRC32-C ON BUFFER");
 
     struct Test {
         int          d_line;
@@ -539,15 +538,15 @@ static void test2_calculateOnBuffer()
             bmqp::Crc32c_Impl::calculateHardwareSerial(test.d_buffer, length);
 
         // Verify correctness
-        ASSERT_EQ_D("line " << test.d_line << " (Default)",
-                    crc32cDefault,
-                    test.d_expectedCrc32c);
-        ASSERT_EQ_D("line " << test.d_line << " (Software)",
-                    crc32cSoftware,
-                    test.d_expectedCrc32c);
-        ASSERT_EQ_D("line " << test.d_line << " (HW Serial)",
-                    crc32cHWSerial,
-                    test.d_expectedCrc32c);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Default)",
+                           crc32cDefault,
+                           test.d_expectedCrc32c);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Software)",
+                           crc32cSoftware,
+                           test.d_expectedCrc32c);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (HW Serial)",
+                           crc32cHWSerial,
+                           test.d_expectedCrc32c);
 
         // Test edge case of non-null buffer and length = 0
 
@@ -562,13 +561,15 @@ static void test2_calculateOnBuffer()
         crc32cHWSerial =
             bmqp::Crc32c_Impl::calculateHardwareSerial(test.d_buffer, 0);
 
-        ASSERT_EQ_D("line " << test.d_line << " (Default)", crc32cDefault, 0u);
-        ASSERT_EQ_D("line " << test.d_line << " (Software)",
-                    crc32cSoftware,
-                    0u);
-        ASSERT_EQ_D("line " << test.d_line << " (HW Serial)",
-                    crc32cHWSerial,
-                    0u);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Default)",
+                           crc32cDefault,
+                           0u);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Software)",
+                           crc32cSoftware,
+                           0u);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (HW Serial)",
+                           crc32cHWSerial,
+                           0u);
     }
 }
 
@@ -601,7 +602,7 @@ static void test3_calculateOnMisalignedBuffer()
 //                                      unsigned int  crc = k_NULL_CRC32C);
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "CALCULATE CRC32-C ON MISALIGNED BUFFER");
 
     const int k_BUFFER_SIZE = 1024;
@@ -687,15 +688,15 @@ static void test3_calculateOnMisalignedBuffer()
                                                            testBufLength);
 
             // Verify correctness
-            ASSERT_EQ_D("line " << test.d_line << " (Default)",
-                        crc32cDefault,
-                        test.d_expectedCrc32c);
-            ASSERT_EQ_D("line " << test.d_line << " (Software)",
-                        crc32cSoftware,
-                        test.d_expectedCrc32c);
-            ASSERT_EQ_D("line " << test.d_line << " (HW Serial)",
-                        crc32cHWSerial,
-                        test.d_expectedCrc32c);
+            BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Default)",
+                               crc32cDefault,
+                               test.d_expectedCrc32c);
+            BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Software)",
+                               crc32cSoftware,
+                               test.d_expectedCrc32c);
+            BMQTST_ASSERT_EQ_D("line " << test.d_line << " (HW Serial)",
+                               crc32cHWSerial,
+                               test.d_expectedCrc32c);
         }
     }
 }
@@ -712,7 +713,7 @@ static void test3_calculateOnMisalignedBuffer()
 /// ------------------------------------------------------------------------
 static void test4_calculateOnBufferWithPreviousCrc()
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "CALCULATE CRC32-C ON BUFFER WITH PREVIOUS CRC");
 
     struct Test {
@@ -765,9 +766,9 @@ static void test4_calculateOnBufferWithPreviousCrc()
                                                 suffixLen,
                                                 crc32cDefault);
 
-        ASSERT_EQ_D("line " << test.d_line << " (Default)",
-                    crc32cDefault,
-                    test.d_expectedCrc32c);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Default)",
+                           crc32cDefault,
+                           test.d_expectedCrc32c);
 
         // Software
         unsigned int crc32cSoftware =
@@ -778,9 +779,9 @@ static void test4_calculateOnBufferWithPreviousCrc()
                                                               suffixLen,
                                                               crc32cSoftware);
 
-        ASSERT_EQ_D("line " << test.d_line << " (Software)",
-                    crc32cSoftware,
-                    test.d_expectedCrc32c);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Software)",
+                           crc32cSoftware,
+                           test.d_expectedCrc32c);
 
         // Test edge case where non-null buffer and length = 0 with previous
         // CRC returns the previous CRC
@@ -789,18 +790,18 @@ static void test4_calculateOnBufferWithPreviousCrc()
         // Default
         crc32cDefault = bmqp::Crc32c::calculate(test.d_buffer, 0, previousCrc);
 
-        ASSERT_EQ_D("line " << test.d_line << " (Default)",
-                    crc32cDefault,
-                    previousCrc);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Default)",
+                           crc32cDefault,
+                           previousCrc);
 
         // Software
         crc32cSoftware = bmqp::Crc32c_Impl::calculateSoftware(test.d_buffer,
                                                               0,
                                                               previousCrc);
 
-        ASSERT_EQ_D("line " << test.d_line << " (Software)",
-                    crc32cSoftware,
-                    previousCrc);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Software)",
+                           crc32cSoftware,
+                           previousCrc);
 
         // Test edge case where null buffer and length = 0 with previous
         // CRC returns the previous CRC
@@ -812,18 +813,18 @@ static void test4_calculateOnBufferWithPreviousCrc()
         // Default
         crc32cDefault = bmqp::Crc32c::calculate(0, 0, previousCrc);
 
-        ASSERT_EQ_D("line " << test.d_line << " (Default)",
-                    crc32cDefault,
-                    previousCrc);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Default)",
+                           crc32cDefault,
+                           previousCrc);
 
         // Software
         crc32cSoftware = bmqp::Crc32c_Impl::calculateSoftware(0,
                                                               0,
                                                               previousCrc);
 
-        ASSERT_EQ_D("line " << test.d_line << " (Software)",
-                    crc32cSoftware,
-                    previousCrc);
+        BMQTST_ASSERT_EQ_D("line " << test.d_line << " (Software)",
+                           crc32cSoftware,
+                           previousCrc);
     }
 }
 
@@ -850,29 +851,31 @@ static void test5_multithreadedCrc32cDefault()
 //   in a multithreaded environment.
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
-    s_ignoreCheckGblAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
+    bmqtst::TestHelperUtil::ignoreCheckGblAlloc() = true;
     // Can't ensure no global memory is allocated because
     // 'bslmt::ThreadUtil::create()' uses the global allocator to allocate
     // memory.
 
-    mwctst::TestHelper::printTestName("MULTITHREAD DEFAULT CRC32-C");
+    bmqtst::TestHelper::printTestName("MULTITHREAD DEFAULT CRC32-C");
 
     enum { k_NUM_PAYLOADS = 10000, k_NUM_THREADS = 10 };
 
     // Input buffers
-    bsl::vector<char*> payloads(s_allocator_p);
+    bsl::vector<char*> payloads(bmqtst::TestHelperUtil::allocator());
     payloads.reserve(k_NUM_PAYLOADS);
 
     // Populate with random data
     for (unsigned int i = 0; i < k_NUM_PAYLOADS; ++i) {
-        char* buffer = static_cast<char*>(s_allocator_p->allocate(i + 1));
+        char* buffer = static_cast<char*>(
+            bmqtst::TestHelperUtil::allocator()->allocate(i + 1));
         bsl::generate_n(buffer, i + 1, bsl::rand);
         payloads.push_back(buffer);
     }
 
     // [1] Serial calculation
-    bsl::vector<unsigned int> serialCrc32cData(s_allocator_p);
+    bsl::vector<unsigned int> serialCrc32cData(
+        bmqtst::TestHelperUtil::allocator());
     serialCrc32cData.reserve(k_NUM_PAYLOADS);
     for (unsigned int i = 0; i < k_NUM_PAYLOADS; ++i) {
         const unsigned int crc32c = bmqp::Crc32c::calculate(payloads[i],
@@ -881,14 +884,15 @@ static void test5_multithreadedCrc32cDefault()
     }
 
     // [2] Multithreaded Calculation
-    bslmt::ThreadGroup threadGroup(s_allocator_p);
+    bslmt::ThreadGroup threadGroup(bmqtst::TestHelperUtil::allocator());
 
     // Barrier to get each thread to start at the same time; `+1` for this
     // (main) thread.
     bslmt::Barrier barrier(k_NUM_THREADS + 1);
 
-    bsl::vector<bsl::vector<unsigned int> > threadsCrc32cData(k_NUM_THREADS,
-                                                              s_allocator_p);
+    bsl::vector<bsl::vector<unsigned int> > threadsCrc32cData(
+        k_NUM_THREADS,
+        bmqtst::TestHelperUtil::allocator());
     for (unsigned int i = 0; i < k_NUM_THREADS; ++i) {
         int rc = threadGroup.addThread(
             bdlf::BindUtil::bind(&threadFunction,
@@ -907,15 +911,15 @@ static void test5_multithreadedCrc32cDefault()
         const bsl::vector<unsigned int>& currThreadCrc32cData =
             threadsCrc32cData[i];
         for (unsigned int j = 0; j < k_NUM_PAYLOADS; ++j) {
-            ASSERT_EQ_D("thread " << i << "[" << j << "]",
-                        serialCrc32cData[j],
-                        currThreadCrc32cData[j]);
+            BMQTST_ASSERT_EQ_D("thread " << i << "[" << j << "]",
+                               serialCrc32cData[j],
+                               currThreadCrc32cData[j]);
         }
     }
 
     // Delete allocated payloads
     for (unsigned int i = 0; i < k_NUM_PAYLOADS; ++i) {
-        s_allocator_p->deallocate(payloads[i]);
+        bmqtst::TestHelperUtil::allocator()->deallocate(payloads[i]);
     }
 }
 
@@ -943,29 +947,31 @@ static void test6_multithreadedCrc32cSoftware()
 //   environment.
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
-    s_ignoreCheckGblAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
+    bmqtst::TestHelperUtil::ignoreCheckGblAlloc() = true;
     // Can't ensure no global memory is allocated because
     // 'bslmt::ThreadUtil::create()' uses the global allocator to allocate
     // memory.
 
-    mwctst::TestHelper::printTestName("MULTITHREAD SOFTWARE CRC32-C");
+    bmqtst::TestHelper::printTestName("MULTITHREAD SOFTWARE CRC32-C");
 
     enum { k_NUM_PAYLOADS = 10000, k_NUM_THREADS = 10 };
 
     // Input buffers
-    bsl::vector<char*> payloads(s_allocator_p);
+    bsl::vector<char*> payloads(bmqtst::TestHelperUtil::allocator());
     payloads.reserve(k_NUM_PAYLOADS);
 
     // Populate with random data
     for (unsigned int i = 0; i < k_NUM_PAYLOADS; ++i) {
-        char* buffer = static_cast<char*>(s_allocator_p->allocate(i + 1));
+        char* buffer = static_cast<char*>(
+            bmqtst::TestHelperUtil::allocator()->allocate(i + 1));
         bsl::generate_n(buffer, i + 1, bsl::rand);
         payloads.push_back(buffer);
     }
 
     // [1] Serial calculation
-    bsl::vector<unsigned int> serialCrc32cData(s_allocator_p);
+    bsl::vector<unsigned int> serialCrc32cData(
+        bmqtst::TestHelperUtil::allocator());
     serialCrc32cData.reserve(k_NUM_PAYLOADS);
     for (unsigned int i = 0; i < k_NUM_PAYLOADS; ++i) {
         const unsigned int crc32c =
@@ -974,13 +980,14 @@ static void test6_multithreadedCrc32cSoftware()
     }
 
     // [2] Multithreaded Calculation
-    bslmt::ThreadGroup threadGroup(s_allocator_p);
+    bslmt::ThreadGroup threadGroup(bmqtst::TestHelperUtil::allocator());
 
     // Barrier to get each thread to start at the same time; `+1` for this
     // (main) thread.
     bslmt::Barrier barrier(k_NUM_THREADS + 1);
 
-    bsl::vector<bsl::vector<unsigned int> > threadsCrc32cData(s_allocator_p);
+    bsl::vector<bsl::vector<unsigned int> > threadsCrc32cData(
+        bmqtst::TestHelperUtil::allocator());
     threadsCrc32cData.resize(k_NUM_THREADS);
     for (unsigned int i = 0; i < k_NUM_THREADS; ++i) {
         int rc = threadGroup.addThread(
@@ -1000,15 +1007,15 @@ static void test6_multithreadedCrc32cSoftware()
         const bsl::vector<unsigned int>& currThreadCrc32cData =
             threadsCrc32cData[i];
         for (unsigned int j = 0; j < k_NUM_PAYLOADS; ++j) {
-            ASSERT_EQ_D("thread " << i << "[" << j << "]",
-                        serialCrc32cData[j],
-                        currThreadCrc32cData[j]);
+            BMQTST_ASSERT_EQ_D("thread " << i << "[" << j << "]",
+                               serialCrc32cData[j],
+                               currThreadCrc32cData[j]);
         }
     }
 
     // Delete allocated payloads
     for (unsigned int i = 0; i < k_NUM_PAYLOADS; ++i) {
-        s_allocator_p->deallocate(payloads[i]);
+        bmqtst::TestHelperUtil::allocator()->deallocate(payloads[i]);
     }
 }
 
@@ -1036,13 +1043,13 @@ static void test7_calculateOnBlob()
 //   both the default and software flavors.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "CALCULATE CRC32-C ON BLOB w/o PREVIOUS CRC");
 
     {
         // One empty blob (no data buffers)
 
-        bdlbb::Blob blob(s_allocator_p);
+        bdlbb::Blob blob(bmqtst::TestHelperUtil::allocator());
 
         // Assumption
         BSLS_ASSERT_OPT(blob.numDataBuffers() == 0);
@@ -1054,32 +1061,38 @@ static void test7_calculateOnBlob()
             bmqp::Crc32c_Impl::calculateSoftware(blob);
 
         const unsigned int expectedCrc32c = bmqp::Crc32c::k_NULL_CRC32C;
-        ASSERT_EQ(crc32cDefault, expectedCrc32c);
-        ASSERT_EQ(crc32cSoftware, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc32c);
     }
 
     {
         // Multiple blob buffers, each of small length
 
-        bdlbb::Blob blob(s_allocator_p);
+        bdlbb::Blob blob(bmqtst::TestHelperUtil::allocator());
 
         char                  one[] = "one";
         bsl::shared_ptr<char> onePtr;
-        onePtr.reset(one, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        onePtr.reset(one,
+                     bslstl::SharedPtrNilDeleter(),
+                     bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf1(onePtr, bsl::strlen(one));
 
         blob.appendDataBuffer(buf1);
 
         char                  two[] = "two";
         bsl::shared_ptr<char> twoPtr;
-        twoPtr.reset(two, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        twoPtr.reset(two,
+                     bslstl::SharedPtrNilDeleter(),
+                     bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf2(twoPtr, bsl::strlen(two));
 
         blob.appendDataBuffer(buf2);
 
         char                  three[] = "three";
         bsl::shared_ptr<char> threePtr;
-        threePtr.reset(three, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        threePtr.reset(three,
+                       bslstl::SharedPtrNilDeleter(),
+                       bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf3(threePtr, bsl::strlen(three));
 
         blob.appendDataBuffer(buf3);
@@ -1091,14 +1104,14 @@ static void test7_calculateOnBlob()
             bmqp::Crc32c_Impl::calculateSoftware(blob);
 
         const unsigned int expectedCrc32c = 0xA0EA6901;
-        ASSERT_EQ(crc32cDefault, expectedCrc32c);
-        ASSERT_EQ(crc32cSoftware, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc32c);
     }
 
     {
         // One blob buffer of medium length
 
-        bdlbb::Blob blob(s_allocator_p);
+        bdlbb::Blob blob(bmqtst::TestHelperUtil::allocator());
 
         char buf[] = "This will be put in a blob buffer of typical"
                      " size, and then we will test the crc32c calculation"
@@ -1117,7 +1130,9 @@ static void test7_calculateOnBlob()
                      "#######################################################"
                      "#######################################################";
         bsl::shared_ptr<char> bufSP;
-        bufSP.reset(buf, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        bufSP.reset(buf,
+                    bslstl::SharedPtrNilDeleter(),
+                    bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer blobBuf(bufSP, bsl::strlen(buf));
 
         blob.appendDataBuffer(blobBuf);
@@ -1129,8 +1144,8 @@ static void test7_calculateOnBlob()
             bmqp::Crc32c_Impl::calculateSoftware(blob);
 
         const unsigned int expectedCrc32c = 0xD86F726E;
-        ASSERT_EQ(crc32cDefault, expectedCrc32c);
-        ASSERT_EQ(crc32cSoftware, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc32c);
     }
 }
 
@@ -1160,13 +1175,13 @@ static void test8_calculateOnBlobWithPreviousCrc()
 //   using both the default and software flavors.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "CALCULATE CRC32-C ON BLOB WITH PREVIOUS CRC");
 
     {
         // One empty blob (no data buffers) with a contrived previous crc
 
-        bdlbb::Blob        blob(s_allocator_p);
+        bdlbb::Blob        blob(bmqtst::TestHelperUtil::allocator());
         const unsigned int prevCrc = 0xA0EA6901;
 
         // Assumption
@@ -1179,34 +1194,40 @@ static void test8_calculateOnBlobWithPreviousCrc()
         const unsigned int crc32cSoftware =
             bmqp::Crc32c_Impl::calculateSoftware(blob, prevCrc);
 
-        ASSERT_EQ(crc32cDefault, prevCrc);
-        ASSERT_EQ(crc32cSoftware, prevCrc);
+        BMQTST_ASSERT_EQ(crc32cDefault, prevCrc);
+        BMQTST_ASSERT_EQ(crc32cSoftware, prevCrc);
     }
 
     {
         // Two blobs, each with data buffers of small size
 
-        bdlbb::Blob blob1(s_allocator_p);
+        bdlbb::Blob blob1(bmqtst::TestHelperUtil::allocator());
 
         char                  one[] = "one";
         bsl::shared_ptr<char> onePtr;
-        onePtr.reset(one, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        onePtr.reset(one,
+                     bslstl::SharedPtrNilDeleter(),
+                     bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf1(onePtr, bsl::strlen(one));
 
         blob1.appendDataBuffer(buf1);
 
-        bdlbb::Blob blob2(s_allocator_p);
+        bdlbb::Blob blob2(bmqtst::TestHelperUtil::allocator());
 
         char                  two[] = "two";
         bsl::shared_ptr<char> twoPtr;
-        twoPtr.reset(two, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        twoPtr.reset(two,
+                     bslstl::SharedPtrNilDeleter(),
+                     bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf2(twoPtr, bsl::strlen(two));
 
         blob2.appendDataBuffer(buf2);
 
         char                  three[] = "three";
         bsl::shared_ptr<char> threePtr;
-        threePtr.reset(three, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        threePtr.reset(three,
+                       bslstl::SharedPtrNilDeleter(),
+                       bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf3(threePtr, bsl::strlen(three));
 
         blob2.appendDataBuffer(buf3);
@@ -1226,15 +1247,15 @@ static void test8_calculateOnBlobWithPreviousCrc()
                                                               crc32cSoftware);
 
         const unsigned int expectedCrc32c = 0xA0EA6901;
-        ASSERT_EQ(crc32cDefault, expectedCrc32c);
-        ASSERT_EQ(crc32cSoftware, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc32c);
     }
 
     {
         // Two blobs, each with data buffers of typical size
 
         // One
-        bdlbb::Blob blob1(s_allocator_p);
+        bdlbb::Blob blob1(bmqtst::TestHelperUtil::allocator());
 
         char one[] = "This will be put in a blob buffer of typical"
                      " size, and then we will test the crc32c calculation"
@@ -1243,13 +1264,15 @@ static void test8_calculateOnBlobWithPreviousCrc()
                      " buffer. Moreover, append some lines bellow to increase"
                      " the size of this buffer.";
         bsl::shared_ptr<char> oneSP;
-        oneSP.reset(one, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        oneSP.reset(one,
+                    bslstl::SharedPtrNilDeleter(),
+                    bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer blobBuf1(oneSP, bsl::strlen(one));
 
         blob1.appendDataBuffer(blobBuf1);
 
         // Two
-        bdlbb::Blob blob2(s_allocator_p);
+        bdlbb::Blob blob2(bmqtst::TestHelperUtil::allocator());
 
         char two[] = "#######################################################"
                      "#######################################################"
@@ -1263,7 +1286,9 @@ static void test8_calculateOnBlobWithPreviousCrc()
                      "#######################################################";
 
         bsl::shared_ptr<char> twoSP;
-        twoSP.reset(two, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        twoSP.reset(two,
+                    bslstl::SharedPtrNilDeleter(),
+                    bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer blobBuf2(twoSP, bsl::strlen(two));
 
         blob2.appendDataBuffer(blobBuf2);
@@ -1283,8 +1308,8 @@ static void test8_calculateOnBlobWithPreviousCrc()
                                                               crc32cSoftware);
 
         const unsigned int expectedCrc32c = 0xD86F726E;
-        ASSERT_EQ(crc32cDefault, expectedCrc32c);
-        ASSERT_EQ(crc32cSoftware, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cDefault, expectedCrc32c);
+        BMQTST_ASSERT_EQ(crc32cSoftware, expectedCrc32c);
     }
 }
 // ============================================================================
@@ -1302,13 +1327,13 @@ static void testN1_performanceDefaultUserInput()
 //   on an user input.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: CALCULATE CRC32-C DEFAULT ON USER INPUT");
 
     cout << "Please enter the string:" << endl << "> ";
 
     // Read from stdin
-    bsl::string input(s_allocator_p);
+    bsl::string input(bmqtst::TestHelperUtil::allocator());
     bsl::getline(bsl::cin, input);
 
     const size_t       k_NUM_ITERS = 100000;  // 100K
@@ -1348,20 +1373,21 @@ static void testN2_performanceDefault()
 //   Performance of calculating CRC32-C using the default implementation.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: CALCULATE CRC32-C ON BUFFER DEFAULT");
 
     const int k_NUM_ITERS = 100000;  // 100K
 
-    bsl::vector<int> bufferLengths(s_allocator_p);
+    bsl::vector<int> bufferLengths(bmqtst::TestHelperUtil::allocator());
     const int        k_MAX_SIZE = populateBufferLengthsSorted(&bufferLengths);
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
     for (unsigned i = 0; i < bufferLengths.size(); ++i) {
         const int length = bufferLengths[i];
 
@@ -1438,7 +1464,7 @@ static void testN2_performanceDefault()
 
     printTable(bsl::cout, headerCols, tableRecords);
 
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 BSLA_MAYBE_UNUSED
@@ -1464,13 +1490,14 @@ static void testN3_defaultCalculateThroughput()
 //   implementation in a single thread environment.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "BENCHMARK: CALCULATE CRC32-C THROUGPUT DEFAULT");
 
     const bsls::Types::Uint64 k_NUM_ITERS = 1000000;  // 1M
     unsigned int              resultDef   = 0;
     const int                 bufLen      = 12345;
-    char* buf = static_cast<char*>(s_allocator_p->allocate(bufLen));
+    char*                     buf         = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(bufLen));
     bsl::memset(buf, 'x', bufLen);
     //=======================================================================//
     //              [1] Crc32c (default -- hardware on linux)
@@ -1497,21 +1524,21 @@ static void testN3_defaultCalculateThroughput()
     cout << "=========================\n";
     cout << "For a payload of length " << bufLen << ", completed "
          << k_NUM_ITERS << " HW-version iterations in "
-         << mwcu::PrintUtil::prettyTimeInterval(diffDef) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(diffDef) << ".\n"
          << "Above implies that 1 HW-version iteration was calculated in "
          << diffDef / k_NUM_ITERS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S) / diffDef))
          << " HW-version iterations per second." << endl
          << "HW-version throughput: "
-         << mwcu::PrintUtil::prettyBytes(
+         << bmqu::PrintUtil::prettyBytes(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S * bufLen) /
                 diffDef)
          << " per second.\n\n"
          << endl;
 
-    s_allocator_p->deallocate(buf);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buf);
     static_cast<void>(resultDef);
 }
 
@@ -1535,13 +1562,14 @@ static void testN3_softwareCalculateThroughput()
 //   software implementation in a single thread environment.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "BENCHMARK: CALCULATE CRC32-C THROUGPUT SOFTWARE");
 
     const bsls::Types::Uint64 k_NUM_ITERS = 1000000;  // 1M
     unsigned int              resultSW    = 0;
     const int                 bufLen      = 12345;
-    char* buf = static_cast<char*>(s_allocator_p->allocate(bufLen));
+    char*                     buf         = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(bufLen));
     bsl::memset(buf, 'x', bufLen);
     //=======================================================================//
     //                        [2] Crc32c (software)
@@ -1560,22 +1588,22 @@ static void testN3_softwareCalculateThroughput()
     cout << "=========================\n";
     cout << "For a payload of length " << bufLen << ", completed "
          << k_NUM_ITERS << " SW-version iterations in "
-         << mwcu::PrintUtil::prettyTimeInterval(diffSW) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(diffSW) << ".\n"
          << "Above implies that 1 SW-version iteration was calculated in "
          << diffSW / k_NUM_ITERS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S) / diffSW))
          << " SW-version iterations per second." << endl
          << "SW-version throughput: "
-         << mwcu::PrintUtil::prettyBytes(
+         << bmqu::PrintUtil::prettyBytes(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S * bufLen) /
                 diffSW)
          << " per second.\n"
          << endl
          << endl;
 
-    s_allocator_p->deallocate(buf);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buf);
     static_cast<void>(resultSW);
 }
 
@@ -1599,13 +1627,14 @@ static void testN3_bdldCalculateThroughput()
 //   BDE implementation in a single thread environment.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "BENCHMARK: CALCULATE CRC32-C THROUGPUT BDE");
 
     const bsls::Types::Uint64 k_NUM_ITERS = 1000000;  // 1M
     unsigned int              resultBde   = 0;
     const int                 bufLen      = 12345;
-    char* buf = static_cast<char*>(s_allocator_p->allocate(bufLen));
+    char*                     buf         = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(bufLen));
     bsl::memset(buf, 'x', bufLen);
     //=======================================================================//
     //                           [3] BDE bdlde::crc32
@@ -1629,22 +1658,22 @@ static void testN3_bdldCalculateThroughput()
     cout << "==========================\n";
     cout << "For a payload of length " << bufLen << ", completed "
          << k_NUM_ITERS << " BDE-version iterations in "
-         << mwcu::PrintUtil::prettyTimeInterval(diffBde) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(diffBde) << ".\n"
          << "Above implies that 1 BDE-version iteration was calculated in "
          << diffBde / k_NUM_ITERS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S) / diffBde))
          << " BDE-version iterations per second." << endl
          << "BDE-version throughput: "
-         << mwcu::PrintUtil::prettyBytes(
+         << bmqu::PrintUtil::prettyBytes(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S * bufLen) /
                 diffBde)
          << " per second.\n"
          << endl
          << endl;
 
-    s_allocator_p->deallocate(buf);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buf);
     static_cast<void>(resultBde);
 }
 
@@ -1666,20 +1695,21 @@ static void testN4_calculateSerialDefault()
 //   Performance of crc32c calculation using the default implementation
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: CALCULATE CRC32-C DEFAULT");
 
     const int k_NUM_ITERS = 100000;  // 100K
 
-    bsl::vector<int> bufferLengths(s_allocator_p);
+    bsl::vector<int> bufferLengths(bmqtst::TestHelperUtil::allocator());
     const int        k_MAX_SIZE = populateBufferLengthsSorted(&bufferLengths);
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
     for (unsigned i = 0; i < bufferLengths.size(); ++i) {
         const int length = bufferLengths[i];
 
@@ -1727,7 +1757,7 @@ static void testN4_calculateSerialDefault()
 
     printTable(bsl::cout, headerCols, tableRecords);
 
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 BSLA_MAYBE_UNUSED
@@ -1748,20 +1778,21 @@ static void testN4_calculateHardwareSerial()
 //   Performance of crc32c calculation using the 'hardware serial' approach
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: CALCULATE CRC32-C HARDWARE SERIAL");
 
     const int k_NUM_ITERS = 100000;  // 100K
 
-    bsl::vector<int> bufferLengths(s_allocator_p);
+    bsl::vector<int> bufferLengths(bmqtst::TestHelperUtil::allocator());
     const int        k_MAX_SIZE = populateBufferLengthsSorted(&bufferLengths);
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
     for (unsigned i = 0; i < bufferLengths.size(); ++i) {
         const int length = bufferLengths[i];
 
@@ -1812,7 +1843,7 @@ static void testN4_calculateHardwareSerial()
 
     printTable(bsl::cout, headerCols, tableRecords);
 
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 BSLA_MAYBE_UNUSED
@@ -1835,20 +1866,21 @@ static void testN5_bmqpPerformanceSoftware()
 //   Performance of calculating CRC32-C using the software implementation.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: CALCULATE CRC32-C ON BUFFER SOFTWARE");
 
     const int k_NUM_ITERS = 100000;  // 100K
 
-    bsl::vector<int> bufferLengths(s_allocator_p);
+    bsl::vector<int> bufferLengths(bmqtst::TestHelperUtil::allocator());
     const int        k_MAX_SIZE = populateBufferLengthsSorted(&bufferLengths);
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
     for (unsigned i = 0; i < bufferLengths.size(); ++i) {
         const int length = bufferLengths[i];
 
@@ -1899,7 +1931,7 @@ static void testN5_bmqpPerformanceSoftware()
     headerCols.emplace_back("Ratio(bdlde::crc32 / SW)");
     printTable(bsl::cout, headerCols, tableRecords);
 
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 BSLA_MAYBE_UNUSED
@@ -1922,20 +1954,21 @@ static void testN5_bdldPerformanceSoftware()
 //   Performance of calculating CRC32-C using the bdlde::crc32 implementation.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: CALCULATE CRC32-C ON BUFFER SOFTWARE");
 
     const int k_NUM_ITERS = 100000;  // 100K
 
-    bsl::vector<int> bufferLengths(s_allocator_p);
+    bsl::vector<int> bufferLengths(bmqtst::TestHelperUtil::allocator());
     const int        k_MAX_SIZE = populateBufferLengthsSorted(&bufferLengths);
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
     for (unsigned i = 0; i < bufferLengths.size(); ++i) {
         const int length = bufferLengths[i];
 
@@ -1988,7 +2021,7 @@ static void testN5_bdldPerformanceSoftware()
 
     printTable(bsl::cout, headerCols, tableRecords);
 
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 BSLA_MAYBE_UNUSED
@@ -2012,22 +2045,23 @@ static void testN6_bmqpPerformanceDefault()
 //   Performance of calculating CRC32-C using the default implementation.
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
-    s_ignoreCheckGblAlloc = true;
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
+    bmqtst::TestHelperUtil::ignoreCheckGblAlloc() = true;
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: CALCULATE CRC32-C ON BUFFER DEFAULT");
 
     const int k_NUM_ITERS = 100000;  // 100K
 
-    bsl::vector<int> bufferLengths(s_allocator_p);
+    bsl::vector<int> bufferLengths(bmqtst::TestHelperUtil::allocator());
     const int        k_MAX_SIZE = populateBufferLengthsSorted(&bufferLengths);
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
     for (unsigned i = 0; i < bufferLengths.size(); ++i) {
         const int length = bufferLengths[i];
 
@@ -2078,7 +2112,7 @@ static void testN6_bmqpPerformanceDefault()
     headerCols.emplace_back("Ratio(bdlde::crc32 / Def)");
     printTable(bsl::cout, headerCols, tableRecords);
 
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 BSLA_MAYBE_UNUSED
@@ -2102,22 +2136,23 @@ static void testN6_bdldPerformanceDefault()
 //   Performance of calculating CRC32-C using the BDE implementation.
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
-    s_ignoreCheckGblAlloc = true;
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
+    bmqtst::TestHelperUtil::ignoreCheckGblAlloc() = true;
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: CALCULATE CRC32-C ON BUFFER BDE");
 
     const int k_NUM_ITERS = 100000;  // 100K
 
-    bsl::vector<int> bufferLengths(s_allocator_p);
+    bsl::vector<int> bufferLengths(bmqtst::TestHelperUtil::allocator());
     const int        k_MAX_SIZE = populateBufferLengthsSorted(&bufferLengths);
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
     for (unsigned i = 0; i < bufferLengths.size(); ++i) {
         const int length = bufferLengths[i];
 
@@ -2171,7 +2206,7 @@ static void testN6_bdldPerformanceDefault()
 
     printTable(bsl::cout, headerCols, tableRecords);
 
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 #ifdef BSLS_PLATFORM_OS_LINUX
@@ -2187,14 +2222,14 @@ testN1_performanceDefaultUserInput_GoogleBenchmark(benchmark::State& state)
 //   on an user input.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "GOOGLE BENCHMARK PERFORMANCE: "
         "CALCULATE CRC32-C DEFAULT ON USER INPUT");
 
     cout << "Please enter the string:" << endl << "> ";
 
     // Read from stdin
-    bsl::string input(s_allocator_p);
+    bsl::string input(bmqtst::TestHelperUtil::allocator());
     bsl::getline(bsl::cin, input);
 
     for (auto _ : state) {
@@ -2227,11 +2262,12 @@ testN3_defaultCalculateThroughput_GoogleBenchmark(benchmark::State& state)
 //   implementation in a single thread environment.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK: "
                                       "CALCULATE CRC32-C THROUGHPUT DEFAULT");
     for (auto _ : state) {
         const int bufLen = 12345;
-        char*     buf    = static_cast<char*>(s_allocator_p->allocate(bufLen));
+        char*     buf    = static_cast<char*>(
+            bmqtst::TestHelperUtil::allocator()->allocate(bufLen));
         bsl::memset(buf, 'x', bufLen);
         bmqp::Crc32c::calculate(buf, bufLen);
 
@@ -2239,7 +2275,7 @@ testN3_defaultCalculateThroughput_GoogleBenchmark(benchmark::State& state)
         for (int i = 0; i < state.range(0); ++i) {
             bmqp::Crc32c::calculate(buf, bufLen);
         }
-        s_allocator_p->deallocate(buf);
+        bmqtst::TestHelperUtil::allocator()->deallocate(buf);
     }
 }
 
@@ -2248,11 +2284,12 @@ testN3_softwareCalculateThroughput_GoogleBenchmark(benchmark::State& state)
 {
     //=======================================================================//
     //                        [2] Crc32c (software)
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK: "
                                       "CALCULATE CRC32-C THROUGHPUT SOFTWARE");
     for (auto _ : state) {
         const int bufLen = 12345;
-        char*     buf    = static_cast<char*>(s_allocator_p->allocate(bufLen));
+        char*     buf    = static_cast<char*>(
+            bmqtst::TestHelperUtil::allocator()->allocate(bufLen));
         bsl::memset(buf, 'x', bufLen);
         bmqp::Crc32c_Impl::calculateSoftware(buf, bufLen);
 
@@ -2260,7 +2297,7 @@ testN3_softwareCalculateThroughput_GoogleBenchmark(benchmark::State& state)
         for (int i = 0; i < state.range(0); ++i) {
             bmqp::Crc32c_Impl::calculateSoftware(buf, bufLen);
         }
-        s_allocator_p->deallocate(buf);
+        bmqtst::TestHelperUtil::allocator()->deallocate(buf);
     }
     // </time>
 }
@@ -2270,11 +2307,12 @@ testN3_bdldCalculateThroughput_GoogleBenchmark(benchmark::State& state)
 {
     //=======================================================================//
     //                           [3] BDE bdlde::crc32
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK: "
                                       "CALCULATE CRC32-C THROUGPUT BDE");
 
     const int bufLen = 12345;
-    char*     buf    = static_cast<char*>(s_allocator_p->allocate(bufLen));
+    char*     buf    = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(bufLen));
     bsl::memset(buf, 'x', bufLen);
     bdlde::Crc32 crcBde(buf, bufLen);
 
@@ -2286,7 +2324,7 @@ testN3_bdldCalculateThroughput_GoogleBenchmark(benchmark::State& state)
         }
     }
     // </time>
-    s_allocator_p->deallocate(buf);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buf);
 }
 
 static void
@@ -2308,13 +2346,14 @@ testN4_calculateSerialDefault_GoogleBenchmark(benchmark::State& state)
 //   Performance of crc32c calculation using the default implementation
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
                                       "CALCULATE CRC32-C DEFAULT");
 
     const int k_MAX_SIZE = 67108864;  // 64 Mi
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
@@ -2329,7 +2368,7 @@ testN4_calculateSerialDefault_GoogleBenchmark(benchmark::State& state)
         }
     }
     // </time>
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 static void
@@ -2351,13 +2390,14 @@ testN4_calculateHardwareSerial_GoogleBenchmark(benchmark::State& state)
     //   approach.
     // ------------------------------------------------------------------------
     //                [2] Crc32c (hardware serial)
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
                                       "CALCULATE CRC32-C HARDWARE SERIAL");
 
     const int k_MAX_SIZE = 67108864;  // 64 Mi
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
@@ -2370,7 +2410,7 @@ testN4_calculateHardwareSerial_GoogleBenchmark(benchmark::State& state)
         }
     }
     // </time>
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 static void
@@ -2391,17 +2431,18 @@ testN5_bmqpPerformanceSoftware_GoogleBenchmark(benchmark::State& state)
 //   Performance of calculating CRC32-C using the software implementation.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
                                       "CALCULATE CRC32-C ON BUFFER SOFTWARE");
 
     const int k_MAX_SIZE = 67108864;  // 64 Mi
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
 
     //===================================================================//
     //                        [1] Crc32c (software)
@@ -2411,7 +2452,7 @@ testN5_bmqpPerformanceSoftware_GoogleBenchmark(benchmark::State& state)
         bmqp::Crc32c_Impl::calculateSoftware(buffer, length);
     }
     // </time>
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 static void
@@ -2432,14 +2473,15 @@ testN5_bdldPerformanceSoftware_GoogleBenchmark(benchmark::State& state)
 //   Performance of calculating CRC32-C using the BDE software implementation.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "GOOGLE BENCHMARK PERFORMANCE: "
         "CALCULATE CRC32-C ON BUFFER SOFTWARE BDE");
 
     const int k_MAX_SIZE = 67108864;  // 64 Mi
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
@@ -2457,7 +2499,7 @@ testN5_bdldPerformanceSoftware_GoogleBenchmark(benchmark::State& state)
     }
     // </time>
 
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 BSLA_MAYBE_UNUSED
@@ -2482,13 +2524,14 @@ testN6_bmqpPerformanceDefault_GoogleBenchmark(benchmark::State& state)
 //   Performance of calculating CRC32-C using the default implementation.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
                                       "CALCULATE CRC32-C ON BUFFER DEFAULT");
 
     const int k_MAX_SIZE = 67108864;  // 64 Mi
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
@@ -2502,7 +2545,7 @@ testN6_bmqpPerformanceDefault_GoogleBenchmark(benchmark::State& state)
         bmqp::Crc32c::calculate(buffer, length);
     }
     // </time>
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 BSLA_MAYBE_UNUSED
@@ -2511,13 +2554,14 @@ testN6_bdldPerformanceDefault_GoogleBenchmark(benchmark::State& state)
 {
     //===================================================================//
     //                         [2] BDE bdlde::crc32
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
                                       "CALCULATE CRC32-C ON BUFFER BDE");
 
     const int k_MAX_SIZE = 67108864;  // 64 Mi
 
     // Read in random input
-    char* buffer = static_cast<char*>(s_allocator_p->allocate(k_MAX_SIZE));
+    char* buffer = static_cast<char*>(
+        bmqtst::TestHelperUtil::allocator()->allocate(k_MAX_SIZE));
     bsl::generate_n(buffer, k_MAX_SIZE, bsl::rand);
 
     // Measure calculation time and report
@@ -2530,7 +2574,7 @@ testN6_bdldPerformanceDefault_GoogleBenchmark(benchmark::State& state)
         crcBde.update(buffer, length);
         crcBde.checksumAndReset();
     }
-    s_allocator_p->deallocate(buffer);
+    bmqtst::TestHelperUtil::allocator()->deallocate(buffer);
 }
 
 #endif  // BSLS_PLATFORM_OS_LINUX
@@ -2546,7 +2590,7 @@ int main(int argc, char* argv[])
     // case where the associated logging infrastructure triggers a default
     // allocation violation for no apparent reason.
 
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     size_t seed = bsl::time(0);
     PV("Seed: " << seed);
@@ -2562,49 +2606,49 @@ int main(int argc, char* argv[])
     case 3: test3_calculateOnMisalignedBuffer(); break;
     case 2: test2_calculateOnBuffer(); break;
     case 1: test1_breathingTest(); break;
-    case -1: MWC_BENCHMARK(testN1_performanceDefaultUserInput); break;
+    case -1: BMQTST_BENCHMARK(testN1_performanceDefaultUserInput); break;
     case -2: testN2_performanceDefault(); break;
     case -3:
-        MWC_BENCHMARK_WITH_ARGS(testN3_defaultCalculateThroughput,
-                                RangeMultiplier(10)
-                                    ->Range(10, 1000000)
-                                    ->Unit(benchmark::kMillisecond));
-        MWC_BENCHMARK_WITH_ARGS(testN3_softwareCalculateThroughput,
-                                RangeMultiplier(10)
-                                    ->Range(10, 1000000)
-                                    ->Unit(benchmark::kMillisecond));
-        MWC_BENCHMARK_WITH_ARGS(testN3_bdldCalculateThroughput,
-                                RangeMultiplier(10)
-                                    ->Range(10, 1000000)
-                                    ->Unit(benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN3_defaultCalculateThroughput,
+                                   RangeMultiplier(10)
+                                       ->Range(10, 1000000)
+                                       ->Unit(benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN3_softwareCalculateThroughput,
+                                   RangeMultiplier(10)
+                                       ->Range(10, 1000000)
+                                       ->Unit(benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN3_bdldCalculateThroughput,
+                                   RangeMultiplier(10)
+                                       ->Range(10, 1000000)
+                                       ->Unit(benchmark::kMillisecond));
         break;
     case -4:
-        MWC_BENCHMARK_WITH_ARGS(
+        BMQTST_BENCHMARK_WITH_ARGS(
             testN4_calculateSerialDefault,
             Apply(populateBufferLengthsSorted_GoogleBenchmark_Small));
-        MWC_BENCHMARK_WITH_ARGS(
+        BMQTST_BENCHMARK_WITH_ARGS(
             testN4_calculateHardwareSerial,
             Apply(populateBufferLengthsSorted_GoogleBenchmark_Small));
         break;
     case -5:
-        MWC_BENCHMARK_WITH_ARGS(
+        BMQTST_BENCHMARK_WITH_ARGS(
             testN5_bmqpPerformanceSoftware,
             Apply(populateBufferLengthsSorted_GoogleBenchmark_Small));
-        MWC_BENCHMARK_WITH_ARGS(
+        BMQTST_BENCHMARK_WITH_ARGS(
             testN5_bdldPerformanceSoftware,
             Apply(populateBufferLengthsSorted_GoogleBenchmark_Small));
         break;
     case -6:
-        MWC_BENCHMARK_WITH_ARGS(
+        BMQTST_BENCHMARK_WITH_ARGS(
             testN6_bmqpPerformanceDefault,
             Apply(populateBufferLengthsSorted_GoogleBenchmark_Large));
-        MWC_BENCHMARK_WITH_ARGS(
+        BMQTST_BENCHMARK_WITH_ARGS(
             testN6_bdldPerformanceDefault,
             Apply(populateBufferLengthsSorted_GoogleBenchmark_Large));
         break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 #ifdef BSLS_PLATFORM_OS_LINUX
@@ -2613,5 +2657,5 @@ int main(int argc, char* argv[])
         benchmark::RunSpecifiedBenchmarks();
     }
 #endif
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

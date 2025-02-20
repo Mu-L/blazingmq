@@ -17,18 +17,14 @@
 #ifndef INCLUDED_BMQT_SUBSCRIPTION
 #define INCLUDED_BMQT_SUBSCRIPTION
 
-//@PURPOSE: Provide a value-semantic types for subscription related API.
-//
-//@CLASSES:
-//  bmqt::Subscription_Handle:      uniquely identifies Subscription
-//  bmqt::Subscription_Expression:  Subscription criteria
-//  bmqt::Subscription:             Subscription parameters
-//
-//@DESCRIPTION: 'bmqt::Subscription' provides a value-semantic type carried
-// by 'bmqt::QueueOptions', when opening and configuring a queue.
-//
-//@NOTE: Experimental.  Do not use until this feature is announced.
-//
+/// @file bmqt_subscription.h
+///
+/// @brief Provide a value-semantic types for subscription related API.
+///
+/// @bbref{bmqt::Subscription} provides a value-semantic type carried by
+/// @bbref{bmqt::QueueOptions}, when opening and configuring a queue.
+///
+/// @note Experimental.  Do not use until this feature is announced.
 
 // BMQ
 
@@ -46,7 +42,7 @@ namespace BloombergLP {
 
 // FORWARD DECLARATION
 namespace bmqa {
-class MessageImpl;
+struct MessageImpl;
 }
 namespace bmqa {
 class MessageIterator;
@@ -61,17 +57,22 @@ class QueueOptions;
 
 /// Value-semantic type for unique Subscription id.
 class SubscriptionHandle {
-    friend class bmqa::MessageImpl;
+    friend struct bmqa::MessageImpl;
     friend class bmqa::MessageIterator;
+
+  public:
+    /// Initial (invalid) value for `bmqt::SubscriptionHandle::d_id`
+    static const unsigned int k_INVALID_HANDLE_ID = 0;
 
   private:
     // PRIVATE DATA
-    unsigned int d_id;
-    // Internal, unique key
 
+    /// Internal, unique key
+    unsigned int d_id;
+
+    /// User-specified, not required to be unique
     bmqt::CorrelationId d_correlationId;
-    // User-specified, not required to be
-    // unique
+
   private:
     // PRIVATE CLASS METHODS
     static unsigned int nextId();
@@ -122,18 +123,22 @@ class SubscriptionHandle {
 class SubscriptionExpression {
   public:
     // TYPES
+
+    /// Enum representing criteria format
     enum Enum {
-        // Enum representing criteria format
-        e_NONE = 0  // EMPTY
+        /// EMPTY
+        e_NONE = 0
+
         ,
-        e_VERSION_1 = 1  // Simple Evaluator
+        /// Simple Evaluator
+        e_VERSION_1 = 1
     };
 
   private:
     bsl::string d_expression;  // e.g., "firmId == foo"
 
-    Enum d_version;  // Required to support newer style
-                     // of expressions in future
+    // Required to support newer style of expressions in future
+    Enum d_version;
 
   public:
     // CREATORS
@@ -164,13 +169,12 @@ class SubscriptionExpression {
 class Subscription {
   public:
     // PUBLIC CONSTANTS
-    static const int k_CONSUMER_PRIORITY_MIN;
-    // Constant representing the minimum
-    // valid consumer priority
 
+    /// Constant representing the minimum valid consumer priority
+    static const int k_CONSUMER_PRIORITY_MIN;
+
+    /// Constant representing the maximum valid consumer priority
     static const int k_CONSUMER_PRIORITY_MAX;
-    // Constant representing the maximum
-    // valid consumer priority
 
     static const int k_DEFAULT_MAX_UNCONFIRMED_MESSAGES;
     static const int k_DEFAULT_MAX_UNCONFIRMED_BYTES;
@@ -178,34 +182,25 @@ class Subscription {
 
   private:
     // PRIVATE DATA
+
+    /// Maximum number of outstanding messages that can be sent by the broker
+    /// without being confirmed.
     bsl::optional<int> d_maxUnconfirmedMessages;
-    // Maximum number of outstanding
-    // messages that can be sent by the
-    // broker without being confirmed.
 
+    /// Maximum accumulated bytes of all outstanding messages that can be sent
+    /// by the broker without being confirmed.
     bsl::optional<int> d_maxUnconfirmedBytes;
-    // Maximum accumulated bytes of all
-    // outstanding messages that can be
-    // sent by the broker without being
-    // confirmed.
 
+    /// Priority of a consumer with respect to delivery of messages
     bsl::optional<int> d_consumerPriority;
-    // Priority of a consumer with respect
-    // to delivery of messages
 
     SubscriptionExpression d_expression;
 
   public:
     // CREATORS
+
+    /// Create a new Subscription
     Subscription();
-
-    // Create a new Subscription
-
-    /// Create a new Subscription by copying values from the specified
-    /// `other`.
-    Subscription(const Subscription& other);
-
-    // MANIPULATORS
 
     /// Set the maxUnconfirmedMessages to the specified `value`.  The
     /// behavior is undefined unless `value >= 0`. If the specified `value`
@@ -276,12 +271,12 @@ bsl::ostream& operator<<(bsl::ostream& stream, const Subscription& rhs);
 //                             INLINE DEFINITIONS
 // ============================================================================
 
-// ----------------------
+// -------------------------
 // class Subscription_Handle
-// ----------------------
+// -------------------------
 
 inline SubscriptionHandle::SubscriptionHandle()
-: d_id(0)
+: d_id(k_INVALID_HANDLE_ID)
 , d_correlationId()
 {
     // NOTHING
@@ -385,24 +380,15 @@ inline bsl::ostream& SubscriptionExpression::print(bsl::ostream& stream,
     return stream;
 }
 
-// ----------------------
+// ------------------
 // class Subscription
-// ----------------------
+// ------------------
 
 inline Subscription::Subscription()
 : d_maxUnconfirmedMessages()
 , d_maxUnconfirmedBytes()
 , d_consumerPriority()
 , d_expression()
-{
-    // NOTHING
-}
-
-inline Subscription::Subscription(const Subscription& other)
-: d_maxUnconfirmedMessages(other.d_maxUnconfirmedMessages)
-, d_maxUnconfirmedBytes(other.d_maxUnconfirmedBytes)
-, d_consumerPriority(other.d_consumerPriority)
-, d_expression(other.d_expression)
 {
     // NOTHING
 }

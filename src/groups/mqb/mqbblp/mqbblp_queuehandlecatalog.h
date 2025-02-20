@@ -17,29 +17,26 @@
 #ifndef INCLUDED_MQBBLP_QUEUEHANDLECATALOG
 #define INCLUDED_MQBBLP_QUEUEHANDLECATALOG
 
-//@PURPOSE: Provide a mechanism to hold and manipulate QueueHandle objects.
-//
-//@CLASSES:
-//  mqbblp::QueueHandleCatalog: Mechanism to hold and manipulate QueueHandles
-//
-//@DESCRIPTION: TBD:
-//
-/// Thread Safety
-///-------------
-// Unless specified otherwise, all methods of the 'mqbblp::QueueHandleCatalog'
-// must be executed by the dispatcher thread of the associated queue.
+/// @file mqbblp_queuehandlecatalog.h
+///
+/// @brief Provide a mechanism to hold and manipulate `QueueHandle` objects.
+///
+/// Thread Safety                           {#mqbblp_queuehandlecatalog_thread}
+/// =============
+///
+/// Unless specified otherwise, all methods of the
+/// @bbref{mqbblp::QueueHandleCatalog} must be executed by the dispatcher
+/// thread of the associated queue.
 
 // MQB
-
 #include <mqbi_queue.h>
 #include <mqbi_storage.h>
+#include <mqbu_resourceusagemonitor.h>
 
 // BMQ
+#include <bmqc_twokeyhashmap.h>
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_queueid.h>
-
-// MWC
-#include <mwcc_twokeyhashmap.h>
 
 // BDE
 #include <bsl_functional.h>
@@ -111,7 +108,7 @@ class QueueHandleCatalog {
     /// * `downstreamSubQueueId`: the downstream subQueueId
     typedef bsl::pair<mqbi::QueueHandle*, unsigned int> DownstreamKey;
 
-    /// 'iterateConsumers` calls visitor for each handle for each registered
+    /// `iterateConsumers` calls visitor for each handle for each registered
     /// subId and streamParameters.
     typedef bsl::function<void(mqbi::QueueHandle*,
                                const mqbi::QueueHandle::StreamInfo&)>
@@ -127,27 +124,26 @@ class QueueHandleCatalog {
         RequesterKey;
 
     /// (queueHandlePtr, requester) -> queueHandleSp
-    typedef mwcc::TwoKeyHashMap<mqbi::QueueHandle*,
+    typedef bmqc::TwoKeyHashMap<mqbi::QueueHandle*,
                                 RequesterKey,
                                 bsl::shared_ptr<mqbi::QueueHandle> >
         HandleMap;
 
   private:
     // DATA
+
+    /// The associated queue.
     mqbi::Queue* d_queue_p;
-    // The associated queue.
 
+    /// Factory to use for creating `QueueHandle` objects.
     bslma::ManagedPtr<mqbi::QueueHandleFactory> d_handleFactory_mp;
-    // Factory to use for creating
-    // QueueHandle objects.
 
+    /// Map of all created handles.  `mutable` because `TwoKeyHashMap` doesn't
+    /// expose `const` operators.
     mutable HandleMap d_handles;
-    // Map of all created handles.
-    // 'mutable' because TwoKeyHashMap
-    // doesn't expose const operators.
 
+    /// Allocator to use.
     bslma::Allocator* d_allocator_p;
-    // Allocator to use.
 
   private:
     // NOT IMPLEMENTED
@@ -170,7 +166,8 @@ class QueueHandleCatalog {
     // CREATOR
 
     /// Create a new object associated to the specified `queue`.  Use the
-    /// specified `allocator` for any memory allocations.
+    /// specified `allocator` for any memory allocations.  Use the specified
+    /// 'counter' to aggregate the counting of  unconfirmed by each handle.
     QueueHandleCatalog(mqbi::Queue* queue, bslma::Allocator* allocator);
 
     /// Destructor.
@@ -240,6 +237,8 @@ class QueueHandleCatalog {
     /// Load into the specified `out` list the internal details about the
     /// handles managed by this catalog.
     void loadInternals(bsl::vector<mqbcmd::QueueHandle>* out) const;
+
+    bsls::Types::Int64 countUnconfirmed() const;
 };
 
 // ============================================================================

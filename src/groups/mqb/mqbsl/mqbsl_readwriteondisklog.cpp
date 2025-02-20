@@ -20,8 +20,7 @@
 // MQB
 #include <mqbs_filesystemutil.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlb_scopeexit.h>
@@ -134,7 +133,7 @@ void ReadWriteOnDiskLog::updateInternalState(int writeLength)
 void ReadWriteOnDiskLog::populateIoVectors(struct iovec*      ioVectors,
                                            int*               iovecCount,
                                            const bdlbb::Blob& entry,
-                                           const mwcu::BlobPosition& offset,
+                                           const bmqu::BlobPosition& offset,
                                            int                       length)
 {
     int iovecCnt        = 0;
@@ -146,7 +145,7 @@ void ReadWriteOnDiskLog::populateIoVectors(struct iovec*      ioVectors,
         BSLS_ASSERT_SAFE(bufIndex < entry.numDataBuffers());
 
         const bdlbb::BlobBuffer& buf = entry.buffer(bufIndex);
-        const int bufSize = mwcu::BlobUtil::bufferSize(entry, bufIndex);
+        const int bufSize = bmqu::BlobUtil::bufferSize(entry, bufIndex);
         const int nbytes  = bsl::min(remainingLength, bufSize - bufOffset);
         ioVectors[iovecCnt].iov_base = buf.data() + bufOffset;
         ioVectors[iovecCnt].iov_len  = nbytes;
@@ -204,7 +203,7 @@ int ReadWriteOnDiskLog::open(int flags)
 
     // If log is writable
     int                rc = 0;
-    mwcu::MemOutStream errorDescription;
+    bmqu::MemOutStream errorDescription;
     if (!openReadOnly) {
         rc = mqbs::FileSystemUtil::grow(d_fd,
                                         logConfig().maxSize(),
@@ -315,7 +314,7 @@ ReadWriteOnDiskLog::write(const void* entry, int offset, int length)
 }
 
 mqbsi::Log::Offset ReadWriteOnDiskLog::write(const bdlbb::Blob&        entry,
-                                             const mwcu::BlobPosition& offset,
+                                             const bmqu::BlobPosition& offset,
                                              int                       length)
 {
     // PRECONDITIONS
@@ -333,10 +332,9 @@ mqbsi::Log::Offset ReadWriteOnDiskLog::write(const bdlbb::Blob&        entry,
     // writev() supports up to IOV_MAX iovecs, so batch it up
     struct iovec ioVectors[IOV_MAX];
 
-    int                rc;
     int                remainingLength = length;
-    mwcu::BlobPosition currOffset      = offset;
-    mwcu::BlobPosition nextCurrOffset;
+    bmqu::BlobPosition currOffset      = offset;
+    bmqu::BlobPosition nextCurrOffset;
     do {
         int iovecCount = 0;
         populateIoVectors(ioVectors,
@@ -348,14 +346,14 @@ mqbsi::Log::Offset ReadWriteOnDiskLog::write(const bdlbb::Blob&        entry,
         // Write Scatter/Gather IO
         const int numWritten = ::writev(d_fd, ioVectors, iovecCount);
         if (numWritten == -1) {
-            rc = errno;
             return LogOpResult::e_BYTE_WRITE_FAILURE;  // RETURN
         }
 
-        rc = mwcu::BlobUtil::findOffset(&nextCurrOffset,
-                                        entry,
-                                        currOffset,
-                                        numWritten);
+        BSLA_MAYBE_UNUSED const int rc = bmqu::BlobUtil::findOffset(
+            &nextCurrOffset,
+            entry,
+            currOffset,
+            numWritten);
         BSLS_ASSERT_SAFE(rc == 0);
 
         currOffset = nextCurrOffset;
@@ -371,10 +369,10 @@ mqbsi::Log::Offset ReadWriteOnDiskLog::write(const bdlbb::Blob&        entry,
 }
 
 mqbsi::Log::Offset ReadWriteOnDiskLog::write(const bdlbb::Blob&       entry,
-                                             const mwcu::BlobSection& section)
+                                             const bmqu::BlobSection& section)
 {
     int length;
-    int rc = mwcu::BlobUtil::sectionSize(&length, entry, section);
+    int rc = bmqu::BlobUtil::sectionSize(&length, entry, section);
     if (rc != 0) {
         return LogOpResult::e_INVALID_BLOB_SECTION;  // RETURN
     }
@@ -452,15 +450,15 @@ int ReadWriteOnDiskLog::read(bdlbb::Blob* entry,
     }
 
     // Ensure blob has enough space for the intended length
-    mwcu::BlobUtil::reserve(entry, length);
+    bmqu::BlobUtil::reserve(entry, length);
 
     // Read Scatter/Gather IO. readv() supports up to IOV_MAX iovecs, so batch
     // it up.
     struct iovec       ioVectors[IOV_MAX];
     const int          numDataBuffers  = entry->numDataBuffers();
     int                remainingLength = length;
-    mwcu::BlobPosition currOffset(0, 0);
-    mwcu::BlobPosition nextCurrOffset;
+    bmqu::BlobPosition currOffset(0, 0);
+    bmqu::BlobPosition nextCurrOffset;
 
     while (remainingLength > 0) {
         const int currBufIdx    = currOffset.buffer();
@@ -469,14 +467,14 @@ int ReadWriteOnDiskLog::read(bdlbb::Blob* entry,
         // i.e. Case j == 0
         const bdlbb::BlobBuffer& buf0 = entry->buffer(currBufIdx);
         ioVectors[0].iov_base         = buf0.data() + currBufOffset;
-        ioVectors[0].iov_len = mwcu::BlobUtil::bufferSize(*entry, currBufIdx) -
+        ioVectors[0].iov_len = bmqu::BlobUtil::bufferSize(*entry, currBufIdx) -
                                currBufOffset;
 
         const int iovecCount = bsl::min(numDataBuffers - currBufIdx, IOV_MAX);
         for (int j = 1; j < iovecCount; ++j) {
             const bdlbb::BlobBuffer& buf = entry->buffer(currBufIdx + j);
             ioVectors[j].iov_base        = buf.data();
-            ioVectors[j].iov_len         = mwcu::BlobUtil::bufferSize(*entry,
+            ioVectors[j].iov_len         = bmqu::BlobUtil::bufferSize(*entry,
                                                               currBufIdx + j);
         }
 
@@ -485,7 +483,7 @@ int ReadWriteOnDiskLog::read(bdlbb::Blob* entry,
             return LogOpResult::e_BYTE_READ_FAILURE;  // RETURN
         }
 
-        rc = mwcu::BlobUtil::findOffset(&nextCurrOffset,
+        rc = bmqu::BlobUtil::findOffset(&nextCurrOffset,
                                         *entry,
                                         currOffset,
                                         numRead);

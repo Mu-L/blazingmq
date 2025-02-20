@@ -16,15 +16,14 @@
 // mqbc_clusterstateledgerprotocol.t.cpp                              -*-C++-*-
 #include <mqbc_clusterstateledgerprotocol.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bsl_limits.h>
 #include <bsls_assert.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -63,7 +62,7 @@ static void test1_breathingTest()
 //   Basic functionality
 // --------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     using namespace mqbc;
 
@@ -77,9 +76,10 @@ static void test1_breathingTest()
         ClusterStateFileHeader fh;
         const unsigned char    numWords = sizeof(fh) / 4;
 
-        ASSERT_EQ(fh.protocolVersion(), ClusterStateLedgerProtocol::k_VERSION);
-        ASSERT_EQ(fh.headerWords(), numWords);
-        ASSERT_EQ(fh.fileKey(), mqbu::StorageKey::k_NULL_KEY);
+        BMQTST_ASSERT_EQ(fh.protocolVersion(),
+                         ClusterStateLedgerProtocol::k_VERSION);
+        BMQTST_ASSERT_EQ(fh.headerWords(), numWords);
+        BMQTST_ASSERT_EQ(fh.fileKey(), mqbu::StorageKey::k_NULL_KEY);
 
         // Create ClusterStateFileHeader, set fields, assert fields
         mqbu::StorageKey       key(mqbu::StorageKey::BinaryRepresentation(),
@@ -87,9 +87,9 @@ static void test1_breathingTest()
         ClusterStateFileHeader fh2;
         fh2.setProtocolVersion(3).setHeaderWords(63).setFileKey(key);
 
-        ASSERT_EQ(fh2.protocolVersion(), 3U);
-        ASSERT_EQ(fh2.headerWords(), 63U);
-        ASSERT_EQ(fh2.fileKey(), key);
+        BMQTST_ASSERT_EQ(fh2.protocolVersion(), 3U);
+        BMQTST_ASSERT_EQ(fh2.headerWords(), 63U);
+        BMQTST_ASSERT_EQ(fh2.fileKey(), key);
     }
 
     {
@@ -102,12 +102,12 @@ static void test1_breathingTest()
         ClusterStateRecordHeader fh;
         const unsigned int       numWords = sizeof(fh) / 4;
 
-        ASSERT_EQ(fh.headerWords(), numWords);
-        ASSERT_EQ(fh.recordType(), ClusterStateRecordType::e_UNDEFINED);
-        ASSERT_EQ(fh.leaderAdvisoryWords(), 0U);
-        ASSERT_EQ(fh.electorTerm(), 0ULL);
-        ASSERT_EQ(fh.sequenceNumber(), 0ULL);
-        ASSERT_EQ(fh.timestamp(), 0ULL);
+        BMQTST_ASSERT_EQ(fh.headerWords(), numWords);
+        BMQTST_ASSERT_EQ(fh.recordType(), ClusterStateRecordType::e_UNDEFINED);
+        BMQTST_ASSERT_EQ(fh.leaderAdvisoryWords(), 0U);
+        BMQTST_ASSERT_EQ(fh.electorTerm(), 0ULL);
+        BMQTST_ASSERT_EQ(fh.sequenceNumber(), 0ULL);
+        BMQTST_ASSERT_EQ(fh.timestamp(), 0ULL);
 
         // Create ClusterStateRecordHeader, set fields, assert fields
         ClusterStateRecordHeader fh2;
@@ -118,12 +118,12 @@ static void test1_breathingTest()
             .setSequenceNumber(k_UINT64_MAX)
             .setTimestamp(k_UINT64_MAX);
 
-        ASSERT_EQ(fh2.headerWords(), 15U);
-        ASSERT_EQ(fh2.recordType(), ClusterStateRecordType::e_COMMIT);
-        ASSERT_EQ(fh2.leaderAdvisoryWords(), k_UNSIGNED_INT_MAX);
-        ASSERT_EQ(fh2.electorTerm(), k_UINT64_MAX);
-        ASSERT_EQ(fh2.sequenceNumber(), k_UINT64_MAX);
-        ASSERT_EQ(fh2.timestamp(), k_UINT64_MAX);
+        BMQTST_ASSERT_EQ(fh2.headerWords(), 15U);
+        BMQTST_ASSERT_EQ(fh2.recordType(), ClusterStateRecordType::e_COMMIT);
+        BMQTST_ASSERT_EQ(fh2.leaderAdvisoryWords(), k_UNSIGNED_INT_MAX);
+        BMQTST_ASSERT_EQ(fh2.electorTerm(), k_UINT64_MAX);
+        BMQTST_ASSERT_EQ(fh2.sequenceNumber(), k_UINT64_MAX);
+        BMQTST_ASSERT_EQ(fh2.timestamp(), k_UINT64_MAX);
     }
 }
 
@@ -135,8 +135,8 @@ static void printEnumHelper(ARRAY (&data)[SIZE])
 
         PVVV("Line [" << test.d_line << "]");
 
-        mwcu::MemOutStream out(s_allocator_p);
-        mwcu::MemOutStream expected(s_allocator_p);
+        bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+        bmqu::MemOutStream expected(bmqtst::TestHelperUtil::allocator());
 
         typedef typename ENUM_TYPE::Enum T;
 
@@ -147,17 +147,17 @@ static void printEnumHelper(ARRAY (&data)[SIZE])
         out.setstate(bsl::ios_base::badbit);
         ENUM_TYPE::print(out, obj, 0, -1);
 
-        ASSERT_EQ(out.str(), "");
+        BMQTST_ASSERT_EQ(out.str(), "");
 
         out.clear();
         ENUM_TYPE::print(out, obj, 0, -1);
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
 
         out.reset();
         out << obj;
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
     }
 }
 
@@ -181,7 +181,7 @@ static void test2_enumPrint()
     //   ClusterStateRecordType::print
     //   operator<<(bsl::ostream&, ClusterStateRecordType::Enum)
     // --------------------------------------------------------------------
-    mwctst::TestHelper::printTestName("ENUM LAYOUT");
+    bmqtst::TestHelper::printTestName("ENUM LAYOUT");
 
     PV("Test mqbc::ClusterStateRecordType printing");
     {
@@ -209,7 +209,7 @@ static void test2_enumPrint()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -217,9 +217,9 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

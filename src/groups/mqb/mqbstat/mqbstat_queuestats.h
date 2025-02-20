@@ -31,28 +31,29 @@
 // 'mqbstat::QueueStatsUtil' is a utility namespace exposing methods to
 // initialize the stat contexts and associated objects.
 
-// MQB
-
 // BMQ
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcst_basictableinfoprovider.h>
-#include <mwcst_table.h>
-#include <mwcst_tablerecords.h>
+#include <bmqst_basictableinfoprovider.h>
+#include <bmqst_table.h>
+#include <bmqst_tablerecords.h>
 
 // BDE
+#include <bsl_list.h>
 #include <bsl_memory.h>
 #include <bsl_string.h>
+#include <bsl_unordered_map.h>
 #include <bslma_allocator.h>
 #include <bslma_managedptr.h>
+#include <bslma_usesbslmaallocator.h>
+#include <bslmf_nestedtraitdeclaration.h>
 #include <bsls_cpp11.h>
 #include <bsls_types.h>
 
 namespace BloombergLP {
 
 // FORWARD DECLARATION
-namespace mwcst {
+namespace bmqst {
 class StatContext;
 }
 namespace mqbi {
@@ -69,6 +70,9 @@ namespace mqbstat {
 /// domain.
 class QueueStatsDomain {
   public:
+    // TRAITS
+    BSLMF_NESTED_TRAIT_DECLARATION(QueueStatsDomain, bslma::UsesBslmaAllocator)
+
     // TYPES
 
     /// Enum representing the various type of events for which statistics
@@ -92,7 +96,8 @@ class QueueStatsDomain {
             e_CHANGE_ROLE,
             e_CFG_MSGS,
             e_CFG_BYTES,
-            e_NO_SC_MESSAGE
+            e_NO_SC_MESSAGE,
+            e_UPDATE_HISTORY
         };
     };
 
@@ -135,8 +140,13 @@ class QueueStatsDomain {
             e_CFG_MSGS,
             e_CFG_BYTES,
             e_NO_SC_MSGS_DELTA,
-            e_NO_SC_MSGS_ABS
+            e_NO_SC_MSGS_ABS,
+            e_HISTORY_ABS
         };
+
+        /// Return the non-modifiable string description corresponding to
+        /// the specified enumeration `value`.
+        static const char* toString(Stat::Enum value);
     };
 
     struct Role {
@@ -173,9 +183,33 @@ class QueueStatsDomain {
     };
 
   private:
-    // DATA
-    bslma::ManagedPtr<mwcst::StatContext> d_statContext_mp;
-    // StatContext
+    // PRIVATE TYPE
+    typedef bslma::ManagedPtr<bmqst::StatContext> StatSubContextMp;
+
+    // PRIVATE DATA
+    /// Allocator to use
+    bslma::Allocator* d_allocator_p;
+
+    /// StatContext
+    bslma::ManagedPtr<bmqst::StatContext> d_statContext_mp;
+
+    /// List of per-appId subcontexts stored as managed pointers.
+    /// Note: `bmqst::StatContext` interface allocates subcontexts as
+    ///       managed pointers.  We are not able to store managed pointers
+    ///       in a collection that might reallocate and copy its elements,
+    ///       since ManagedPtr implementation on Solaris is constraining.
+    ///       This is why list is used to store managed pointers.  But we
+    ///       also want to perform fast lookups to subcontexts, and for this
+    ///       we have `d_subContextsLookup` table that points to raw pointers
+    ///       to subcontexts.  These both fields must be kept in sync during
+    ///       reconfiguration.
+    /// TODO: use one bsl::unordered_map to store and lookup if Solaris support
+    ///       is stopped.
+    bsl::list<StatSubContextMp> d_subContextsHolder;
+
+    /// Lookup table for per-appId subcontexts.  Managed pointers to these
+    /// subcontexts must be held in `d_subContextsHolder`.
+    bsl::unordered_map<bsl::string, bmqst::StatContext*> d_subContextsLookup;
 
   private:
     // NOT IMPLEMENTED
@@ -191,27 +225,27 @@ class QueueStatsDomain {
     /// represented by its associated specified `context` as the difference
     /// between the latest snapshot-ed value (i.e., `snapshotId == 0`) and
     /// the value that was recorded at the specified `snapshotId` snapshots
-    /// ago.
+    /// ago.  The negative `snapshotId == -1` means that the oldest available
+    /// snapshot should be used, while other negative values are not supported.
     ///
     /// THREAD: This method can only be invoked from the `snapshot` thread.
-    static bsls::Types::Int64 getValue(const mwcst::StatContext& context,
+    static bsls::Types::Int64 getValue(const bmqst::StatContext& context,
                                        int                       snapshotId,
                                        const Stat::Enum&         stat);
 
     // CREATORS
 
-    /// Create a new object in an uninitialized state.
-    QueueStatsDomain();
+    /// Create a new object in an uninitialized state, using the specified
+    /// `allocator` for any memory allocations.
+    explicit QueueStatsDomain(bslma::Allocator* allocator);
 
     // MANIPULATORS
 
     /// Initialize this object for the queue with the specified `uri`, and
     /// register it as a subcontext of the specified `domainStatContext`
     /// (which correspond to the domain-level stat context this queue is
-    /// part of), using the specified `allocator`.
-    void initialize(const bmqt::Uri&  uri,
-                    mqbi::Domain*     domain,
-                    bslma::Allocator* allocator);
+    /// part of).
+    void initialize(const bmqt::Uri& uri, mqbi::Domain* domain);
 
     /// Set the reader count to the specified `readerCount`.  Return the
     /// `QueueStatsDomain` object.
@@ -222,17 +256,24 @@ class QueueStatsDomain {
     QueueStatsDomain& setWriterCount(int writerCount);
 
     /// Update statistics for the event of the specified `type` and with the
-    /// specified `value` (depending on the `type`, `value` can represent
+    /// specified `value`.  Depending on the `type`, `value` can represent
     /// the number of bytes, a counter, ...
-    void onEvent(EventType::Enum type, bsls::Types::Int64 value);
+    template <EventType::Enum type>
+    void onEvent(bsls::Types::Int64 value);
 
-    /// Force set the stats of the content of the queue to the specified
-    /// absolute `messages` and `bytes` values.
-    void setQueueContentRaw(bsls::Types::Int64 messages,
-                            bsls::Types::Int64 bytes);
+    /// Update statistics for the event of the specified `type` and with the
+    /// specified `value` for the specified `appId`.  Depending on the `type`,
+    /// `value` can represent the number of bytes, a counter, ...
+    void onEvent(EventType::Enum    type,
+                 bsls::Types::Int64 value,
+                 const bsl::string& appId);
+
+    /// Update subcontexts in case of domain reconfigure with the given list of
+    /// AppIds.
+    void updateDomainAppIds(const bsl::vector<bsl::string>& appIds);
 
     /// Return a pointer to the statcontext.
-    mwcst::StatContext* statContext();
+    bmqst::StatContext* statContext();
 };
 
 // FREE OPERATORS
@@ -287,7 +328,7 @@ class QueueStatsClient {
 
   private:
     // DATA
-    bslma::ManagedPtr<mwcst::StatContext> d_statContext_mp;
+    bslma::ManagedPtr<bmqst::StatContext> d_statContext_mp;
     // StatContext
 
   private:
@@ -307,7 +348,7 @@ class QueueStatsClient {
     /// ago.
     ///
     /// THREAD: This method can only be invoked from the `snapshot` thread.
-    static bsls::Types::Int64 getValue(const mwcst::StatContext& context,
+    static bsls::Types::Int64 getValue(const bmqst::StatContext& context,
                                        int                       snapshotId,
                                        const Stat::Enum&         stat);
 
@@ -323,7 +364,7 @@ class QueueStatsClient {
     /// (which correspond to the client-level stat context this queue is
     /// part of), using the specified `allocator`.
     void initialize(const bmqt::Uri&    uri,
-                    mwcst::StatContext* clientStatContext,
+                    bmqst::StatContext* clientStatContext,
                     bslma::Allocator*   allocator);
 
     /// Update statistics for the event of the specified `type` and with the
@@ -332,7 +373,7 @@ class QueueStatsClient {
     void onEvent(EventType::Enum type, bsls::Types::Int64 value);
 
     /// Return a pointer to the statcontext.
-    mwcst::StatContext* statContext();
+    bmqst::StatContext* statContext();
 };
 
 // =====================
@@ -347,29 +388,129 @@ struct QueueStatsUtil {
     /// specified `historySize` of history: return the created top level
     /// stat context to use as parent of all domains statistics.  Use the
     /// specified `allocator` for all stat context and stat values.
-    static bsl::shared_ptr<mwcst::StatContext>
+    static bsl::shared_ptr<bmqst::StatContext>
     initializeStatContextDomains(int historySize, bslma::Allocator* allocator);
 
     /// Initialize the statistics for the queues (client level) keeping the
     /// specified `historySize` of history: return the created top level
     /// stat context to use as parent of all domains statistics.  Use the
     /// specified `allocator` for all stat context and stat values.
-    static bsl::shared_ptr<mwcst::StatContext>
+    static bsl::shared_ptr<bmqst::StatContext>
     initializeStatContextClients(int historySize, bslma::Allocator* allocator);
 
     /// Load in the specified `table` and `tip` the objects to print the
     /// specified `statContext` for the specified `historySize`.
-    static void initializeTableAndTipDomains(mwcst::Table* table,
-                                             mwcu::BasicTableInfoProvider* tip,
-                                             int                 historySize,
-                                             mwcst::StatContext* statContext);
+    static void
+    initializeTableAndTipDomains(bmqst::Table*                  table,
+                                 bmqst::BasicTableInfoProvider* tip,
+                                 int                            historySize,
+                                 bmqst::StatContext*            statContext);
 
     /// Load in the specified `table` and `tip` the objects to print the
     /// specified `statContext` for the specified `historySize`.
-    static void initializeTableAndTipClients(mwcst::Table* table,
-                                             mwcu::BasicTableInfoProvider* tip,
-                                             int                 historySize,
-                                             mwcst::StatContext* statContext);
+    static void
+    initializeTableAndTipClients(bmqst::Table*                  table,
+                                 bmqst::BasicTableInfoProvider* tip,
+                                 int                            historySize,
+                                 bmqst::StatContext*            statContext);
+};
+
+// -----------------------
+// struct DomainQueueStats
+// -----------------------
+
+/// Namespace for the constants of stat values that applies to the queues
+/// on the domain
+struct DomainQueueStats {
+    enum Enum {
+        /// Value:      Current number of clients who opened the queue with
+        ///             the `WRITE` flag
+        e_STAT_NB_PRODUCER
+
+        ,
+        /// Value:      Current number of clients who opened the queue with
+        ///             the 'READ' flag
+        e_STAT_NB_CONSUMER
+
+        ,
+        /// Value:      Current number of messages in the queue
+        e_STAT_MESSAGES
+
+        ,
+        /// Value:      Accumulated bytes of all messages currently in the
+        ///             queue
+        e_STAT_BYTES
+
+        ,
+        /// Value:      Number of ack messages delivered by this queue
+        e_STAT_ACK
+
+        ,
+        /// Value:      The time between PUT and ACK (in nanoseconds).
+        e_STAT_ACK_TIME
+
+        ,
+        /// Value:      Number of NACK messages generated for this queue
+        e_STAT_NACK
+
+        ,
+        /// Value:      Number of CONFIRM messages received by this queue
+        e_STAT_CONFIRM
+
+        ,
+        /// Value:      The time between PUSH and CONFIRM (in nanoseconds).
+        e_STAT_CONFIRM_TIME
+
+        ,
+        /// Value:      Number of messages rejected by this queue (RDA
+        ///             reaching zero)
+        e_STAT_REJECT
+
+        ,
+        /// Value:      The time spent by the message in the queue (in
+        ///             nanoseconds).
+        e_STAT_QUEUE_TIME
+
+        ,
+        /// Value:      Accumulated bytes of all messages ever pushed from
+        ///             the queue
+        /// Increment:  Number of messages ever pushed from the queue
+        e_STAT_PUSH
+
+        ,
+        /// Value:      Accumulated bytes of all messages ever put in the
+        ///             queue
+        /// Increment:  Number of messages ever put in the queue
+        e_STAT_PUT
+
+        ,
+        /// Value:      Accumulated number of messages ever GC'ed in the
+        ///             queue
+        e_STAT_GC_MSGS
+
+        ,
+        /// Value:      Role (Unknown, Primary, Replica, Proxy)
+        e_STAT_ROLE
+
+        ,
+        /// Value:      The configured queue messages capacity
+        e_CFG_MSGS
+
+        ,
+        /// Value:      The configured queue bytes capacity
+        e_CFG_BYTES
+
+        ,
+        /// Value:      Accumulated number of messages in the strong
+        ///             consistency queue expired before receiving quorum
+        ///             Receipts
+        e_STAT_NO_SC_MSGS
+
+        ,
+        // Value:      Current number of GUIDs stored in queue's history
+        //             (does not include messages in the queue)
+        e_STAT_HISTORY
+    };
 };
 
 // ============================================================================
@@ -380,9 +521,187 @@ struct QueueStatsUtil {
 // class QueueStatsDomain
 // ----------------------
 
-inline mwcst::StatContext* QueueStatsDomain::statContext()
+inline bmqst::StatContext* QueueStatsDomain::statContext()
 {
     return d_statContext_mp.get();
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_ACK>(
+    BSLS_ANNOTATION_UNUSED bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_ACK, 1);
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_ACK_TIME>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->reportValue(DomainQueueStats::e_STAT_ACK_TIME, value);
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_NACK>(
+    BSLS_ANNOTATION_UNUSED bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    // For NACK, we don't care about the bytes value
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_NACK, 1);
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_CONFIRM>(
+    BSLS_ANNOTATION_UNUSED bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    // For CONFIRM, we don't care about the bytes value
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_CONFIRM, 1);
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_CONFIRM_TIME>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->reportValue(DomainQueueStats::e_STAT_CONFIRM_TIME,
+                                  value);
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_REJECT>(
+    BSLS_ANNOTATION_UNUSED bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    // For REJECT, we don't care about the bytes value
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_REJECT, 1);
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_QUEUE_TIME>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->reportValue(DomainQueueStats::e_STAT_QUEUE_TIME, value);
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_PUSH>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_PUSH, value);
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_PUT>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_PUT, value);
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_ADD_MESSAGE>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_BYTES, value);
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_MESSAGES, 1);
+    if (!d_subContextsHolder.empty()) {
+        bsl::list<StatSubContextMp>::iterator it = d_subContextsHolder.begin();
+        while (it != d_subContextsHolder.end()) {
+            it->get()->adjustValue(DomainQueueStats::e_STAT_BYTES, value);
+            it->get()->adjustValue(DomainQueueStats::e_STAT_MESSAGES, 1);
+            ++it;
+        }
+    }
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_DEL_MESSAGE>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_BYTES, -value);
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_MESSAGES, -1);
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_GC_MESSAGE>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_GC_MSGS, value);
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_PURGE>(
+    BSLS_ANNOTATION_UNUSED bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    // NOTE: Setting the value like that will cause weird results if using
+    //       the stat to get rates
+    d_statContext_mp->setValue(DomainQueueStats::e_STAT_BYTES, 0);
+    d_statContext_mp->setValue(DomainQueueStats::e_STAT_MESSAGES, 0);
+    if (!d_subContextsHolder.empty()) {
+        bsl::list<StatSubContextMp>::iterator it = d_subContextsHolder.begin();
+        while (it != d_subContextsHolder.end()) {
+            it->get()->setValue(DomainQueueStats::e_STAT_BYTES, 0);
+            it->get()->setValue(DomainQueueStats::e_STAT_MESSAGES, 0);
+            ++it;
+        }
+    }
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_CHANGE_ROLE>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->setValue(DomainQueueStats::e_STAT_ROLE, value);
+}
+
+template <>
+inline void QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_CFG_MSGS>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->setValue(DomainQueueStats::e_CFG_MSGS, value);
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_CFG_BYTES>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->setValue(DomainQueueStats::e_CFG_BYTES, value);
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_NO_SC_MESSAGE>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_NO_SC_MSGS, value);
+}
+
+template <>
+inline void
+QueueStatsDomain::onEvent<QueueStatsDomain::EventType::e_UPDATE_HISTORY>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->setValue(DomainQueueStats::e_STAT_HISTORY, value);
 }
 
 // -----------------------------
@@ -399,7 +718,7 @@ inline bsl::ostream& operator<<(bsl::ostream&                stream,
 // class QueueStatsClient
 // ----------------------
 
-inline mwcst::StatContext* QueueStatsClient::statContext()
+inline bmqst::StatContext* QueueStatsClient::statContext()
 {
     return d_statContext_mp.get();
 }
