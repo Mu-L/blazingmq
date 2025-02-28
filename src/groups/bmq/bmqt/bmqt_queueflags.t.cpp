@@ -17,10 +17,9 @@
 #include <bmqt_queueflags.h>
 
 // BMQ
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bsl_ios.h>
@@ -29,7 +28,7 @@
 #include <bsls_types.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -59,60 +58,61 @@ BSLMF_ASSERT(k_ALL_FLAGS_SETTED < 1 << 10);
 
 static void test1_breathingTest()
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
-    mwcu::MemOutStream  errorOs(s_allocator_p);
+    bmqu::MemOutStream  errorOs(bmqtst::TestHelperUtil::allocator());
     int                 rc;
     bsls::Types::Uint64 flags1 = 0;
     bsls::Types::Uint64 flags2 = 0;
 
     PV("Testing QueueFlagsUtil::isValid");
-    ASSERT_EQ(bmqt::QueueFlagsUtil::isValid(errorOs, flags1), false);
-    ASSERT_EQ(errorOs.str(),
-              "At least one of 'READ' or 'WRITE' mode must be set.");
+    BMQTST_ASSERT_EQ(bmqt::QueueFlagsUtil::isValid(errorOs, flags1), false);
+    BMQTST_ASSERT_EQ(errorOs.str(),
+                     "At least one of 'READ' or 'WRITE' mode must be set.");
     errorOs.reset();
 
     flags1 |= bmqt::QueueFlags::e_WRITE;
     flags1 |= bmqt::QueueFlags::e_ACK;
-    ASSERT_EQ(bmqt::QueueFlagsUtil::isValid(errorOs, flags1), true);
+    BMQTST_ASSERT_EQ(bmqt::QueueFlagsUtil::isValid(errorOs, flags1), true);
 
     errorOs.reset();
     flags1 |= bmqt::QueueFlags::e_ADMIN;
-    ASSERT_EQ(bmqt::QueueFlagsUtil::isValid(errorOs, flags1), false);
-    ASSERT_EQ(errorOs.str(),
-              "'ADMIN' mode is valid only for BlazingMQ admin tasks.");
+    BMQTST_ASSERT_EQ(bmqt::QueueFlagsUtil::isValid(errorOs, flags1), false);
+    BMQTST_ASSERT_EQ(errorOs.str(),
+                     "'ADMIN' mode is valid only for BlazingMQ admin tasks.");
     flags1 &= ~bmqt::QueueFlags::e_ADMIN;
     errorOs.reset();
 
     PV("Testing prettyPrint");
-    mwcu::MemOutStream osPrint(s_allocator_p);
+    bmqu::MemOutStream osPrint(bmqtst::TestHelperUtil::allocator());
     bmqt::QueueFlagsUtil::prettyPrint(osPrint, flags2);
-    ASSERT_EQ(osPrint.str(), "");
+    BMQTST_ASSERT_EQ(osPrint.str(), "");
 
     bmqt::QueueFlagsUtil::prettyPrint(osPrint, flags1);
-    ASSERT_EQ(osPrint.str(), "WRITE,ACK");
+    BMQTST_ASSERT_EQ(osPrint.str(), "WRITE,ACK");
 
     PV("Testing fromString");
     rc = bmqt::QueueFlagsUtil::fromString(errorOs, &flags2, osPrint.str());
     PV("Error out: '" << errorOs.str() << "'");
-    ASSERT_EQ(rc, 0);
-    ASSERT_EQ(flags2, flags1);
+    BMQTST_ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(flags2, flags1);
 
     flags2 = 0;
     rc     = bmqt::QueueFlagsUtil::fromString(errorOs, &flags2, "READ");
-    ASSERT_EQ(rc, 0);
-    ASSERT(bmqt::QueueFlagsUtil::isReader(flags2));
-    ASSERT(!bmqt::QueueFlagsUtil::isWriter(flags2));
+    BMQTST_ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT(bmqt::QueueFlagsUtil::isReader(flags2));
+    BMQTST_ASSERT(!bmqt::QueueFlagsUtil::isWriter(flags2));
 
-    bsl::string flagsStr("WRITE,INVALID,READ,INVALID2", s_allocator_p);
+    bsl::string flagsStr("WRITE,INVALID,READ,INVALID2",
+                         bmqtst::TestHelperUtil::allocator());
     rc = bmqt::QueueFlagsUtil::fromString(errorOs, &flags2, flagsStr);
-    ASSERT_NE(rc, 0);
-    ASSERT_EQ(errorOs.str(), "Invalid flag(s) 'INVALID','INVALID2'");
+    BMQTST_ASSERT_NE(rc, 0);
+    BMQTST_ASSERT_EQ(errorOs.str(), "Invalid flag(s) 'INVALID','INVALID2'");
 }
 
 static void test2_additionsRemovals()
 {
-    mwctst::TestHelper::printTestName("ADDITIONS / REMOVALS");
+    bmqtst::TestHelper::printTestName("ADDITIONS / REMOVALS");
 
     // Short alias
     const int k_ADMIN = bmqt::QueueFlags::e_ADMIN;
@@ -160,13 +160,13 @@ static void test2_additionsRemovals()
         PVV("Line: " << test.d_line << ", Old: " << test.d_oldFlags
                      << ", New: " << test.d_newFlags << ", Diff: " << diffFlags
                      << ", Expected: " << test.d_expected);
-        ASSERT_EQ(diffFlags, test.d_expected);
+        BMQTST_ASSERT_EQ(diffFlags, test.d_expected);
     }
 }
 
 static void test3_printTest()
 {
-    mwctst::TestHelper::printTestName("PRINT");
+    bmqtst::TestHelper::printTestName("PRINT");
 
     PV("Testing print");
 
@@ -189,140 +189,148 @@ static void test3_printTest()
 
     for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
         const Test&        test = k_DATA[idx];
-        mwcu::MemOutStream out(s_allocator_p);
-        mwcu::MemOutStream expected(s_allocator_p);
+        bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+        bmqu::MemOutStream expected(bmqtst::TestHelperUtil::allocator());
 
         expected << test.d_expected;
 
         out.setstate(bsl::ios_base::badbit);
         bmqt::QueueFlags::print(out, test.d_type, 0, -1);
 
-        ASSERT_EQ(out.str(), "");
+        BMQTST_ASSERT_EQ(out.str(), "");
 
         out.clear();
         bmqt::QueueFlags::print(out, test.d_type, 0, -1);
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
 
         out.reset();
         out << test.d_type;
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
     }
 }
 
 static void test4_empty()
 {
-    mwctst::TestHelper::printTestName("EMPTY");
+    bmqtst::TestHelper::printTestName("EMPTY");
 
     bsls::Types::Uint64 flags = 0;
 
     // EMPTY
     PV("Testing empty state getters")
     flags = bmqt::QueueFlagsUtil::empty();
-    ASSERT_EQ(flags, 0UL);
-    ASSERT_EQ(bmqt::QueueFlagsUtil::isEmpty(flags), true);
+    BMQTST_ASSERT_EQ(flags, 0UL);
+    BMQTST_ASSERT_EQ(bmqt::QueueFlagsUtil::isEmpty(flags), true);
 
     // NOT EMPTY
     flags = 0xffffffff;
-    ASSERT_EQ(bmqt::QueueFlagsUtil::isEmpty(flags), false);
+    BMQTST_ASSERT_EQ(bmqt::QueueFlagsUtil::isEmpty(flags), false);
 }
 
 static void test5_setFlag()
 {
-    mwctst::TestHelper::printTestName("SET FLAG");
+    bmqtst::TestHelper::printTestName("SET FLAG");
 
     PV("Test flag setter")
     for (bsls::Types::Uint64 flags = 0; flags <= k_ALL_FLAGS_SETTED; flags++) {
         // ACK flag
         bsls::Types::Uint64 flags0 = flags;
         bmqt::QueueFlagsUtil::setAck(&flags0);
-        ASSERT_EQ_D("Test set ACK", flags | bmqt::QueueFlags::e_ACK, flags0)
+        BMQTST_ASSERT_EQ_D("Test set ACK",
+                           flags | bmqt::QueueFlags::e_ACK,
+                           flags0)
 
         // READ flag
         flags0 = flags;
         bmqt::QueueFlagsUtil::setReader(&flags0);
-        ASSERT_EQ_D("Test set READ", flags | bmqt::QueueFlags::e_READ, flags0)
+        BMQTST_ASSERT_EQ_D("Test set READ",
+                           flags | bmqt::QueueFlags::e_READ,
+                           flags0)
 
         // WRITE flag
         flags0 = flags;
         bmqt::QueueFlagsUtil::setWriter(&flags0);
-        ASSERT_EQ_D("Test set WRITE",
-                    flags | bmqt::QueueFlags::e_WRITE,
-                    flags0)
+        BMQTST_ASSERT_EQ_D("Test set WRITE",
+                           flags | bmqt::QueueFlags::e_WRITE,
+                           flags0)
 
         // ADMIN flag
         flags0 = flags;
         bmqt::QueueFlagsUtil::setAdmin(&flags0);
-        ASSERT_EQ_D("Test set ADMIN",
-                    flags | bmqt::QueueFlags::e_ADMIN,
-                    flags0)
+        BMQTST_ASSERT_EQ_D("Test set ADMIN",
+                           flags | bmqt::QueueFlags::e_ADMIN,
+                           flags0)
     }
 }
 
 static void test6_unsetFlag()
 {
-    mwctst::TestHelper::printTestName("UNSET FLAG");
+    bmqtst::TestHelper::printTestName("UNSET FLAG");
 
     PV("Test flag unsetter")
     for (bsls::Types::Uint64 flags = 0; flags <= k_ALL_FLAGS_SETTED; flags++) {
         // ACK flag
         bsls::Types::Uint64 flags0 = flags;
         bmqt::QueueFlagsUtil::unsetAck(&flags0);
-        ASSERT_EQ_D("Test unset ACK", flags & ~bmqt::QueueFlags::e_ACK, flags0)
+        BMQTST_ASSERT_EQ_D("Test unset ACK",
+                           flags & ~bmqt::QueueFlags::e_ACK,
+                           flags0)
 
         // READ flag
         flags0 = flags;
         bmqt::QueueFlagsUtil::unsetReader(&flags0);
-        ASSERT_EQ_D("Test unset READ",
-                    flags & ~bmqt::QueueFlags::e_READ,
-                    flags0)
+        BMQTST_ASSERT_EQ_D("Test unset READ",
+                           flags & ~bmqt::QueueFlags::e_READ,
+                           flags0)
 
         // WRITE flag
         flags0 = flags;
         bmqt::QueueFlagsUtil::unsetWriter(&flags0);
-        ASSERT_EQ_D("Test unset WRITE",
-                    flags & ~bmqt::QueueFlags::e_WRITE,
-                    flags0)
+        BMQTST_ASSERT_EQ_D("Test unset WRITE",
+                           flags & ~bmqt::QueueFlags::e_WRITE,
+                           flags0)
 
         // ADMIN flag
         flags0 = flags;
         bmqt::QueueFlagsUtil::unsetAdmin(&flags0);
-        ASSERT_EQ_D("Test unset ADMIN",
-                    flags & ~bmqt::QueueFlags::e_ADMIN,
-                    flags0)
+        BMQTST_ASSERT_EQ_D("Test unset ADMIN",
+                           flags & ~bmqt::QueueFlags::e_ADMIN,
+                           flags0)
     }
 }
 
 static void test7_getFlag()
 {
-    mwctst::TestHelper::printTestName("GET FLAG");
+    bmqtst::TestHelper::printTestName("GET FLAG");
 
     PV("Test flag getter")
     for (bsls::Types::Uint64 flags = 0; flags <= k_ALL_FLAGS_SETTED; flags++) {
         // ACK flag
         bsls::Types::Uint64 flags0 = flags;
-        ASSERT_EQ_D("Test ACK flag check",
-                    bmqt::QueueFlagsUtil::isAck(flags0),
-                    static_cast<bool>(flags & bmqt::QueueFlags::e_ACK))
+        BMQTST_ASSERT_EQ_D("Test ACK flag check",
+                           bmqt::QueueFlagsUtil::isAck(flags0),
+                           static_cast<bool>(flags & bmqt::QueueFlags::e_ACK))
 
         // READ flag
         flags0 = flags;
-        ASSERT_EQ_D("Test READ flag check",
-                    bmqt::QueueFlagsUtil::isReader(flags0),
-                    static_cast<bool>(flags & bmqt::QueueFlags::e_READ))
+        BMQTST_ASSERT_EQ_D("Test READ flag check",
+                           bmqt::QueueFlagsUtil::isReader(flags0),
+                           static_cast<bool>(flags & bmqt::QueueFlags::e_READ))
 
         // WRITE flag
         flags0 = flags;
-        ASSERT_EQ_D("Test WRITE flag check",
-                    bmqt::QueueFlagsUtil::isWriter(flags0),
-                    static_cast<bool>(flags & bmqt::QueueFlags::e_WRITE))
+        BMQTST_ASSERT_EQ_D(
+            "Test WRITE flag check",
+            bmqt::QueueFlagsUtil::isWriter(flags0),
+            static_cast<bool>(flags & bmqt::QueueFlags::e_WRITE))
 
         // ADMIN flag
         flags0 = flags;
-        ASSERT_EQ_D("Test ADMIN flag check",
-                    bmqt::QueueFlagsUtil::isAdmin(flags0),
-                    static_cast<bool>(flags & bmqt::QueueFlags::e_ADMIN))
+        BMQTST_ASSERT_EQ_D(
+            "Test ADMIN flag check",
+            bmqt::QueueFlagsUtil::isAdmin(flags0),
+            static_cast<bool>(flags & bmqt::QueueFlags::e_ADMIN))
     }
 }
 
@@ -332,7 +340,7 @@ static void test7_getFlag()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -345,9 +353,9 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

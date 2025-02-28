@@ -33,11 +33,10 @@
 #include <bmqp_pushmessageiterator.h>
 #include <bmqt_messageguid.h>
 
-// MWC
-#include <mwctsk_alarmlog.h>
-#include <mwcu_blob.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_printutil.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_blob.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <ball_severity.h>
@@ -72,9 +71,9 @@ const double k_ACTIVE_NODE_INITIAL_WAIT = 10.0;
 
 typedef bsl::function<void()> CompletionCallback;
 
-/// Utility function used in `mwcu::OperationChain` as the operation
+/// Utility function used in `bmqu::OperationChain` as the operation
 /// callback which just calls the completion callback.
-void allClientSessionsShutDown(const CompletionCallback& callback)
+void completeShutDown(const CompletionCallback& callback)
 {
     callback();
 }
@@ -104,14 +103,14 @@ void ClusterProxy::generateNack(bmqt::AckResult::Enum               status,
                                     appData,
                                     options);
 
-    MWCU_THROTTLEDACTION_THROTTLE(
+    BMQU_THROTTLEDACTION_THROTTLE(
         d_throttledSkippedPutMessages,
         BALL_LOG_ERROR << description() << ": skipping relay-PUT message ["
                        << "queueId: " << putHeader.queueId() << ", GUID: "
                        << putHeader.messageGUID() << "], rc: " << rc << ".";);
 }
 
-void ClusterProxy::startDispatched(bsl::ostream* errorDescription, int* rc)
+void ClusterProxy::startDispatched()
 {
     // executed by the *DISPATCHER* thread
 
@@ -120,29 +119,22 @@ void ClusterProxy::startDispatched(bsl::ostream* errorDescription, int* rc)
     BSLS_ASSERT_SAFE(!d_isStarted &&
                      "start() can only be called once on this object");
 
-    enum { rc_SUCCESS = 0, rc_ACTIVE_NODE_MANAGER = -1, rc_QUEUE_HELPER = -2 };
-
-    *rc = d_queueHelper.initialize(*errorDescription);
-    if (*rc != 0) {
-        *rc = (*rc * 10) + rc_QUEUE_HELPER;
-        return;  // RETURN
-    }
+    d_queueHelper.initialize();
 
     d_clusterData.membership().netCluster()->registerObserver(this);
 
     // Start the monitor
-    d_clusterMonitor.start(*errorDescription);
+    d_clusterMonitor.start();
     d_clusterMonitor.registerObserver(this);
 
     d_isStarted = true;
-    *rc         = rc_SUCCESS;
 
     // Because the 'cluster' was already created, it may already had some
     // sessions up before we registered ourself as observer.  So scan all nodes
     // and all session to build initial state and then schedule a refresh to
     // find active node if there is none after processing all pending events.
 
-    d_activeNodeManager.initialize(d_clusterData.transportManager());
+    d_activeNodeManager.initialize(&d_clusterData.transportManager());
 
     // Ready to read.
     d_clusterData.membership().netCluster()->enableRead();
@@ -154,17 +146,18 @@ void ClusterProxy::startDispatched(bsl::ostream* errorDescription, int* rc)
 
     // Schedule an event, to ensure we will eventually use a connection - refer
     // to the ClusterActiveNodeManager documentation for more details.
-    bsls::TimeInterval interval = mwcsys::Time::nowMonotonicClock() +
+    bsls::TimeInterval interval = bmqsys::Time::nowMonotonicClock() +
                                   bsls::TimeInterval(
                                       k_ACTIVE_NODE_INITIAL_WAIT);
-    d_clusterData.scheduler()->scheduleEvent(
+    d_clusterData.scheduler().scheduleEvent(
         &d_activeNodeLookupEventHandle,
         interval,
         bdlf::BindUtil::bind(&ClusterProxy::onActiveNodeLookupTimerExpired,
                              this));
 }
 
-void ClusterProxy::initiateShutdownDispatched(const VoidFunctor& callback)
+void ClusterProxy::initiateShutdownDispatched(const VoidFunctor& callback,
+                                              bool supportShutdownV2)
 {
     // executed by the *DISPATCHER* thread
 
@@ -177,51 +170,73 @@ void ClusterProxy::initiateShutdownDispatched(const VoidFunctor& callback)
     // Mark self as stopping.
     d_isStopping = true;
 
-    // Fill the first link with client session shutdown operations
-    mwcu::OperationChainLink link(d_shutdownChain.allocator());
-    SessionSpVec             sessions;
-    bsls::TimeInterval       shutdownTimeout;
-    shutdownTimeout.addMilliseconds(
-        d_clusterProxyConfig.queueOperations().shutdownTimeoutMs());
+    if (supportShutdownV2) {
+        d_queueHelper.requestToStopPushing();
 
-    for (mqbnet::TransportManagerIterator sessIt(
-             d_clusterData.transportManager());
-         sessIt;
-         ++sessIt) {
-        bsl::shared_ptr<mqbnet::Session> sessionSp = sessIt.session().lock();
-        if (!sessionSp) {
-            continue;  // CONTINUE
+        bsls::TimeInterval whenToStop(
+            bsls::SystemTime::now(bsls::SystemClockType::e_MONOTONIC));
+        whenToStop.addMilliseconds(d_clusterData.clusterConfig()
+                                       .queueOperations()
+                                       .shutdownTimeoutMs());
+
+        d_shutdownChain.appendInplace(
+            bdlf::BindUtil::bind(&ClusterQueueHelper::checkUnconfirmedV2,
+                                 &d_queueHelper,
+                                 whenToStop,
+                                 bdlf::PlaceHolders::_1));  // completionCb
+    }
+    else {
+        // TODO(shutdown-v2): TEMPORARY, remove when all switch to StopRequest
+        // V2.
+
+        // Fill the first link with client session shutdown operations
+        bmqu::OperationChainLink link(d_shutdownChain.allocator());
+        SessionSpVec             sessions;
+        bsls::TimeInterval       shutdownTimeout;
+        shutdownTimeout.addMilliseconds(
+            clusterProxyConfig()->queueOperations().shutdownTimeoutMs());
+
+        for (mqbnet::TransportManagerIterator sessIt(
+                 &d_clusterData.transportManager());
+             sessIt;
+             ++sessIt) {
+            bsl::shared_ptr<mqbnet::Session> sessionSp =
+                sessIt.session().lock();
+            if (!sessionSp) {
+                continue;  // CONTINUE
+            }
+
+            const bmqp_ctrlmsg::NegotiationMessage& negoMsg =
+                sessionSp->negotiationMessage();
+            if (mqbnet::ClusterUtil::isClientOrProxy(negoMsg)) {
+                if (mqbnet::ClusterUtil::isClient(negoMsg)) {
+                    link.insert(bdlf::BindUtil::bind(
+                        &mqbnet::Session::initiateShutdown,
+                        sessionSp,
+                        bdlf::PlaceHolders::_1,
+                        shutdownTimeout,
+                        false));
+                }
+                else {
+                    sessions.push_back(sessionSp);
+                }
+            }
         }
 
-        const bmqp_ctrlmsg::NegotiationMessage& negoMsg =
-            sessionSp->negotiationMessage();
-        if (mqbnet::ClusterUtil::isClientOrProxy(negoMsg)) {
-            if (mqbnet::ClusterUtil::isClient(negoMsg)) {
-                link.insert(
-                    bdlf::BindUtil::bind(&mqbnet::Session::initiateShutdown,
-                                         sessionSp,
-                                         bdlf::PlaceHolders::_1,
-                                         shutdownTimeout));
-            }
-            else {
-                sessions.push_back(sessionSp);
-            }
-        }
+        link.insert(bdlf::BindUtil::bind(
+            &ClusterProxy::sendStopRequest,
+            this,
+            sessions,
+            bdlf::PlaceHolders::_1));  // completion callback
+
+        d_shutdownChain.append(&link);
     }
 
-    link.insert(
-        bdlf::BindUtil::bind(&ClusterProxy::sendStopRequest,
-                             this,
-                             sessions,
-                             bdlf::PlaceHolders::_1));  // completion callback
-
-    d_shutdownChain.append(&link);
-
-    // Add callback to be invoked once all the client sessions are shut down
-    d_shutdownChain.appendInplace(
-        bdlf::BindUtil::bind(&allClientSessionsShutDown,
-                             bdlf::PlaceHolders::_1),
-        callback);
+    // Add callback to be invoked once V1 shuts down all client sessions or
+    // V2 finishes waiting for unconfirmed
+    d_shutdownChain.appendInplace(bdlf::BindUtil::bind(&completeShutDown,
+                                                       bdlf::PlaceHolders::_1),
+                                  callback);
 
     d_shutdownChain.start();
 }
@@ -249,7 +264,7 @@ void ClusterProxy::stopDispatched()
 
     // Cancel scheduler event
     if (d_activeNodeLookupEventHandle) {
-        d_clusterData.scheduler()->cancelEventAndWait(
+        d_clusterData.scheduler().cancelEventAndWait(
             &d_activeNodeLookupEventHandle);
     }
 
@@ -292,7 +307,7 @@ void ClusterProxy::processCommandDispatched(
     // be sent to a cluster.
 
     bdlma::LocalSequentialAllocator<256> localAllocator(d_allocator_p);
-    mwcu::MemOutStream                   os(&localAllocator);
+    bmqu::MemOutStream                   os(&localAllocator);
     os << "Unknown command '" << command << "'";
     result->makeError().message() = os.str();
 }
@@ -343,7 +358,7 @@ void ClusterProxy::processActiveNodeManagerResult(
     if (result & mqbnet::ClusterActiveNodeManager::e_NEW_ACTIVE) {
         // Cancel the scheduler event, if any.
         if (d_activeNodeLookupEventHandle) {
-            d_clusterData.scheduler()->cancelEvent(
+            d_clusterData.scheduler().cancelEvent(
                 &d_activeNodeLookupEventHandle);
             d_activeNodeManager.enableExtendedSelection();
         }
@@ -377,6 +392,10 @@ void ClusterProxy::onActiveNodeUp(mqbnet::ClusterNode* activeNode)
         mqbnet::ElectorState::e_LEADER,
         d_clusterData.electorInfo().electorTerm() + 1,
         activeNode,
+        mqbc::ElectorInfoLeaderStatus::e_PASSIVE);
+    // It is **prohibited** to set leader status directly from e_UNDEFINED
+    // to e_ACTIVE.  Hence, we do: e_UNDEFINED -> e_PASSIVE -> e_ACTIVE
+    d_clusterData.electorInfo().setLeaderStatus(
         mqbc::ElectorInfoLeaderStatus::e_ACTIVE);
 }
 
@@ -404,6 +423,16 @@ void ClusterProxy::onActiveNodeDown(const mqbnet::ClusterNode* node)
         return;  // RETURN
     }
 
+    // Update the cluster state with the info.  Active node lock must *not* be
+    // held.  Reuse the existing term since this is not a 'new active node'
+    // event.
+
+    d_clusterData.electorInfo().setElectorInfo(
+        mqbnet::ElectorState::e_DORMANT,
+        d_clusterData.electorInfo().electorTerm(),
+        0,  // Leader (or 'active node') pointer
+        mqbc::ElectorInfoLeaderStatus::e_UNDEFINED);
+
     // Cancel all requests with the 'CANCELED' category and the 'e_ACTIVE_LOST'
     // code; and the callback will simply re-issue those requests; which then
     // will be added to the pending request list.
@@ -415,16 +444,6 @@ void ClusterProxy::onActiveNodeDown(const mqbnet::ClusterNode* node)
     failure.message()  = "Lost connection with active node";
 
     d_clusterData.requestManager().cancelAllRequests(response, node->nodeId());
-
-    // Update the cluster state with the info.  Active node lock must *not* be
-    // held.  Reuse the existing term since this is not a 'new active node'
-    // event.
-
-    d_clusterData.electorInfo().setElectorInfo(
-        mqbnet::ElectorState::e_DORMANT,
-        d_clusterData.electorInfo().electorTerm(),
-        0,  // Leader (or 'active node') pointer
-        mqbc::ElectorInfoLeaderStatus::e_UNDEFINED);
 }
 
 // PRIVATE MANIPULATORS
@@ -442,7 +461,7 @@ void ClusterProxy::onPushEvent(const mqbi::DispatcherPushEvent& event)
 
     bmqp::Event rawEvent(event.blob().get(), d_allocator_p);
     bdlma::LocalSequentialAllocator<1024> lsa(d_allocator_p);
-    bmqp::PushMessageIterator iter(d_clusterData.bufferFactory(), &lsa);
+    bmqp::PushMessageIterator iter(&d_clusterData.bufferFactory(), &lsa);
     rawEvent.loadPushMessageIterator(&iter, false);
 
     BSLS_ASSERT_SAFE(iter.isValid());
@@ -457,13 +476,13 @@ void ClusterProxy::onPushEvent(const mqbi::DispatcherPushEvent& event)
         }
 
         bsl::shared_ptr<bdlbb::Blob> appDataSp =
-            d_clusterData.blobSpPool()->getObject();
+            d_clusterData.blobSpPool().getObject();
         rc = iter.loadApplicationData(appDataSp.get());
         BSLS_ASSERT_SAFE(rc == 0);
 
         bsl::shared_ptr<bdlbb::Blob> optionsSp;
         if (iter.hasOptions()) {
-            optionsSp = d_clusterData.blobSpPool()->getObject();
+            optionsSp = d_clusterData.blobSpPool().getObject();
             rc        = iter.loadOptions(optionsSp.get());
             BSLS_ASSERT_SAFE(0 == rc);
         }
@@ -473,7 +492,10 @@ void ClusterProxy::onPushEvent(const mqbi::DispatcherPushEvent& event)
                              appDataSp,
                              optionsSp,
                              logic,
-                             iter.header().compressionAlgorithmType());
+                             iter.header().compressionAlgorithmType(),
+                             bmqp::PushHeaderFlagUtil::isSet(
+                                 iter.header().flags(),
+                                 bmqp::PushHeaderFlags::e_OUT_OF_ORDER));
     }
 }
 
@@ -507,7 +529,7 @@ void ClusterProxy::onAckEvent(const mqbi::DispatcherAckEvent& event)
             //       back the ACK.
             // TBD: Until closeQueue sequence is revisited to prevent this
             //      situation, log at INFO level.
-            MWCU_THROTTLEDACTION_THROTTLE(
+            BMQU_THROTTLEDACTION_THROTTLE(
                 d_throttledFailedAckMessages,
                 BALL_LOG_INFO << "Received an ACK for unknown queue "
                               << "[queueId: " << ackMessage.queueId()
@@ -540,7 +562,7 @@ void ClusterProxy::onRelayPutEvent(const mqbi::DispatcherPutEvent& event,
     bsls::Types::Uint64    genCount = event.genCount();
     bsls::Types::Uint64    term = d_clusterData.electorInfo().electorTerm();
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(genCount != term)) {
-        MWCU_THROTTLEDACTION_THROTTLE(
+        BMQU_THROTTLEDACTION_THROTTLE(
             d_throttledSkippedPutMessages,
             BALL_LOG_WARN << description() << ": skipping relay-PUT message ["
                           << "queueId: " << ph.queueId() << ", GUID: "
@@ -666,7 +688,7 @@ void ClusterProxy::processEvent(const bmqp::Event&   event,
                 << "#CORRUPTED_EVENT " << description()
                 << ": received invalid control message [reason: 'failed to "
                 << "decode', rc: " << rc << "]\n"
-                << mwcu::BlobStartHexDumper(event.blob());
+                << bmqu::BlobStartHexDumper(event.blob());
             return;  // RETURN
         }
 
@@ -682,6 +704,15 @@ void ClusterProxy::processEvent(const bmqp::Event&   event,
                                          this,
                                          source,
                                          controlMessage),
+                    this);
+                return;  // RETURN
+            }
+            if (clusterMessage.choice().isStopResponseValue()) {
+                dispatcher()->execute(
+                    bdlf::BindUtil::bind(
+                        &ClusterProxy::processPeerStopResponse,
+                        this,
+                        controlMessage),
                     this);
                 return;  // RETURN
             }
@@ -721,7 +752,7 @@ void ClusterProxy::processEvent(const bmqp::Event&   event,
     case bmqp::EventType::e_PUSH: {
         mqbi::DispatcherEvent*       dispEvent = dispatcher()->getEvent(this);
         bsl::shared_ptr<bdlbb::Blob> blobSp =
-            d_clusterData.blobSpPool()->getObject();
+            d_clusterData.blobSpPool().getObject();
         *blobSp = *(event.blob());
         (*dispEvent)
             .setType(mqbi::DispatcherEventType::e_PUSH)
@@ -732,7 +763,7 @@ void ClusterProxy::processEvent(const bmqp::Event&   event,
     case bmqp::EventType::e_ACK: {
         mqbi::DispatcherEvent*       dispEvent = dispatcher()->getEvent(this);
         bsl::shared_ptr<bdlbb::Blob> blobSp =
-            d_clusterData.blobSpPool()->getObject();
+            d_clusterData.blobSpPool().getObject();
         *blobSp = *(event.blob());
         (*dispEvent)
             .setType(mqbi::DispatcherEventType::e_ACK)
@@ -753,7 +784,7 @@ void ClusterProxy::processEvent(const bmqp::Event&   event,
                        << "Received unexpected event: " << event;
         BSLS_ASSERT_SAFE(false && "Unexpected event received");
         return;  // RETURN
-    }            // break;
+    }  // break;
     default: {
         BALL_LOG_ERROR << "#UNEXPECTED_EVENT " << description()
                        << "Received unknown event: " << event;
@@ -836,6 +867,14 @@ void ClusterProxy::processResponse(
         this);
 }
 
+void ClusterProxy::processPeerStopResponse(
+    const bmqp_ctrlmsg::ControlMessage& response)
+{
+    BALL_LOG_INFO << description() << ": processStopResponse: " << response;
+
+    d_stopRequestsManager_p->processResponse(response);
+}
+
 void ClusterProxy::processPeerStopRequest(
     mqbnet::ClusterNode*                clusterNode,
     const bmqp_ctrlmsg::ControlMessage& request)
@@ -845,11 +884,10 @@ void ClusterProxy::processPeerStopRequest(
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
 
-    const bsl::vector<int>* noPartitions = 0;
     d_queueHelper.processNodeStoppingNotification(
         clusterNode,
         &request,
-        noPartitions,
+        0,
         bdlf::BindUtil::bind(&ClusterProxy::finishStopSequence,
                              this,
                              clusterNode));
@@ -863,6 +901,7 @@ void ClusterProxy::finishStopSequence(
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
 
+    // REVISIT
     // Internal-ticket D169562052
     // TODO: handle/eliminate the possibility of Multiple StopRequests.
     // Currently, cannot switch the active node because another StopRequest can
@@ -889,7 +928,7 @@ void ClusterProxy::updateDatumStats()
                                           ? "Active"
                                           : "";
 
-        mwcst::StatContext* statContext = (iter->second).get();
+        bmqst::StatContext* statContext = (iter->second).get();
         bslma::Allocator*   alloc       = statContext->datumAllocator();
         ManagedDatumMp      datum       = statContext->datum();
 
@@ -970,7 +1009,7 @@ void ClusterProxy::sendStopRequest(const SessionSpVec& sessions,
 {
     // Send a StopRequest to available proxies connected to the virtual cluster
     StopRequestManagerType::RequestContextSp contextSp =
-        d_stopRequestsManager.createRequestContext();
+        d_stopRequestsManager_p->createRequestContext();
     bmqp_ctrlmsg::StopRequest& request = contextSp->request()
                                              .choice()
                                              .makeClusterMessage()
@@ -989,7 +1028,7 @@ void ClusterProxy::sendStopRequest(const SessionSpVec& sessions,
     BALL_LOG_INFO << "Sending StopRequest to " << sessions.size()
                   << " proxies; timeout is " << timeoutMs;
 
-    d_stopRequestsManager.sendRequest(contextSp, timeoutMs);
+    d_stopRequestsManager_p->sendRequest(contextSp, timeoutMs);
 
     // continue after receipt of all StopResponses or the timeout
 }
@@ -1011,22 +1050,18 @@ ClusterProxy::ClusterProxy(
     const mqbcfg::ClusterProxyDefinition& clusterProxyConfig,
     bslma::ManagedPtr<mqbnet::Cluster>    netCluster,
     const StatContextsMap&                statContexts,
-    bdlmt::EventScheduler*                scheduler,
-    bdlbb::BlobBufferFactory*             bufferFactory,
-    BlobSpPool*                           blobSpPool,
     mqbi::Dispatcher*                     dispatcher,
     mqbnet::TransportManager*             transportManager,
+    StopRequestManagerType*               stopRequestsManager,
+    const mqbi::ClusterResources&         resources,
     bslma::Allocator*                     allocator)
 : d_allocator_p(allocator)
 , d_isStarted(false)
 , d_isStopping(false)
-, d_description("ClusterProxy (" + name + ")", d_allocator_p)
-, d_clusterProxyConfig(clusterProxyConfig)
 , d_clusterData(name,
-                scheduler,
-                bufferFactory,
-                blobSpPool,
+                resources,
                 mqbcfg::ClusterDefinition(allocator),
+                clusterProxyConfig,
                 netCluster,
                 this,
                 0,
@@ -1038,7 +1073,7 @@ ClusterProxy::ClusterProxy(
           0,  // Partition count.  Proxy has no notion of partition.
           allocator)
 , d_activeNodeManager(d_clusterData.membership().netCluster()->nodes(),
-                      d_description,
+                      description(),
                       mqbcfg::BrokerConfig::get().hostDataCenter())
 , d_queueHelper(&d_clusterData, &d_state, 0, allocator)
 , d_nodeStatsMap(allocator)
@@ -1047,12 +1082,12 @@ ClusterProxy::ClusterProxy(
 , d_clusterMonitor(&d_clusterData, &d_state, d_allocator_p)
 , d_activeNodeLookupEventHandle()
 , d_shutdownChain(d_allocator_p)
-, d_stopRequestsManager(&d_clusterData.requestManager(), d_allocator_p)
+, d_stopRequestsManager_p(stopRequestsManager)
 {
     // PRECONDITIONS
     mqbnet::Cluster* netCluster_p = d_clusterData.membership().netCluster();
     BSLS_ASSERT_SAFE(netCluster_p && "NetCluster not set !");
-    BSLS_ASSERT_SAFE(scheduler->clockType() ==
+    BSLS_ASSERT_SAFE(resources.scheduler()->clockType() ==
                      bsls::SystemClockType::e_MONOTONIC);
 
     d_clusterData.clusterConfig().queueOperations() =
@@ -1065,7 +1100,7 @@ ClusterProxy::ClusterProxy(
     NodeListIter  nodeIter     = netCluster_p->nodes().begin();
     NodeListIter  endIter      = netCluster_p->nodes().end();
     for (; nodeIter != endIter; ++nodeIter) {
-        mwcst::StatContextConfiguration config((*nodeIter)->hostName());
+        bmqst::StatContextConfiguration config((*nodeIter)->hostName());
 
         StatContextMp statContextMp =
             d_clusterData.clusterNodesStatContext()->addSubcontext(config);
@@ -1104,20 +1139,18 @@ ClusterProxy::~ClusterProxy()
 
 // MANIPULATORS
 //   (virtual: mqbi::Cluster)
-int ClusterProxy::start(bsl::ostream& errorDescription)
+int ClusterProxy::start(BSLS_ANNOTATION_UNUSED bsl::ostream& errorDescription)
 {
-    int rc;
     dispatcher()->execute(bdlf::BindUtil::bind(&ClusterProxy::startDispatched,
-                                               this,
-                                               &errorDescription,
-                                               &rc),
+                                               this),
                           this);
     dispatcher()->synchronize(this);
 
-    return rc;
+    return 0;
 }
 
-void ClusterProxy::initiateShutdown(const VoidFunctor& callback)
+void ClusterProxy::initiateShutdown(const VoidFunctor& callback,
+                                    bool               supportShutdownV2)
 {
     // executed by *ANY* thread
 
@@ -1129,7 +1162,8 @@ void ClusterProxy::initiateShutdown(const VoidFunctor& callback)
     dispatcher()->execute(
         bdlf::BindUtil::bind(&ClusterProxy::initiateShutdownDispatched,
                              this,
-                             callback),
+                             callback,
+                             supportShutdownV2),
         this);
 
     dispatcher()->synchronize(this);
@@ -1308,6 +1342,16 @@ void ClusterProxy::loadClusterStatus(mqbcmd::ClusterResult* out)
     loadQueuesInfo(&clusterProxyStatus.queuesInfo());
 }
 
+void ClusterProxy::purgeAndGCQueueOnDomain(
+    mqbcmd::ClusterResult*       result,
+    BSLS_ANNOTATION_UNUSED const bsl::string& domainName)
+{
+    bdlma::LocalSequentialAllocator<256> localAllocator(d_allocator_p);
+    bmqu::MemOutStream                   os(&localAllocator);
+    os << "Purge and GC queue not supported on a Proxy.";
+    result->makeError().message() = os.str();
+}
+
 // MANIPULATORS
 //   (virtual: mqbi::DispatcherClient)
 void ClusterProxy::onDispatcherEvent(const mqbi::DispatcherEvent& event)
@@ -1371,31 +1415,31 @@ void ClusterProxy::onDispatcherEvent(const mqbi::DispatcherEvent& event)
         BSLS_ASSERT_OPT(false &&
                         "'DISPATCHER' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_CLUSTER_STATE: {
         BSLS_ASSERT_OPT(false &&
                         "'CLUSTER_STATE' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_STORAGE: {
         BSLS_ASSERT_OPT(false && "'STORAGE' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_RECOVERY: {
         BSLS_ASSERT_OPT(false &&
                         "'RECOVERY' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_UNDEFINED: {
         BSLS_ASSERT_OPT(false &&
                         "'UNDEFINED' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_REPLICATION_RECEIPT: {
         BSLS_ASSERT_OPT(
             false && "'REPLICATION_RECEIPT' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     default: {
         BALL_LOG_ERROR << "#UNEXPECTED_EVENT " << description()
                        << ": received unexpected dispatcher event: " << event;
@@ -1417,19 +1461,19 @@ void ClusterProxy::onFailoverThreshold()
 {
     const mqbcfg::ClusterMonitorConfig& monitorConfig =
         d_clusterData.clusterConfig().clusterMonitorConfig();
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
 
     os << "'" << d_clusterData.identity().description() << "'"
        << " has not completed the failover process above the threshold "
        << "amount of "
-       << mwcu::PrintUtil::prettyTimeInterval(
+       << bmqu::PrintUtil::prettyTimeInterval(
               monitorConfig.thresholdFailover() *
               bdlt::TimeUnitRatio::k_NS_PER_S)
        << ". There are " << d_queueHelper.numPendingReopenQueueRequests()
        << " pending reopen-queue requests.\n";
     // Log only a summary in the alarm
     printClusterStateSummary(os, 0, 4);
-    MWCTSK_ALARMLOG_PANIC("CLUSTERPROXY") << os.str() << MWCTSK_ALARMLOG_END;
+    BMQTSK_ALARMLOG_PANIC("CLUSTERPROXY") << os.str() << BMQTSK_ALARMLOG_END;
 }
 
 // MANIPULATORS

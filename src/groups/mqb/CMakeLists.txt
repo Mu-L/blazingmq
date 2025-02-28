@@ -10,8 +10,6 @@ endif()
 add_library( mqb )
 set_property( TARGET mqb PROPERTY POSITION_INDEPENDENT_CODE ON )
 
-target_compile_definitions( mqb PRIVATE "MWC_INTERNAL_USAGE" )
-
 # Pass build type to a source file so that it can print it in startup banner
 set_property(SOURCE "mqba/mqba_application.cpp"
              APPEND
@@ -19,12 +17,6 @@ set_property(SOURCE "mqba/mqba_application.cpp"
 
 set(MQB_PRIVATE_PACKAGES mqba mqbblp mqbc mqbcmd mqbconfm mqbi mqbmock mqbnet mqbs mqbsi mqbsl mqbu)
 target_bmq_style_uor( mqb PRIVATE_PACKAGES ${MQB_PRIVATE_PACKAGES})
-
-# Note these calls are temporary and should be removed immediately when BDE
-# team fixes how to install both the library and the headers together
-bbs_read_metadata(GROUP mqb PRIVATE_PACKAGES ${MQB_PRIVATE_PACKAGES})
-bmq_install_target_headers(mqb)
-bmq_emit_pkg_config(mqb)
 
 # Additional system required libraries:
 #  o dlopen()/dlsym() require to link with '-ldl' on Linux

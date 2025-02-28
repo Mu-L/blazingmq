@@ -298,26 +298,26 @@ bsls::Types::Uint64 FileStoreProtocolUtil::lastJournalRecord(
 int FileStoreProtocolUtil::calculateMd5Digest(
     bdlde::Md5::Md5Digest*    buffer,
     const bdlbb::Blob&        blob,
-    const mwcu::BlobPosition& startPos,
+    const bmqu::BlobPosition& startPos,
     unsigned int              length)
 {
     BSLS_ASSERT_SAFE(buffer);
     BSLS_ASSERT_SAFE(0 < length);
-    BSLS_ASSERT_SAFE(mwcu::BlobUtil::isValidPos(blob, startPos));
+    BSLS_ASSERT_SAFE(bmqu::BlobUtil::isValidPos(blob, startPos));
 
-    mwcu::BlobPosition endPos;
+    bmqu::BlobPosition endPos;
     int                rc =
-        mwcu::BlobUtil::findOffsetSafe(&endPos, blob, startPos, length - 1);
+        bmqu::BlobUtil::findOffsetSafe(&endPos, blob, startPos, length - 1);
     if (0 != rc) {
         return rc;  // RETURN
     }
 
     bdlde::Md5         hasher;
-    mwcu::BlobPosition pos(startPos);
+    bmqu::BlobPosition pos(startPos);
     while (length) {
         unsigned int len = bsl::min(
             static_cast<int>(length),
-            mwcu::BlobUtil::bufferSize(blob, pos.buffer()) - pos.byte());
+            bmqu::BlobUtil::bufferSize(blob, pos.buffer()) - pos.byte());
 
         hasher.update(blob.buffer(pos.buffer()).data() + pos.byte(), len);
 
@@ -330,15 +330,13 @@ int FileStoreProtocolUtil::calculateMd5Digest(
     return 0;
 }
 
-void FileStoreProtocolUtil::loadAppIdKeyPairs(
-    bsl::vector<bsl::pair<bsl::string, mqbu::StorageKey> >* appIdKeyPairs,
-    const MemoryBlock&                                      appIdsBlock,
-    unsigned int                                            numAppIds)
+void FileStoreProtocolUtil::loadAppInfos(
+    mqbi::Storage::AppInfos* appIdKeyPairs,
+    const MemoryBlock&       appIdsBlock,
+    unsigned int             numAppIds)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(appIdKeyPairs);
-
-    appIdKeyPairs->reserve(numAppIds);
 
     // 'appIdsAreaBegin' should point to the beginning of 1st 'AppIdHeader'.
     unsigned int offset = 0;
@@ -351,12 +349,12 @@ void FileStoreProtocolUtil::loadAppIdKeyPairs(
         const char* appIdBegin = appIdsBlock.base() + offset +
                                  sizeof(AppIdHeader);
 
-        appIdKeyPairs->emplace_back(
+        appIdKeyPairs->insert(bsl::make_pair(
             bsl::string(appIdBegin,
                         paddedLen - appIdBegin[paddedLen - 1],
                         appIdKeyPairs->get_allocator()),
             mqbu::StorageKey(mqbu::StorageKey::BinaryRepresentation(),
-                             appIdBegin + paddedLen));
+                             appIdBegin + paddedLen)));
 
         // Move to beginning of next AppIdHeader.
         offset += sizeof(AppIdHeader) + paddedLen +

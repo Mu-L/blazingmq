@@ -41,12 +41,13 @@ QueueEngine::~QueueEngine()
 
 // MANIPULATORS
 int QueueEngine::configure(
-    BSLS_ANNOTATION_UNUSED bsl::ostream& errorDescription)
+    BSLS_ANNOTATION_UNUSED bsl::ostream& errorDescription,
+    BSLS_ANNOTATION_UNUSED bool          isReconfigure)
 {
     return 0;
 }
 
-void QueueEngine::resetState()
+void QueueEngine::resetState(BSLS_ANNOTATION_UNUSED bool keepConfirming)
 {
     // NOTHING
 }
@@ -140,6 +141,18 @@ void QueueEngine::onTimer(
     // executed by the *QUEUE DISPATCHER* thread
 
     // NOTHING
+}
+
+mqbi::StorageResult::Enum QueueEngine::evaluateAppSubscriptions(
+    BSLS_ANNOTATION_UNUSED const bmqp::PutHeader& putHeader,
+    BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<bdlbb::Blob>& appData,
+    BSLS_ANNOTATION_UNUSED const bmqp::MessagePropertiesInfo& mpi,
+    BSLS_ANNOTATION_UNUSED bsls::Types::Uint64 timestamp)
+{
+    // executed by the *QUEUE DISPATCHER* thread
+
+    // NOTHING
+    return mqbi::StorageResult::e_SUCCESS;
 }
 
 // ACCESSORS

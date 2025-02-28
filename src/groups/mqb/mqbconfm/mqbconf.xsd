@@ -33,7 +33,7 @@
   <complexType name='Request'>
     <annotation>
       <documentation>
-        The choice between all possible request to the bmqconf task.
+        The choice between all the possible requests to the bmqconf task.
       </documentation>
     </annotation>
     <choice>
@@ -44,7 +44,7 @@
   <complexType name='Response'>
     <annotation>
       <documentation>
-        The choice between all possible response from the bmqconf task.
+        The choice between all the possible responses from the bmqconf task.
       </documentation>
     </annotation>
     <choice>
@@ -95,11 +95,11 @@
         Represent the various limitations to apply to either a 'domain' or an
         individual 'queue'.
 
-        message................: maximum number of messages
+        messages...............: maximum number of messages
         messagesWatermarkRatio.: threshold ratio to the maximum number of
                                  messages for which a high watermark alarm
                                  will trigger
-        byte...................: maximum cumulated number of bytes
+        bytes..................: maximum cumulated number of bytes
         bytesWatermarkRatio....: threshold ratio to the maximum cumulated
                                  number of bytes for which a high watermark
                                  alarm will trigger
@@ -170,6 +170,7 @@
       <documentation>
         Configuration for a Domain using the custom Bloomberg Domain.
 
+        name................: name of this domain
         mode................: mode of the queues in this domain
         storage.............: storage to use by queues in this domain
         maxConsumers........: will reject if more than this number of consumers
@@ -197,6 +198,7 @@
                               message for the purpose of detecting duplicate
                               PUTs.
         consistency.........: optional consistency mode.
+        subscriptions.......: optional application subscriptions
       </documentation>
     </annotation>
     <sequence>
@@ -213,6 +215,7 @@
       <element name='maxDeliveryAttempts' type='int' default='0'/>
       <element name='deduplicationTimeMs' type='int' default='300000'/>   <!-- 5 minutes -->
       <element name='consistency'         type='mqbconfm:Consistency'/>
+      <element name='subscriptions'       type='mqbconfm:Subscription' maxOccurs='unbounded'/>
     </sequence>
   </complexType>
 
@@ -247,7 +250,7 @@
   <complexType name='QueueMode'>
     <annotation>
       <documentation>
-        Choice of all the various mode a queue can be configured in.
+        Choice of all the various modes a queue can be configured in.
 
         fanout.........: multiple consumers are each getting all messages
         priority.......: consumers with highest priority are sharing load in
@@ -267,11 +270,14 @@
       <documentation>
         Configuration for a fanout queue.
 
-        appIDs.: List of appIDs authorized to consume from the queue.
+        appIDs.............: List of appIDs authorized to consume from the
+                             queue.
+        publishAppIdMetrics: Whether to publish appId metrics.
       </documentation>
     </annotation>
     <sequence>
-      <element name='appIDs' type='string' maxOccurs='unbounded'/>
+      <element name='appIDs'              type='string' maxOccurs='unbounded'/>
+      <element name='publishAppIdMetrics' type='boolean' default='false'/>
     </sequence>
   </complexType>
 
@@ -334,6 +340,50 @@
     </sequence>
   </complexType>
 
+  <simpleType name='ExpressionVersion'>
+    <annotation>
+      <documentation>
+        Enumeration of the various expression versions.
+      </documentation>
+    </annotation>
+    <restriction base='string' bdem:preserveEnumOrder='1'>
+      <enumeration value='E_UNDEFINED' bdem:id='0'/>
+      <enumeration value='E_VERSION_1' bdem:id='1'/>
+    </restriction>
+  </simpleType>
+
+  <complexType name='Expression'>
+    <annotation>
+      <documentation>
+        This complex type contains expression to evaluate when selecting
+        Subscription for delivery.
+
+        version................: expression version (default is no expression)
+        text...................: textual representation of the expression
+      </documentation>
+    </annotation>
+    <sequence>
+      <element name='version' type='tns:ExpressionVersion' default='E_UNDEFINED'/>
+      <element name='text' type='string'/>
+    </sequence>
+  </complexType>
+
+  <complexType name='Subscription'>
+    <annotation>
+      <documentation>
+        This complex type contains various parameters required by an upstream
+        node to configure subscription for an app.
+
+        appId..................: app identifier
+        expression.............: expression denoting a subscription for the app
+      </documentation>
+    </annotation>
+    <sequence>
+      <element name='appId'      type='string'/>
+      <element name='expression' type='tns:Expression'/>
+    </sequence>
+  </complexType>
+
   <!-- ========================================================================
                                     STORAGE
   ========================================================================= -->
@@ -360,7 +410,7 @@
   <complexType name='Storage'>
     <annotation>
       <documentation>
-        Choice of all the various Storage backend
+        Choice of all the various Storage backends
 
         inMemory....: store data in memory
         fileBacked..: store data in a file on disk

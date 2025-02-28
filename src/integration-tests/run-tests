@@ -1,0 +1,39 @@
+#! /usr/bin/env bash
+
+# DESCRIPTION
+# ===========
+# This script runs integration tests in different presets.
+# The preset setting is expected to be the first cmd argument for
+# this script.
+# Alternatively, BLAZINGMQ_IT_PRESET env variable might be used.
+
+# USAGE
+# =====
+#   ./run-tests
+#   ./run-tests "legacy_mode"
+#   ./run-tests "not fsm_mode"
+#   ./run-tests "legacy_mode or fsm_mode"
+#   export BLAZINGMQ_IT_PRESET="fsm_mode" && ./run-tests
+
+set -e
+
+PRESET="legacy_mode or fsm_mode"
+
+if [[ -n "$1" ]] && ! [[ "$1" == -* ]]; then
+  PRESET=$1
+  shift
+  echo "Use IT preset '$PRESET' from the script argument"
+elif [ -n "$BLAZINGMQ_IT_PRESET" ]; then
+  PRESET=$BLAZINGMQ_IT_PRESET
+  echo "Use IT preset '$PRESET' from the BLAZINGMQ_IT_PRESET var"
+else
+  echo "Use default IT preset '$PRESET'"
+fi
+
+repo_dir=$(realpath "$0")
+repo_dir=${repo_dir%/src/*}
+
+export PYTHONPATH=$repo_dir/src/python:$PYTHONPATH
+cd "$repo_dir/src/integration-tests"
+
+python3 -m pytest -m "$PRESET" "$@"

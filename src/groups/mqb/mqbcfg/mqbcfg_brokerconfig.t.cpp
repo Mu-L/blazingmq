@@ -17,8 +17,7 @@
 #include <mqbcfg_brokerconfig.h>
 #include <mqbcfg_messages.h>
 
-// MWC
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // BDE
 #include <bsl_cstdlib.h>
@@ -31,15 +30,15 @@ using namespace BloombergLP;
 //                                  UTILITIES
 // ----------------------------------------------------------------------------
 
-TEST(breathing)
+BMQTST_TEST(breathing)
 {
-    ASSERT_SAFE_FAIL(mqbcfg::BrokerConfig::get());
+    BMQTST_ASSERT_SAFE_FAIL(mqbcfg::BrokerConfig::get());
 
     mqbcfg::AppConfig config;
     mqbcfg::BrokerConfig::set(config);
-    ASSERT_EQ(&mqbcfg::BrokerConfig::get(), &config);
+    BMQTST_ASSERT_EQ(&mqbcfg::BrokerConfig::get(), &config);
 
-    ASSERT_SAFE_FAIL(mqbcfg::BrokerConfig::set(config));
+    BMQTST_ASSERT_SAFE_FAIL(mqbcfg::BrokerConfig::set(config));
 }
 
 // ============================================================================
@@ -48,9 +47,9 @@ TEST(breathing)
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    mwctst::runTest(_testCase);
+    bmqtst::runTest(_testCase);
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_GBL_ALLOC);
 }

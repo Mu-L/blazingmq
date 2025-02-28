@@ -17,8 +17,12 @@
 #include <mqbs_virtualstoragecatalog.h>
 
 #include <mqbscm_version.h>
+
 // MQB
 #include <mqbi_queueengine.h>
+#include <mqbstat_queuestats.h>
+
+#include <bmqtsk_alarmlog.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -34,16 +38,79 @@ namespace mqbs {
 // class VirtualStorageCatalog
 // ---------------------------
 
+// When the 'd_dataStream.erase(msgGUID)' is called
+//
+//  Queues    | QueueEngines      | Storage           | VSC
+// ———————————+———————————————————+———————————————————+———————————————————
+//
+//    confirmMessage
+//    |
+//    |—————> onConfirmMessage
+//    |       | onRejectMessage
+//    |       |           |
+//    |       +-----------+—————> confirm ——————————> confirm
+//    |                   |
+//    |                   |
+//    |                   |       processDeletionRecord (1)
+//    |                   |       |
+//    |                   |       V
+//    +———————————————————+—————> remove ———————————> remove
+//                                                    |
+//                                                    +—————————————> erase
+//
+// Proxy
+//    onHandleReleased
+//    |
+//    +—————————————————————————> removeVirtualStorage
+//                                |
+//    BroadcastMode               +—————————————————> removeVirtualStorage
+//    |                                               |
+//    |       Primary                                 |
+//    |       afterAppIdUnregistered                  |
+//    |       |                                       |
+//    |       |                                       |
+//    +———————+—————————————> removeAll               |
+//                                |   purge           |
+//                                |   |               |
+//                                V   V               |
+//                                purgeCommon         |
+//                                |                   V
+//                                +—————————————————> removeAll
+//                                                    |
+//                                releaseRef (1) <————+—————————————> erase
+//
+//
+//
+//                                gcExpiredMessages (1)
+//                                |
+//                                |
+//                                +—————————————————> gc
+//                                                    |
+//                                                    +—————————————> erase
+//
+// (1) QE::beforeMessageRemoved
+//
+
 // CREATORS
 VirtualStorageCatalog::VirtualStorageCatalog(mqbi::Storage*    storage,
                                              bslma::Allocator* allocator)
 : d_storage_p(storage)
 , d_virtualStorages(allocator)
+, d_availableOrdinals(allocator)
+, d_dataStream(allocator)
+, d_totalBytes(0)
+, d_numMessages(0)
+, d_defaultAppMessage(bmqp::RdaInfo())
+, d_defaultNonApplicableAppMessage(bmqp::RdaInfo())
+, d_isProxy(true)
+, d_queue_p(0)
 , d_allocator_p(allocator)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(storage);
     BSLS_ASSERT_SAFE(allocator);
+
+    d_defaultNonApplicableAppMessage.setRemovedState();
 }
 
 VirtualStorageCatalog::~VirtualStorageCatalog()
@@ -53,43 +120,107 @@ VirtualStorageCatalog::~VirtualStorageCatalog()
 }
 
 // MANIPULATORS
-mqbi::StorageResult::Enum
-VirtualStorageCatalog::put(const bmqt::MessageGUID& msgGUID,
-                           int                      msgSize,
-                           const bmqp::RdaInfo&     rdaInfo,
-                           unsigned int             subScriptionId,
-                           const mqbu::StorageKey&  appKey)
+VirtualStorageCatalog::DataStreamIterator
+VirtualStorageCatalog::begin(const bmqt::MessageGUID& where)
 {
-    if (!appKey.isNull()) {
-        VirtualStoragesIter it = d_virtualStorages.find(appKey);
-        BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
+    if (where.isUnset()) {
+        return d_dataStream.begin();
+    }
+    else {
+        return d_dataStream.find(where);
+    }
+}
 
-        return it->second->put(msgGUID,
-                               msgSize,
-                               rdaInfo,
-                               subScriptionId);  // RETURN
+VirtualStorageCatalog::DataStreamIterator VirtualStorageCatalog::end()
+{
+    return d_dataStream.end();
+}
+
+VirtualStorageCatalog::DataStreamIterator
+VirtualStorageCatalog::get(const bmqt::MessageGUID& msgGUID)
+{
+    DataStreamIterator it = d_dataStream.find(msgGUID);
+
+    if (it != d_dataStream.end()) {
+        setup(&it->second);
     }
 
-    // Add guid to all virtual storages.
+    return it;
+}
 
-    for (VirtualStoragesIter it = d_virtualStorages.begin();
-         it != d_virtualStorages.end();
-         ++it) {
-        it->second->put(msgGUID, msgSize, rdaInfo, subScriptionId);
+mqbi::StorageResult::Enum
+VirtualStorageCatalog::put(const bmqt::MessageGUID&  msgGUID,
+                           int                       msgSize,
+                           unsigned int              refCount,
+                           mqbi::DataStreamMessage** out)
+{
+    bsl::pair<VirtualStorage::DataStreamIterator, bool> insertResult =
+        d_dataStream.insert(bsl::make_pair(
+            msgGUID,
+            mqbi::DataStreamMessage(refCount, msgSize, d_allocator_p)));
+
+    mqbi::StorageResult::Enum result = mqbi::StorageResult::e_SUCCESS;
+
+    mqbi::DataStreamMessage& dataStreamMessage = insertResult.first->second;
+
+    if (!insertResult.second) {
+        // Duplicate GUID
+        if (!d_isProxy) {
+            // A proxy can receive subsequent PUSH messages for the same GUID
+            // but different apps
+            BSLS_ASSERT_SAFE(refCount <= d_ordinals.size());
+
+            dataStreamMessage.d_numApps = refCount;
+        }
+        result = mqbi::StorageResult::e_GUID_NOT_UNIQUE;
+    }
+    else {
+        d_totalBytes += msgSize;
+        ++d_numMessages;
     }
 
-    return mqbi::StorageResult::e_SUCCESS;  // RETURN
+    if (out) {
+        // The auto-confirm case when we need to update App states.
+        *out = &dataStreamMessage;
+
+        setup(*out);
+    }
+
+    return result;
 }
 
 bslma::ManagedPtr<mqbi::StorageIterator>
 VirtualStorageCatalog::getIterator(const mqbu::StorageKey& appKey)
 {
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(!appKey.isNull());
+    bslma::ManagedPtr<mqbi::StorageIterator> mp;
 
-    VirtualStoragesIter it = d_virtualStorages.find(appKey);
-    BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
-    return it->second->getIterator(appKey);
+    if (!appKey.isNull()) {
+        VirtualStoragesIter it = d_virtualStorages.findByKey2(appKey);
+        BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
+
+        VirtualStorage* vs = it->value().get();
+
+        mp.load(new (*d_allocator_p)
+                    VirtualStorageIterator(it->value().get(),
+                                           d_storage_p,
+                                           this,
+                                           d_dataStream.begin()),
+                d_allocator_p);
+
+        if (!mp->atEnd()) {
+            if (!mp->appMessageView(vs->ordinal()).isPending()) {
+                // By contract, the iterator iterates only pending states.
+                mp->advance();
+            }
+        }
+    }
+    else {
+        mp.load(new (*d_allocator_p)
+                    StorageIterator(d_storage_p, this, d_dataStream.begin()),
+                d_allocator_p);
+    }
+
+    return mp;
 }
 
 mqbi::StorageResult::Enum VirtualStorageCatalog::getIterator(
@@ -97,48 +228,248 @@ mqbi::StorageResult::Enum VirtualStorageCatalog::getIterator(
     const mqbu::StorageKey&                   appKey,
     const bmqt::MessageGUID&                  msgGUID)
 {
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(!appKey.isNull());
+    DataStreamIterator data = d_dataStream.find(msgGUID);
 
-    VirtualStoragesIter it = d_virtualStorages.find(appKey);
-    BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
-    return it->second->getIterator(out, appKey, msgGUID);
-}
-
-mqbi::StorageResult::Enum
-VirtualStorageCatalog::remove(const bmqt::MessageGUID& msgGUID,
-                              const mqbu::StorageKey&  appKey)
-{
-    if (!appKey.isNull()) {
-        VirtualStoragesIter it = d_virtualStorages.find(appKey);
-        BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
-        return it->second->remove(msgGUID);  // RETURN
+    if (data == d_dataStream.end()) {
+        return mqbi::StorageResult::e_GUID_NOT_FOUND;  // RETURN
     }
 
-    // Remove guid from all virtual storages.
-    for (VirtualStoragesIter it = d_virtualStorages.begin();
-         it != d_virtualStorages.end();
-         ++it) {
-        it->second->remove(msgGUID);  // ignore rc
+    if (!appKey.isNull()) {
+        VirtualStoragesIter it = d_virtualStorages.findByKey2(appKey);
+        BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
+
+        VirtualStorage* vs = it->value().get();
+
+        out->load(new (*d_allocator_p)
+                      VirtualStorageIterator(vs, d_storage_p, this, data),
+                  d_allocator_p);
+
+        const mqbi::AppMessage& appView = (*out)->appMessageView(
+            vs->ordinal());
+
+        if (!appView.isPending()) {
+            // By contract, the iterator iterates only pending states.
+
+            return mqbi::StorageResult::e_GUID_NOT_FOUND;  // RETURN
+        }
+    }
+    else {
+        out->load(new (*d_allocator_p)
+                      StorageIterator(d_storage_p, this, data),
+                  d_allocator_p);
     }
 
     return mqbi::StorageResult::e_SUCCESS;
 }
 
 mqbi::StorageResult::Enum
-VirtualStorageCatalog::removeAll(const mqbu::StorageKey& appKey)
+VirtualStorageCatalog::confirm(const bmqt::MessageGUID& msgGUID,
+                               const mqbu::StorageKey&  appKey)
 {
-    if (!appKey.isNull()) {
-        VirtualStoragesIter it = d_virtualStorages.find(appKey);
-        BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
-        return it->second->removeAll(appKey);  // RETURN
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(!appKey.isNull());
+
+    VirtualStorage::DataStreamIterator data = get(msgGUID);
+    if (data == d_dataStream.end()) {
+        return mqbi::StorageResult::e_GUID_NOT_FOUND;  // RETURN
     }
 
-    // Clear all virtual storages.
+    VirtualStoragesIter it = d_virtualStorages.findByKey2(appKey);
+    BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
+
+    const mqbi::StorageResult::Enum rc = it->value()->confirm(&data->second);
+    if (queue() && mqbi::StorageResult::e_SUCCESS == rc) {
+        queue()->stats()->onEvent(
+            mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE,
+            data->second.d_size,
+            it->key1());
+    }
+
+    return rc;
+}
+
+mqbi::StorageResult::Enum
+VirtualStorageCatalog::remove(const bmqt::MessageGUID& msgGUID)
+{
+    // Remove all Apps states at once.
+    if (0 == d_dataStream.erase(msgGUID)) {
+        return mqbi::StorageResult::e_GUID_NOT_FOUND;  // RETURN
+    }
+
+    return mqbi::StorageResult::e_SUCCESS;
+}
+
+mqbi::StorageResult::Enum
+VirtualStorageCatalog::gc(const bmqt::MessageGUID& msgGUID)
+{
+    VirtualStorage::DataStreamIterator data = d_dataStream.find(msgGUID);
+    if (data == d_dataStream.end()) {
+        return mqbi::StorageResult::e_GUID_NOT_FOUND;  // RETURN
+    }
+
+    // Update each App so the math of numMessages/numBytes stays correct.
+    // REVISIT.
     for (VirtualStoragesIter it = d_virtualStorages.begin();
          it != d_virtualStorages.end();
          ++it) {
-        it->second->removeAll(it->first);  // ignore rc
+        it->value()->onGC(data->second);
+    }
+
+    d_totalBytes -= data->second.d_size;
+    --d_numMessages;
+
+    d_dataStream.erase(data);
+
+    return mqbi::StorageResult::e_SUCCESS;
+}
+
+void VirtualStorageCatalog::removeAll()
+{
+    for (VirtualStoragesIter it = d_virtualStorages.begin();
+         it != d_virtualStorages.end();
+         ++it) {
+        it->value()->resetStats();
+    }
+    d_dataStream.clear();
+    d_numMessages = 0;
+    d_totalBytes  = 0;
+}
+
+void VirtualStorageCatalog::removeAll(const mqbu::StorageKey& appKey)
+{
+    BSLS_ASSERT_SAFE(!appKey.isNull());
+
+    VirtualStoragesIter itVs = d_virtualStorages.findByKey2(appKey);
+    BSLS_ASSERT_SAFE(itVs != d_virtualStorages.end());
+    VirtualStorage* vs = itVs->value().get();
+
+    DataStreamIterator itData;
+    bsls::Types::Int64 total = d_dataStream.size();
+    if (seek(&itData, vs) < total) {
+        purgeImpl(vs, itData, numVirtualStorages());
+    }
+}
+
+bsls::Types::Int64 VirtualStorageCatalog::seek(DataStreamIterator*   it,
+                                               const VirtualStorage* vs)
+{
+    BSLS_ASSERT_SAFE(vs);
+
+    DataStreamIterator& itData = *it;  // alias
+
+    itData = d_dataStream.begin();
+
+    if (!d_isProxy) {
+        return 0;
+    }
+
+    bsls::Types::Int64 result = 0;
+    for (; itData != d_dataStream.end(); ++itData, ++result) {
+        const mqbi::DataStreamMessage& data    = itData->second;
+        const unsigned int             numApps = data.d_numApps;
+
+        if (vs->ordinal() < numApps) {
+            break;  // BREAK
+        }
+        // else 'dataStreamMessage' is older than this VirtualStorage
+    }
+
+    return result;
+}
+
+mqbi::StorageResult::Enum
+VirtualStorageCatalog::purge(const mqbu::StorageKey& appKey,
+                             const PurgeCallback&    cb)
+{
+    BSLS_ASSERT_SAFE(!appKey.isNull());
+
+    VirtualStoragesConstIter it = d_virtualStorages.findByKey2(appKey);
+    if (it == d_virtualStorages.end()) {
+        return mqbi::StorageResult::e_APPKEY_NOT_FOUND;
+    }
+
+    VirtualStorage*    vs = it->value().get();
+    DataStreamIterator itData;
+    bsls::Types::Int64 total = d_dataStream.size();
+
+    if (seek(&itData, vs) < total) {
+        if (cb) {
+            mqbi::StorageResult::Enum rc = cb(appKey, itData);
+            if (mqbi::StorageResult::e_SUCCESS != rc) {
+                return rc;
+            }
+        }
+
+        purgeImpl(vs, itData, numVirtualStorages());
+    }
+
+    return mqbi::StorageResult::e_SUCCESS;
+}
+
+mqbi::StorageResult::Enum
+VirtualStorageCatalog::purgeImpl(VirtualStorage*     vs,
+                                 DataStreamIterator& itData,
+                                 unsigned int        replacingOrdinal)
+{
+    BSLS_ASSERT_SAFE(!d_ordinals.empty());
+
+    while (itData != d_dataStream.end()) {
+        const bmqt::MessageGUID& msgGUID           = itData->first;
+        mqbi::DataStreamMessage* dataStreamMessage = &itData->second;
+
+        mqbi::StorageResult::Enum result = mqbi::StorageResult::e_SUCCESS;
+
+        // Must call 'seek' before 'purge'
+        setup(dataStreamMessage);
+
+        if (vs->remove(dataStreamMessage, replacingOrdinal)) {
+            // The 'data' was not already removed or confirmed.
+            result = d_storage_p->releaseRef(msgGUID);
+        }
+
+        if (result == mqbi::StorageResult::e_ZERO_REFERENCES) {
+            itData = d_dataStream.erase(itData);
+        }
+        else {
+            if (result == mqbi::StorageResult::e_GUID_NOT_FOUND) {
+                BALL_LOG_WARN
+                    << "#STORAGE_PURGE_ERROR " << "Partition ["
+                    << d_storage_p->partitionId() << "]"
+                    << ": Attempting to purge GUID '" << msgGUID
+                    << "' from virtual storage with appId '" << vs->appId()
+                    << "' & appKey '" << vs->appKey() << "' for queue '"
+                    << d_storage_p->queueUri() << "' & queueKey '"
+                    << d_storage_p->queueKey()
+                    << "', but GUID does not exist in the underlying "
+                       "storage.";
+            }
+            else if (result == mqbi::StorageResult::e_NON_ZERO_REFERENCES) {
+                // Not logging this case.
+            }
+            else if (result == mqbi::StorageResult::e_SUCCESS) {
+                // Not logging this case.
+            }
+            else {
+                BMQTSK_ALARMLOG_ALARM("STORAGE_PURGE_ERROR")
+                    << "Partition [" << d_storage_p->partitionId() << "]"
+                    << ": Attempting to purge GUID '" << msgGUID
+                    << "' from virtual storage with appId '" << vs->appId()
+                    << "' & appKey '" << vs->appKey() << "] for queue '"
+                    << d_storage_p->queueUri() << "' & queueKey '"
+                    << d_storage_p->queueKey()
+                    << "', with invalid context (refCount is already "
+                       "zero)."
+                    << BMQTSK_ALARMLOG_END;
+            }
+            ++itData;
+        }
+    }
+
+    if (queue()) {
+        queue()->stats()->onEvent(
+            mqbstat::QueueStatsDomain::EventType::e_PURGE,
+            0,
+            vs->appId());
     }
 
     return mqbi::StorageResult::e_SUCCESS;
@@ -152,9 +483,9 @@ int VirtualStorageCatalog::addVirtualStorage(bsl::ostream& errorDescription,
     BSLS_ASSERT_SAFE(!appId.empty());
     BSLS_ASSERT_SAFE(!appKey.isNull());
 
-    VirtualStoragesConstIter cit = d_virtualStorages.find(appKey);
+    VirtualStoragesConstIter cit = d_virtualStorages.findByKey2(appKey);
     if (cit != d_virtualStorages.end()) {
-        const VirtualStorage* vs = cit->second.get();
+        const VirtualStorage* vs = cit->value().get();
         BSLS_ASSERT_SAFE(!vs->appKey().isNull());
 
         errorDescription << "Virtual storage exists with same appKey. "
@@ -164,44 +495,176 @@ int VirtualStorageCatalog::addVirtualStorage(bsl::ostream& errorDescription,
         return -1;  // RETURN
     }
 
+    Ordinal appOrdinal;
+
+    if (d_availableOrdinals.empty() || d_isProxy) {
+        // Replicas or Primary
+        // Grow ordinals
+        appOrdinal = d_ordinals.size();
+        d_ordinals.resize(appOrdinal + 1);
+    }
+    else {
+        // Proxy. Recycle ordinal.
+        AvailableOrdinals::const_iterator first = d_availableOrdinals.cbegin();
+        appOrdinal                              = *first;
+        // There is no conflict because everything 'appOrdinal' was removed.
+        d_availableOrdinals.erase(first);
+    }
+
+    BSLS_ASSERT_SAFE(appOrdinal <= d_virtualStorages.size());
+
     VirtualStorageSp vsp;
     vsp.createInplace(d_allocator_p,
                       d_storage_p,
                       appId,
                       appKey,
+                      appOrdinal,
+                      d_numMessages,
                       d_allocator_p);
-    d_virtualStorages.insert(bsl::make_pair(appKey, vsp));
+    d_virtualStorages.insert(appId, appKey, vsp);
+
+    d_ordinals[appOrdinal] = vsp;
+
+    BALL_LOG_INFO << "Adding VirtualStorage for appId '" << vsp->appId()
+                  << "' & appKey '" << vsp->appKey() << "' for queue '"
+                  << d_storage_p->queueUri() << "' & queueKey '"
+                  << d_storage_p->queueKey() << "', with ordinal "
+                  << vsp->ordinal();
+
+    if (d_queue_p) {
+        BSLS_ASSERT_SAFE(d_queue_p->queueEngine());
+        // QueueEngines use the key to look up the id
+
+        d_queue_p->queueEngine()->registerStorage(appId, appKey, appOrdinal);
+    }
 
     return 0;
 }
 
-bool VirtualStorageCatalog::removeVirtualStorage(
-    const mqbu::StorageKey& appKey)
+mqbi::StorageResult::Enum
+VirtualStorageCatalog::removeVirtualStorage(const mqbu::StorageKey& appKey,
+                                            const PurgeCallback&    cb)
 {
-    if (appKey.isNull()) {
-        // Remove all virtual storages
-        d_virtualStorages.clear();
-        return true;  // RETURN
+    BSLS_ASSERT_SAFE(!appKey.isNull());
+
+    VirtualStoragesConstIter it = d_virtualStorages.findByKey2(appKey);
+    if (it == d_virtualStorages.end()) {
+        return mqbi::StorageResult::e_APPKEY_NOT_FOUND;
     }
 
-    VirtualStoragesConstIter it = d_virtualStorages.find(appKey);
-    if (it != d_virtualStorages.end()) {
-        d_virtualStorages.erase(it);
-        return true;  // RETURN
+    // Make sure there is no AppMessage in the pending states
+
+    BSLS_ASSERT_SAFE(!d_ordinals.empty());
+
+    VirtualStorage*    removing        = it->value().get();
+    const unsigned int removingOrdinal = removing->ordinal();
+
+    VirtualStorageSp replacing;
+    unsigned int     replacingOrdinal = removingOrdinal;
+
+    if (d_isProxy) {
+        replacing        = d_ordinals.back();
+        replacingOrdinal = replacing->ordinal();
+        BSLS_ASSERT_SAFE(replacingOrdinal + 1 == d_ordinals.size());
     }
 
-    return false;
+    BALL_LOG_INFO << "Removing VirtualStorage with appId '"
+                  << removing->appId() << "' & appKey '" << removing->appKey()
+                  << "' for queue '" << d_storage_p->queueUri()
+                  << "' & queueKey '" << d_storage_p->queueKey()
+                  << "'. Replacing " << removingOrdinal << " with "
+                  << replacingOrdinal;
+
+    // Replace [vs->ordinal()] with [maxVirtualStorageSpOrdinal]
+
+    DataStreamIterator itData;
+    bsls::Types::Int64 total = d_dataStream.size();
+
+    if (seek(&itData, removing) < total) {
+        if (cb) {
+            mqbi::StorageResult::Enum rc = cb(appKey, itData);
+            if (mqbi::StorageResult::e_SUCCESS != rc) {
+                return rc;
+            }
+        }
+    }
+
+    purgeImpl(removing, itData, replacingOrdinal);
+
+    if (d_queue_p) {
+        BSLS_ASSERT_SAFE(d_queue_p->queueEngine());
+        // QueueEngines use the key to look up the id
+
+        d_queue_p->queueEngine()->unregisterStorage(removing->appId(),
+                                                    appKey,
+                                                    removingOrdinal);
+    }
+
+    if (d_isProxy) {
+        if (removingOrdinal != replacingOrdinal) {
+            // Replacement
+
+            d_ordinals[removingOrdinal] = replacing;
+            replacing->replaceOrdinal(removingOrdinal);
+
+            if (d_queue_p) {
+                BSLS_ASSERT_SAFE(d_queue_p->queueEngine());
+                d_queue_p->queueEngine()->registerStorage(
+                    replacing->appId(),
+                    replacing->appKey(),
+                    replacing->ordinal());
+            }
+        }
+
+        d_ordinals.resize(d_ordinals.size() - 1);
+    }
+    else {
+        d_availableOrdinals.insert(removingOrdinal);
+        d_ordinals[removingOrdinal].reset();
+    }
+
+    d_virtualStorages.erase(it);
+
+    return mqbi::StorageResult::e_SUCCESS;
 }
 
-mqbi::Storage*
+VirtualStorage*
 VirtualStorageCatalog::virtualStorage(const mqbu::StorageKey& appKey)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(!appKey.isNull());
 
-    VirtualStoragesIter it = d_virtualStorages.find(appKey);
+    VirtualStoragesIter it = d_virtualStorages.findByKey2(appKey);
+    if (it == d_virtualStorages.end()) {
+        return 0;
+    }
+    else {
+        return it->value().get();
+    }
+}
+
+void VirtualStorageCatalog::autoConfirm(
+    mqbi::DataStreamMessage* dataStreamMessage,
+    const mqbu::StorageKey&  appKey)
+{
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(dataStreamMessage);
+    BSLS_ASSERT_SAFE(!appKey.isNull());
+
+    VirtualStoragesIter it = d_virtualStorages.findByKey2(appKey);
     BSLS_ASSERT_SAFE(it != d_virtualStorages.end());
-    return it->second.get();
+
+    it->value()->confirm(dataStreamMessage);
+}
+
+void VirtualStorageCatalog::calibrate()
+{
+    for (VirtualStoragesIter it = d_virtualStorages.begin();
+         it != d_virtualStorages.end();
+         ++it) {
+        DataStreamIterator itData;
+        it->value()->setNumRemoved(seek(&itData, it->value().get()));
+    }
 }
 
 // ACCESSORS
@@ -211,60 +674,50 @@ bool VirtualStorageCatalog::hasVirtualStorage(const mqbu::StorageKey& appKey,
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(!appKey.isNull());
 
-    VirtualStoragesConstIter cit   = d_virtualStorages.find(appKey);
+    VirtualStoragesConstIter cit   = d_virtualStorages.findByKey2(appKey);
     const bool               hasVs = (cit != d_virtualStorages.end());
 
     if (appId) {
         if (hasVs) {
-            *appId = cit->second->appId();
-            return true;  // RETURN
+            *appId = cit->value()->appId();
         }
-
-        *appId = "";
+        else {
+            *appId = "";
+        }
     }
 
     return hasVs;
 }
 
 bool VirtualStorageCatalog::hasVirtualStorage(const bsl::string& appId,
-                                              mqbu::StorageKey*  appKey) const
+                                              mqbu::StorageKey*  appKey,
+                                              unsigned int*      ordinal) const
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(!appId.empty());
 
-    for (VirtualStoragesConstIter it = d_virtualStorages.begin();
-         it != d_virtualStorages.end();
-         ++it) {
-        if (it->second->appId() == appId) {
-            if (appKey) {
-                *appKey = it->first;
-            }
-            return true;  // RETURN
-        }
-    }
+    VirtualStoragesConstIter cit   = d_virtualStorages.findByKey1(appId);
+    const bool               hasVs = (cit != d_virtualStorages.end());
 
     if (appKey) {
-        *appKey = mqbu::StorageKey::k_NULL_KEY;
-    }
-
-    return false;
-}
-
-bool VirtualStorageCatalog::hasMessage(const bmqt::MessageGUID& msgGUID) const
-{
-    for (VirtualStoragesConstIter it = d_virtualStorages.begin();
-         it != d_virtualStorages.end();
-         ++it) {
-        if (it->second->hasMessage(msgGUID)) {
-            return true;  // RETURN
+        if (hasVs) {
+            *appKey = cit->key2();
+        }
+        else {
+            *appKey = mqbu::StorageKey::k_NULL_KEY;
         }
     }
 
-    return false;
+    if (ordinal) {
+        if (hasVs) {
+            *ordinal = cit->value()->ordinal();
+        }
+    }
+
+    return hasVs;
 }
 
-void VirtualStorageCatalog::loadVirtualStorageDetails(
-    AppIdKeyPairs* buffer) const
+void VirtualStorageCatalog::loadVirtualStorageDetails(AppInfos* buffer) const
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(buffer);
@@ -272,9 +725,36 @@ void VirtualStorageCatalog::loadVirtualStorageDetails(
     for (VirtualStoragesConstIter cit = d_virtualStorages.begin();
          cit != d_virtualStorages.end();
          ++cit) {
-        BSLS_ASSERT_SAFE(cit->first == cit->second->appKey());
-        buffer->push_back(
-            bsl::make_pair(cit->second->appId(), cit->second->appKey()));
+        BSLS_ASSERT_SAFE(cit->key2() == cit->value()->appKey());
+        buffer->insert(bsl::make_pair(cit->key1(), cit->key2()));
+    }
+}
+
+void VirtualStorageCatalog::setup(mqbi::DataStreamMessage* data) const
+{
+    // The only case for subsequent resize is proxy receiving subsequent PUSH
+    // messages for the same GUID and different apps
+    const unsigned int numApps = data->d_numApps;
+    if (data->d_apps.size() < numApps) {
+        data->d_apps.resize(numApps, defaultAppMessage());
+    }
+}
+
+const mqbi::AppMessage& VirtualStorageCatalog::appMessageView(
+    const mqbi::DataStreamMessage& dataStreamMessage,
+    unsigned int                   ordinal) const
+{
+    const unsigned int numApps = dataStreamMessage.d_numApps;
+
+    if (ordinal < numApps) {
+        if (dataStreamMessage.d_apps.size() > ordinal) {
+            return dataStreamMessage.app(ordinal);
+        }
+        return d_defaultAppMessage;
+    }
+    else {
+        // The message is older than the App associated with the 'appOrdinal'
+        return d_defaultNonApplicableAppMessage;
     }
 }
 

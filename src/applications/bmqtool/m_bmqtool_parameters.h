@@ -40,8 +40,8 @@
 // MQB
 #include <mqbs_filestoreprotocol.h>
 
-// MWC
-#include <mwcu_stringutil.h>
+// BMQ
+#include <bmqu_stringutil.h>
 
 namespace BloombergLP {
 
@@ -209,7 +209,7 @@ class Parameters {
     bool d_confirmMsg;
     // Confirm messages upon reception
 
-    int d_eventSize;
+    bsl::uint64_t d_eventSize;
     // Number of messages per event
     // Default: 1
 
@@ -226,7 +226,7 @@ class Parameters {
     // Interval to publish events (in ms)
     // Default: 1000
 
-    int d_eventsCount;
+    bsl::uint64_t d_eventsCount;
     // if >= 0, number of events to post (in
     // producer mode) before stopping to produce;
     // else infinite
@@ -268,6 +268,10 @@ class Parameters {
 
     bsl::vector<Subscription> d_subscriptions;
 
+    bsl::string d_autoIncrementedField;
+    // A name of a property to put auto-incremented values
+    // in batch-posting mode.
+
   public:
     // CREATORS
 
@@ -283,11 +287,11 @@ class Parameters {
     Parameters& setLatencyReportPath(const bsl::string& value);
     Parameters& setDumpMsg(bool value);
     Parameters& setConfirmMsg(bool value);
-    Parameters& setEventSize(int value);
+    Parameters& setEventSize(bsl::uint64_t value);
     Parameters& setMsgSize(int value);
     Parameters& setPostRate(int value);
     Parameters& setPostInterval(int value);
-    Parameters& setEventsCount(int value);
+    Parameters& setEventsCount(bsl::uint64_t value);
     Parameters& setMaxUnconfirmedMsgs(int value);
     Parameters& setMaxUnconfirmedBytes(int value);
     Parameters& setVerbosity(ParametersVerbosity::Value value);
@@ -302,6 +306,7 @@ class Parameters {
     Parameters&
     setMessageProperties(const bsl::vector<MessageProperty>& value);
     Parameters& setSubscriptions(const bsl::vector<Subscription>& value);
+    Parameters& setAutoIncrementedField(const bsl::string& value);
 
     // Set the corresponding member to the specified 'value' and return a
     // reference offering modifiable access to this object.
@@ -311,13 +316,13 @@ class Parameters {
     /// error in the specified `stream` and return false on failure.
     bool from(bsl::ostream& stream, const CommandLineParameters& params);
 
-    /// Do a nicer pretty print of all the parameters aligned.
-    void dump(bsl::ostream& stream);
-
     /// Validate the consistency of all settings.
     bool validate(bsl::string* error);
 
     // ACCESSORS
+
+    /// Do a nicer pretty print of all the parameters aligned.
+    void dump(bsl::ostream& stream) const;
 
     /// Format this object to the specified output `stream` at the (absolute
     /// value of) the optionally specified indentation `level` and return a
@@ -344,11 +349,11 @@ class Parameters {
     const bsl::string&                  logFilePath() const;
     bool                                dumpMsg() const;
     bool                                confirmMsg() const;
-    int                                 eventSize() const;
+    bsl::uint64_t                       eventSize() const;
     int                                 msgSize() const;
     int                                 postRate() const;
     int                                 postInterval() const;
-    int                                 eventsCount() const;
+    bsl::uint64_t                       eventsCount() const;
     int                                 maxUnconfirmedMsgs() const;
     int                                 maxUnconfirmedBytes() const;
     ParametersVerbosity::Value          verbosity() const;
@@ -358,9 +363,8 @@ class Parameters {
     int                                 shutdownGrace() const;
     bool                                noSessionEventHandler() const;
     const bsl::vector<MessageProperty>& messageProperties() const;
-
-    /// Return the corresponding data member value.
-    const bsl::vector<Subscription>& subscriptions() const;
+    const bsl::vector<Subscription>&    subscriptions() const;
+    const bsl::string&                  autoIncrementedField() const;
 };
 
 // FREE OPERATORS
@@ -423,7 +427,7 @@ inline Parameters& Parameters::setConfirmMsg(bool value)
     return *this;
 }
 
-inline Parameters& Parameters::setEventSize(int value)
+inline Parameters& Parameters::setEventSize(bsl::uint64_t value)
 {
     d_eventSize = value;
     return *this;
@@ -447,7 +451,7 @@ inline Parameters& Parameters::setPostInterval(int value)
     return *this;
 }
 
-inline Parameters& Parameters::setEventsCount(int value)
+inline Parameters& Parameters::setEventsCount(bsl::uint64_t value)
 {
     d_eventsCount = value;
     return *this;
@@ -523,13 +527,13 @@ inline Parameters& Parameters::setStoragePath(const bsl::string& value)
             d_dataFilePath.assign(substr);
             d_dataFilePath.append(dataExt);
         }
-        else if (mwcu::StringUtil::endsWith(value, qlistExt)) {
+        else if (bmqu::StringUtil::endsWith(value, qlistExt)) {
             d_qlistFilePath = value;
         }
-        else if (mwcu::StringUtil::endsWith(value, journalExt)) {
+        else if (bmqu::StringUtil::endsWith(value, journalExt)) {
             d_journalFilePath = value;
         }
-        else if (mwcu::StringUtil::endsWith(value, dataExt)) {
+        else if (bmqu::StringUtil::endsWith(value, dataExt)) {
             d_dataFilePath = value;
         }
     }
@@ -560,6 +564,13 @@ inline Parameters&
 Parameters::setSubscriptions(const bsl::vector<Subscription>& value)
 {
     d_subscriptions = value;
+    return *this;
+}
+
+inline Parameters&
+Parameters::setAutoIncrementedField(const bsl::string& value)
+{
+    d_autoIncrementedField = value;
     return *this;
 }
 
@@ -629,7 +640,7 @@ inline bool Parameters::confirmMsg() const
     return d_confirmMsg;
 }
 
-inline int Parameters::eventSize() const
+inline bsl::uint64_t Parameters::eventSize() const
 {
     return d_eventSize;
 }
@@ -649,7 +660,7 @@ inline int Parameters::postInterval() const
     return d_postInterval;
 }
 
-inline int Parameters::eventsCount() const
+inline bsl::uint64_t Parameters::eventsCount() const
 {
     return d_eventsCount;
 }
@@ -703,6 +714,11 @@ Parameters::messageProperties() const
 inline const bsl::vector<Subscription>& Parameters::subscriptions() const
 {
     return d_subscriptions;
+}
+
+inline const bsl::string& Parameters::autoIncrementedField() const
+{
+    return d_autoIncrementedField;
 }
 
 }  // close package namespace

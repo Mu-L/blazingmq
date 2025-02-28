@@ -34,19 +34,18 @@
 // BlazingMQ storage mechanism testable.
 
 // MQB
-
 #include <mqbi_dispatcher.h>
 #include <mqbi_storage.h>
 #include <mqbs_filestoreprotocol.h>
 #include <mqbu_storagekey.h>
 
 // BMQ
+#include <bmqc_orderedhashmap.h>
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqt_messageguid.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcc_orderedhashmap.h>
+#include <bmqc_orderedhashmap.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -273,17 +272,35 @@ struct DataStoreRecordKeyLess {
 class DataStoreConfigQueueInfo {
   public:
     // TYPES
-    typedef mqbi::Storage::AppIdKeyPair AppIdKeyPair;
+    typedef bmqc::OrderedHashMap<mqbu::StorageKey, bsl::string> AppInfos;
 
-    typedef mqbi::Storage::AppIdKeyPairs AppIdKeyPairs;
+    /// Collection of intervals [`first`, `second`) where `first` is the start
+    /// and `second` is the end of Purge range for some App that does not exist
+    /// anymore - a "ghost" App.
+    /// In other words, `first` is the oldest message which is younger than
+    /// some "ghost" App, and any message after `second` is not purged.
+    typedef bsl::multimap<DataStoreRecordKey, DataStoreRecordKey> PurgeOps;
+    typedef PurgeOps::const_iterator                              PurgeOp;
+
+    /// A collection of all "ghost" App with corresponding last PurgeOp.
+    typedef bsl::unordered_map<mqbu::StorageKey, PurgeOp> Ghosts;
 
   private:
     // DATA
+    bool d_isCSL;
+
     bsl::string d_canonicalUri;
 
     int d_partitionId;
 
-    AppIdKeyPairs d_appIdKeyPairs;
+    AppInfos d_appIdKeyPairs;
+
+    /// Ghosts are Apps which got removed before the current recovery.
+    Ghosts d_ghosts;
+
+    /// Second pass of `FileStore::recoverMessages` will cache Purge intervals
+    /// for ghost Apps.
+    mutable PurgeOps d_purgeOps;
 
   public:
     // TRAITS
@@ -291,7 +308,8 @@ class DataStoreConfigQueueInfo {
                                    bslma::UsesBslmaAllocator)
 
     // CREATORS
-    explicit DataStoreConfigQueueInfo(bslma::Allocator* basicAllocator = 0);
+    explicit DataStoreConfigQueueInfo(bool              isCSL,
+                                      bslma::Allocator* basicAllocator = 0);
 
     DataStoreConfigQueueInfo(const DataStoreConfigQueueInfo& other,
                              bslma::Allocator* basicAllocator = 0);
@@ -301,14 +319,30 @@ class DataStoreConfigQueueInfo {
 
     void setPartitionId(int value);
 
-    void addAppIdKeyPair(const AppIdKeyPair& value);
+    /// Save the specified `appId` and the specified `appKey` as a valid App
+    /// for which a Storage will be created.  If the same key was specified in
+    /// a previous `addPurgeOp` call, remove the App from the cache of Ghost
+    /// Apps.
+    void addAppInfo(const bsl::string& appId, const mqbu::StorageKey& appKey);
+
+    /// Cache the Purge interval from the specified `start` to the specified
+    /// `end` for the specified `key` unless the `key` was specified in a
+    /// previous `addAppInfo` call.
+    void addPurgeOp(const mqbu::StorageKey&   key,
+                    const DataStoreRecordKey& start,
+                    const DataStoreRecordKey& end);
+
+    /// Return the number of previously cached Purge intervals which contain
+    /// the specified `current` message.  Erase all Purge intervals whose end
+    /// end is less than the `current` value.
+    unsigned int advanceAndCount(const DataStoreRecordKey& current) const;
 
     // ACCESSORS
     const bsl::string& canonicalQueueUri() const;
 
     int partitionId() const;
 
-    const AppIdKeyPairs& appIdKeyPairs() const;
+    const AppInfos& appIdKeyPairs() const;
 };
 
 // =====================
@@ -328,7 +362,7 @@ class DataStoreConfig {
     typedef QueueKeyInfoMap::const_iterator      QueueKeyInfoMapConstIter;
     typedef bsl::pair<QueueKeyInfoMapIter, bool> QueueKeyInfoMapInsertRc;
 
-    typedef mwcc::OrderedHashMap<DataStoreRecordKey,
+    typedef bmqc::OrderedHashMap<DataStoreRecordKey,
                                  DataStoreRecord,
                                  DataStoreRecordKeyHashAlgo>
         Records;
@@ -337,15 +371,13 @@ class DataStoreConfig {
 
     typedef Records::const_iterator RecordConstIterator;
 
-    typedef mqbi::Storage::AppIdKeyPair AppIdKeyPair;
-
-    typedef mqbi::Storage::AppIdKeyPairs AppIdKeyPairs;
+    typedef mqbi::Storage::AppInfos AppInfos;
 
     typedef bsl::function<void(int*                    status,
                                int                     partitionId,
                                const bmqt::Uri&        uri,
                                const mqbu::StorageKey& queueKey,
-                               const AppIdKeyPairs&    appIdKeyPairs,
+                               const AppInfos&         appIdKeyPairs,
                                bool                    isNewQueue)>
         QueueCreationCb;
 
@@ -516,6 +548,8 @@ class DataStoreRecordHandle {
 
     /// Return the Primary LeaseId which created the record.
     unsigned int primaryLeaseId() const;
+
+    bsls::Types::Uint64 sequenceNum() const;
 };
 
 // FREE OPERATORS
@@ -541,9 +575,7 @@ class DataStore : public mqbi::DispatcherClient {
 
   public:
     // TYPES
-    typedef mqbi::Storage::AppIdKeyPair AppIdKeyPair;
-
-    typedef mqbi::Storage::AppIdKeyPairs AppIdKeyPairs;
+    typedef mqbi::Storage::AppInfos AppInfos;
 
     typedef DataStoreConfig::QueueKeyInfoMap QueueKeyInfoMap;
 
@@ -596,14 +628,15 @@ class DataStore : public mqbi::DispatcherClient {
     virtual int writeQueueCreationRecord(DataStoreRecordHandle*  handle,
                                          const bmqt::Uri&        queueUri,
                                          const mqbu::StorageKey& queueKey,
-                                         const AppIdKeyPairs&    appIdKeyPairs,
+                                         const AppInfos&         appIdKeyPairs,
                                          bsls::Types::Uint64     timestamp,
                                          bool isNewQueue) = 0;
 
-    virtual int writeQueuePurgeRecord(DataStoreRecordHandle*  handle,
-                                      const mqbu::StorageKey& queueKey,
-                                      const mqbu::StorageKey& appKey,
-                                      bsls::Types::Uint64     timestamp) = 0;
+    virtual int writeQueuePurgeRecord(DataStoreRecordHandle*       handle,
+                                      const mqbu::StorageKey&      queueKey,
+                                      const mqbu::StorageKey&      appKey,
+                                      bsls::Types::Uint64          timestamp,
+                                      const DataStoreRecordHandle& start) = 0;
 
     virtual int writeQueueDeletionRecord(DataStoreRecordHandle*  handle,
                                          const mqbu::StorageKey& queueKey,
@@ -614,14 +647,14 @@ class DataStore : public mqbi::DispatcherClient {
     /// ---------------
 
     /// Write a CONFIRM record to the data store with the specified
-    /// `queueKey`, optional `appKey`, `guid`, `timestamp` and `onReject`.
+    /// `queueKey`, optional `appKey`, `guid`, `timestamp` and `reason`.
     /// Return zero on success, non-zero value otherwise.
     virtual int writeConfirmRecord(DataStoreRecordHandle*   handle,
                                    const bmqt::MessageGUID& guid,
                                    const mqbu::StorageKey&  queueKey,
                                    const mqbu::StorageKey&  appKey,
                                    bsls::Types::Uint64      timestamp,
-                                   bool                     onReject) = 0;
+                                   ConfirmReason::Enum      reason) = 0;
 
     /// Write a DELETION record to the data store with the specified
     /// `queueKey`, `flag`, `guid` and `timestamp`.  Return zero on success,
@@ -674,19 +707,21 @@ class DataStore : public mqbi::DispatcherClient {
     virtual int issueSyncPoint() = 0;
 
     /// Set the specified `primaryNode` with the specified `primaryLeaseId`
-    /// as the primary for this data store partition.  Note that
+    /// as the active primary for this data store partition.  Note that
     /// `primaryNode` could refer to the node which owns this data store.
-    virtual void setPrimary(mqbnet::ClusterNode* primaryNode,
-                            unsigned int         primaryLeaseId) = 0;
+    virtual void setActivePrimary(mqbnet::ClusterNode* primaryNode,
+                                  unsigned int         primaryLeaseId) = 0;
 
     /// Clear the current primary associated with this partition.
     virtual void clearPrimary() = 0;
 
     /// If the specified `storage` is `true`, flush any buffered replication
     /// messages to the peers.  If the specified `queues` is `true`, `flush`
-    /// all associated queues.  Behavior is undefined unless this node is
-    /// the primary for this partition.
-    virtual void dispatcherFlush(bool storage, bool queues) = 0;
+    /// all associated queues.
+
+    /// Flush any buffered replication messages to the peers.  Behaviour is
+    /// undefined unless this cluster node is the primary for this partition.
+    virtual void flushStorage() = 0;
 
     // ACCESSORS
 
@@ -832,7 +867,7 @@ inline DataStoreRecordKeyHashAlgo::result_type
 DataStoreRecordKeyHashAlgo::operator()(const TYPE& type) const
 {
     return type.d_sequenceNum +
-           static_cast<bsls::Types::Uint64>(type.d_primaryLeaseId);
+           (static_cast<bsls::Types::Uint64>(type.d_primaryLeaseId) << 32);
 }
 
 // -----------------------------
@@ -861,19 +896,26 @@ DataStoreRecordKeyLess::operator()(const DataStoreRecordKey& lhs,
 
 // CREATORS
 inline DataStoreConfigQueueInfo::DataStoreConfigQueueInfo(
+    bool              isCSL,
     bslma::Allocator* basicAllocator)
-: d_canonicalUri(basicAllocator)
+: d_isCSL(isCSL)
+, d_canonicalUri(basicAllocator)
 , d_partitionId(DataStore::k_INVALID_PARTITION_ID)
 , d_appIdKeyPairs(basicAllocator)
+, d_ghosts(basicAllocator)
+, d_purgeOps(basicAllocator)
 {
 }
 
 inline DataStoreConfigQueueInfo::DataStoreConfigQueueInfo(
     const DataStoreConfigQueueInfo& other,
     bslma::Allocator*               basicAllocator)
-: d_canonicalUri(other.d_canonicalUri, basicAllocator)
+: d_isCSL(other.d_isCSL)
+, d_canonicalUri(other.d_canonicalUri, basicAllocator)
 , d_partitionId(other.d_partitionId)
 , d_appIdKeyPairs(other.d_appIdKeyPairs, basicAllocator)
+, d_ghosts(other.d_ghosts, basicAllocator)
+, d_purgeOps(other.d_purgeOps, basicAllocator)
 {
 }
 
@@ -889,12 +931,6 @@ inline void DataStoreConfigQueueInfo::setPartitionId(int value)
     d_partitionId = value;
 }
 
-inline void
-DataStoreConfigQueueInfo::addAppIdKeyPair(const AppIdKeyPair& value)
-{
-    d_appIdKeyPairs.push_back(value);
-}
-
 // ACCESSORS
 inline const bsl::string& DataStoreConfigQueueInfo::canonicalQueueUri() const
 {
@@ -906,7 +942,7 @@ inline int DataStoreConfigQueueInfo::partitionId() const
     return d_partitionId;
 }
 
-inline const DataStoreConfigQueueInfo::AppIdKeyPairs&
+inline const DataStoreConfigQueueInfo::AppInfos&
 DataStoreConfigQueueInfo::appIdKeyPairs() const
 {
     return d_appIdKeyPairs;
@@ -1162,6 +1198,12 @@ inline unsigned int DataStoreRecordHandle::primaryLeaseId() const
 {
     BSLS_ASSERT_SAFE(isValid());
     return d_iterator->first.d_primaryLeaseId;
+}
+
+inline bsls::Types::Uint64 DataStoreRecordHandle::sequenceNum() const
+{
+    BSLS_ASSERT_SAFE(isValid());
+    return d_iterator->first.d_sequenceNum;
 }
 
 }  // close package namespace

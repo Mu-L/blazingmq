@@ -22,8 +22,7 @@
 #include <bmqp_optionutil.h>
 #include <bmqp_protocol.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlbb_blobutil.h>
@@ -137,7 +136,7 @@ void PutTester::populateBlob(bdlbb::Blob*              blob,
         bdlbb::BlobUtil::append(&properties, payload);
         data.d_appData = properties;
 
-        mwcu::MemOutStream error(allocator);
+        bmqu::MemOutStream error(allocator);
         int                paddedCompressedAppDataNumWords = -1;
         if (cat != bmqt::CompressionAlgorithmType::e_NONE) {
             bdlbb::Blob compressed(bufferFactory, allocator);
@@ -159,7 +158,8 @@ void PutTester::populateBlob(bdlbb::Blob*              blob,
                                               compressed,
                                               &error,
                                               allocator);
-                int compare = bdlbb::BlobUtil::compare(dummy, data.d_appData);
+                BSLA_MAYBE_UNUSED int compare =
+                    bdlbb::BlobUtil::compare(dummy, data.d_appData);
                 BSLS_ASSERT_SAFE(compare == 0);
             }
 
@@ -181,7 +181,7 @@ void PutTester::populateBlob(bdlbb::Blob*              blob,
         const bool hasMsgGroupId = (i % 3);
         if (hasMsgGroupId) {
             // Don't add Group Id, once every 3 iterations
-            mwcu::MemOutStream oss(allocator);
+            bmqu::MemOutStream oss(allocator);
             oss << "gid:" << i;
             data.d_msgGroupId.makeValue(oss.str());
         }
@@ -273,8 +273,8 @@ void PutTester::populateBlob(bdlbb::Blob*             blob,
                              bmqp::EventHeader*       eh,
                              bdlbb::Blob*             eb,
                              int*                     ebLen,
-                             mwcu::BlobPosition*      headerPosition,
-                             mwcu::BlobPosition*      payloadPosition,
+                             bmqu::BlobPosition*      headerPosition,
+                             bmqu::BlobPosition*      payloadPosition,
                              int                      queueId,
                              const bmqt::MessageGUID& messageGUID,
                              bmqt::CompressionAlgorithmType::Enum cat,
@@ -288,7 +288,7 @@ void PutTester::populateBlob(bdlbb::Blob*             blob,
     *ebLen = bsl::strlen(payload);
 
     bdlbb::BlobUtil::append(eb, payload, *ebLen);
-    mwcu::MemOutStream error(allocator);
+    bmqu::MemOutStream error(allocator);
     bdlbb::Blob        compressedBlob(bufferFactory, allocator);
     if (cat != bmqt::CompressionAlgorithmType::e_NONE) {
         int payloadLength = bsl::strlen(payload);
@@ -299,10 +299,11 @@ void PutTester::populateBlob(bdlbb::Blob*             blob,
                                     payloadLength,
                                     &error,
                                     allocator);
-        int padding  = 0;
-        int numWords = bmqp::ProtocolUtil::calcNumWordsAndPadding(
-            &padding,
-            compressedBlob.length());
+        int                   padding = 0;
+        BSLA_MAYBE_UNUSED int numWords =
+            bmqp::ProtocolUtil::calcNumWordsAndPadding(
+                &padding,
+                compressedBlob.length());
         BSLS_ASSERT_SAFE(numWords >= 0);
         // Adding padding per BlazingMQ protocol
         bsl::string paddingCompressedBlob(padding, '\0');
@@ -353,11 +354,11 @@ void PutTester::populateBlob(bdlbb::Blob*             blob,
                             eh->headerWords() * bmqp::Protocol::k_WORD_SIZE);
 
     // Capture PutHeader position
-    mwcu::BlobUtil::reserve(headerPosition,
+    bmqu::BlobUtil::reserve(headerPosition,
                             blob,
                             ph.headerWords() * bmqp::Protocol::k_WORD_SIZE);
 
-    mwcu::BlobUtil::writeBytes(blob,
+    bmqu::BlobUtil::writeBytes(blob,
                                *headerPosition,
                                reinterpret_cast<const char*>(&ph),
                                ph.headerWords() * bmqp::Protocol::k_WORD_SIZE);
@@ -367,13 +368,13 @@ void PutTester::populateBlob(bdlbb::Blob*             blob,
 
         const int payloadOffset = blob->length();
         bdlbb::BlobUtil::append(blob, compressedBlob);
-        mwcu::BlobUtil::findOffset(payloadPosition, *blob, payloadOffset);
+        bmqu::BlobUtil::findOffset(payloadPosition, *blob, payloadOffset);
     }
     else {
         // Capture payload position
-        mwcu::BlobUtil::reserve(payloadPosition, blob, bsl::strlen(payload));
+        bmqu::BlobUtil::reserve(payloadPosition, blob, bsl::strlen(payload));
 
-        mwcu::BlobUtil::writeBytes(blob,
+        bmqu::BlobUtil::writeBytes(blob,
                                    *payloadPosition,
                                    payload,
                                    bsl::strlen(payload));
@@ -397,7 +398,7 @@ void PutTester::populateBlob(bdlbb::Blob*                   blob,
                              bmqt::CompressionAlgorithmType::Enum cat,
                              bslma::Allocator*                    allocator)
 {
-    mwcu::BlobUtil::reserve(blob,
+    bmqu::BlobUtil::reserve(blob,
                             sizeof(bmqp::EventHeader) +
                                 sizeof(bmqp::PutHeader));
 
@@ -450,7 +451,7 @@ void PutTester::populateBlob(bdlbb::Blob*                   blob,
     }
     else {
         bdlbb::Blob        dataBlob(bufferFactory, allocator);
-        mwcu::MemOutStream error(allocator);
+        bmqu::MemOutStream error(allocator);
 
         bdlbb::BlobUtil::append(&dataBlob, propertiesBlob);
         populateBlob(&dataBlob, length);
@@ -477,20 +478,21 @@ void PutTester::populateBlob(bdlbb::Blob*                   blob,
     eh->setLength(sizeof(bmqp::EventHeader) +
                   ph->messageWords() * bmqp::Protocol::k_WORD_SIZE);
 
-    mwcu::BlobPosition pos;
-    mwcu::BlobUtil::writeBytes(blob,
+    bmqu::BlobPosition pos;
+    bmqu::BlobUtil::writeBytes(blob,
                                pos,
                                reinterpret_cast<const char*>(eh),
                                eh->headerWords() *
                                    bmqp::Protocol::k_WORD_SIZE);
 
-    int rc = mwcu::BlobUtil::findOffsetSafe(&pos,
-                                            *blob,
-                                            mwcu::BlobPosition(),
-                                            sizeof(bmqp::EventHeader));
+    BSLA_MAYBE_UNUSED int rc = bmqu::BlobUtil::findOffsetSafe(
+        &pos,
+        *blob,
+        bmqu::BlobPosition(),
+        sizeof(bmqp::EventHeader));
     BSLS_ASSERT_SAFE(rc == 0);
 
-    mwcu::BlobUtil::writeBytes(blob,
+    bmqu::BlobUtil::writeBytes(blob,
                                pos,
                                reinterpret_cast<const char*>(ph),
                                ph->headerWords() *

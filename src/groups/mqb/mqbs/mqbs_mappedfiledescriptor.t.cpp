@@ -25,7 +25,7 @@
 #include <bsls_types.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -43,17 +43,19 @@ static void test1_breathingTest()
 //   Verifies the default constructor of 'mqbs::MappedFileDescriptor'.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("Breathing Test");
+    bmqtst::TestHelper::printTestName("Breathing Test");
 
     // Default constructor
     mqbs::MappedFileDescriptor obj;
 
-    ASSERT_EQ(obj.fd(), static_cast<int>(obj.k_INVALID_FILE_DESCRIPTOR));
-    ASSERT_EQ(obj.fileSize(), 0U);
-    ASSERT_EQ(obj.mappingSize(),
-              static_cast<bsls::Types::Uint64>(obj.k_INVALID_MAPPING_SIZE));
-    ASSERT_EQ(obj.mapping(), obj.k_INVALID_MAPPING);
-    ASSERT(!obj.isValid());
+    BMQTST_ASSERT_EQ(obj.fd(),
+                     static_cast<int>(obj.k_INVALID_FILE_DESCRIPTOR));
+    BMQTST_ASSERT_EQ(obj.fileSize(), 0U);
+    BMQTST_ASSERT_EQ(
+        obj.mappingSize(),
+        static_cast<bsls::Types::Uint64>(obj.k_INVALID_MAPPING_SIZE));
+    BMQTST_ASSERT_EQ(obj.mapping(), obj.k_INVALID_MAPPING);
+    BMQTST_ASSERT(!obj.isValid());
 }
 
 static void test2_operations()
@@ -65,7 +67,7 @@ static void test2_operations()
 //   in a 'mqbs::MappedFileDescriptor'.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("Operations Test");
+    bmqtst::TestHelper::printTestName("Operations Test");
 
     const bsl::size_t         bufferLength         = 64;
     char                      buffer[bufferLength] = {0};
@@ -83,13 +85,13 @@ static void test2_operations()
         .setMapping(block.base())
         .setMappingSize(block.size());
 
-    ASSERT(obj.isValid());
+    BMQTST_ASSERT(obj.isValid());
 
     // Verify Manipulators- Accessors
-    ASSERT_EQ(obj.fd(), fileDescriptor);
-    ASSERT_EQ(obj.fileSize(), fileSize);
-    ASSERT_EQ(obj.mapping(), block.base());
-    ASSERT_EQ(obj.mappingSize(), block.size());
+    BMQTST_ASSERT_EQ(obj.fd(), fileDescriptor);
+    BMQTST_ASSERT_EQ(obj.fileSize(), fileSize);
+    BMQTST_ASSERT_EQ(obj.mapping(), block.base());
+    BMQTST_ASSERT_EQ(obj.mappingSize(), block.size());
 }
 
 static void test3_reset()
@@ -100,7 +102,7 @@ static void test3_reset()
 //   Verifies the manupulator 'clear()' of a 'mqbs::MappedFileDescriptor'.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("Reset Test");
+    bmqtst::TestHelper::printTestName("Reset Test");
 
     const bsl::size_t         bufferLength         = 32;
     char                      buffer[bufferLength] = {0};
@@ -118,17 +120,19 @@ static void test3_reset()
         .setMapping(block.base())
         .setMappingSize(block.size());
 
-    ASSERT(obj.isValid());
+    BMQTST_ASSERT(obj.isValid());
 
     // Verify Clear()
     obj.reset();
 
-    ASSERT_EQ(obj.fd(), static_cast<int>(obj.k_INVALID_FILE_DESCRIPTOR));
-    ASSERT_EQ(obj.fileSize(), 0U);
-    ASSERT_EQ(obj.mappingSize(),
-              static_cast<bsls::Types::Uint64>(obj.k_INVALID_MAPPING_SIZE));
-    ASSERT_EQ(obj.mapping(), obj.k_INVALID_MAPPING);
-    ASSERT(!obj.isValid());
+    BMQTST_ASSERT_EQ(obj.fd(),
+                     static_cast<int>(obj.k_INVALID_FILE_DESCRIPTOR));
+    BMQTST_ASSERT_EQ(obj.fileSize(), 0U);
+    BMQTST_ASSERT_EQ(
+        obj.mappingSize(),
+        static_cast<bsls::Types::Uint64>(obj.k_INVALID_MAPPING_SIZE));
+    BMQTST_ASSERT_EQ(obj.mapping(), obj.k_INVALID_MAPPING);
+    BMQTST_ASSERT(!obj.isValid());
 }
 
 // ============================================================================
@@ -137,7 +141,7 @@ static void test3_reset()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -146,9 +150,9 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

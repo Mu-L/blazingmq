@@ -19,7 +19,7 @@
 #include <mqbscm_version.h>
 // BMQ
 #include <bmqp_protocol.h>
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlf_bind.h>
@@ -45,19 +45,19 @@ namespace mqbnet {
 ClusterNodeImp::ClusterNodeImp(ClusterImp*                cluster,
                                const mqbcfg::ClusterNode& config,
                                bdlbb::BlobBufferFactory*  blobBufferFactory,
-                               Channel::ItemPool*         itemPool,
                                bslma::Allocator*          allocator)
-: d_cluster_p(cluster)
+: d_allocators(allocator)
+, d_cluster_p(cluster)
 , d_config(config, allocator)
 , d_description(allocator)
-, d_channel(blobBufferFactory, itemPool, config.name(), allocator)
+, d_channel(blobBufferFactory, config.name(), d_allocators.get(config.name()))
 , d_identity(allocator)
 , d_isReading(false)
 {
     BSLS_ASSERT_SAFE(d_cluster_p &&
                      "A ClusterNode should always be part of a Cluster");
 
-    mwcu::MemOutStream osstr;
+    bmqu::MemOutStream osstr;
     osstr << "[" << hostName() << ", " << nodeId() << "]";
     d_description.assign(osstr.str().data(), osstr.str().length());
 }
@@ -68,9 +68,9 @@ ClusterNodeImp::~ClusterNodeImp()
 }
 
 ClusterNode*
-ClusterNodeImp::setChannel(const bsl::weak_ptr<mwcio::Channel>& value,
+ClusterNodeImp::setChannel(const bsl::weak_ptr<bmqio::Channel>& value,
                            const bmqp_ctrlmsg::ClientIdentity&  identity,
-                           const mwcio::Channel::ReadCallback&  readCb)
+                           const bmqio::Channel::ReadCallback&  readCb)
 {
     // Save the value
     d_readCb    = readCb;
@@ -87,7 +87,7 @@ ClusterNodeImp::setChannel(const bsl::weak_ptr<mwcio::Channel>& value,
 
 bool ClusterNodeImp::enableRead()
 {
-    const bsl::shared_ptr<mwcio::Channel> channelSp = d_channel.channel();
+    const bsl::shared_ptr<bmqio::Channel> channelSp = d_channel.channel();
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(!channelSp)) {
         BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
         return false;  // RETURN
@@ -99,7 +99,7 @@ bool ClusterNodeImp::enableRead()
         return true;  // RETURN
     }
 
-    mwcio::Status readStatus;
+    bmqio::Status readStatus;
     channelSp->read(&readStatus, bmqp::Protocol::k_PACKET_MIN_SIZE, d_readCb);
 
     if (!readStatus) {
@@ -126,7 +126,7 @@ ClusterNode* ClusterNodeImp::resetChannel()
     d_channel.resetChannel();
     d_isReading = false;
     d_identity.reset();
-    d_readCb = mwcio::Channel::ReadCallback();
+    d_readCb = bmqio::Channel::ReadCallback();
 
     // Notify the cluster of changes to this node
     d_cluster_p->notifyObserversOfNodeStateChange(this, false);
@@ -142,8 +142,9 @@ void ClusterNodeImp::closeChannel()
     d_channel.closeChannel();
 }
 
-bmqt::GenericResult::Enum ClusterNodeImp::write(const bdlbb::Blob&    blob,
-                                                bmqp::EventType::Enum type)
+bmqt::GenericResult::Enum
+ClusterNodeImp::write(const bsl::shared_ptr<bdlbb::Blob>& blob,
+                      bmqp::EventType::Enum               type)
 {
     return d_channel.writeBlob(blob, type);
 }
@@ -181,10 +182,8 @@ ClusterImp::ClusterImp(const bsl::string&                      name,
                        const bsl::vector<mqbcfg::ClusterNode>& nodesConfig,
                        int                                     selfNodeId,
                        bdlbb::BlobBufferFactory* blobBufferFactory,
-                       Channel::ItemPool*        itemPool,
                        bslma::Allocator*         allocator)
-: d_allocator_p(allocator)
-, d_name(name, allocator)
+: d_name(name, allocator)
 , d_nodesConfig(nodesConfig, allocator)
 , d_selfNodeId(selfNodeId)
 , d_selfNode(0)  // set below
@@ -199,7 +198,7 @@ ClusterImp::ClusterImp(const bsl::string&                      name,
     bsl::vector<mqbcfg::ClusterNode>::const_iterator nodeIt;
     for (nodeIt = d_nodesConfig.begin(); nodeIt != d_nodesConfig.end();
          ++nodeIt) {
-        d_nodes.emplace_back(this, *nodeIt, blobBufferFactory, itemPool);
+        d_nodes.emplace_back(this, *nodeIt, blobBufferFactory);
         d_nodesList.emplace_back(&d_nodes.back());
         if (nodeIt->id() == selfNodeId) {
             d_selfNode = d_nodesList.back();
@@ -233,7 +232,8 @@ Cluster* ClusterImp::unregisterObserver(ClusterObserver* observer)
     return this;
 }
 
-int ClusterImp::writeAll(const bdlbb::Blob& blob, bmqp::EventType::Enum type)
+int ClusterImp::writeAll(const bsl::shared_ptr<bdlbb::Blob>& blob,
+                         bmqp::EventType::Enum               type)
 {
     unsigned int maxPushChannelPendingItems = 0;
     unsigned int maxChannelPendingItems     = 0;
@@ -264,7 +264,7 @@ int ClusterImp::writeAll(const bdlbb::Blob& blob, bmqp::EventType::Enum type)
                 if (d_failedWritesThrottler.requestPermission()) {
                     BALL_LOG_ERROR << "#CLUSTER_SEND_FAILURE "
                                    << "Failed to write blob of length ["
-                                   << blob.length() << "] bytes, to node "
+                                   << blob->length() << "] bytes, to node "
                                    << it->nodeDescription() << ", rc: " << rc
                                    << ".";
                 }
@@ -279,7 +279,7 @@ int ClusterImp::writeAll(const bdlbb::Blob& blob, bmqp::EventType::Enum type)
     return maxPushChannelPendingItems;
 }
 
-int ClusterImp::broadcast(const bdlbb::Blob& blob)
+int ClusterImp::broadcast(const bsl::shared_ptr<bdlbb::Blob>& blob)
 {
     return writeAll(blob, bmqp::EventType::e_STORAGE);
 }
@@ -310,7 +310,7 @@ void ClusterImp::enableRead()
 }
 
 void ClusterImp::onProxyConnectionUp(
-    const bsl::shared_ptr<mwcio::Channel>& channel,
+    const bsl::shared_ptr<bmqio::Channel>& channel,
     const bmqp_ctrlmsg::ClientIdentity&    identity,
     const bsl::string&                     description)
 {

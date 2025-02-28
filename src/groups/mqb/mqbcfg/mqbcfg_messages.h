@@ -1,4 +1,4 @@
-// Copyright 2018-2023 Bloomberg Finance L.P.
+// Copyright 2025 Bloomberg Finance L.P.
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,9 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // mqbcfg_messages.h             *DO NOT EDIT*             @generated -*-C++-*-
-
 #ifndef INCLUDED_MQBCFG_MESSAGES
 #define INCLUDED_MQBCFG_MESSAGES
 
@@ -76,6 +74,9 @@ namespace mqbcfg {
 class Heartbeat;
 }
 namespace mqbcfg {
+class LogDumpConfig;
+}
+namespace mqbcfg {
 class MessagePropertiesV2;
 }
 namespace mqbcfg {
@@ -91,9 +92,6 @@ namespace mqbcfg {
 class ResolvedDomain;
 }
 namespace mqbcfg {
-class StatPluginConfig;
-}
-namespace mqbcfg {
 class StatsPrinterConfig;
 }
 namespace mqbcfg {
@@ -106,7 +104,7 @@ namespace mqbcfg {
 class TcpClusterNodeConnection;
 }
 namespace mqbcfg {
-class TcpInterfaceConfig;
+class TcpInterfaceListener;
 }
 namespace mqbcfg {
 class VirtualClusterInformation;
@@ -121,13 +119,13 @@ namespace mqbcfg {
 class LogController;
 }
 namespace mqbcfg {
-class NetworkInterfaces;
-}
-namespace mqbcfg {
 class PartitionConfig;
 }
 namespace mqbcfg {
-class StatsConfig;
+class StatPluginConfigPrometheus;
+}
+namespace mqbcfg {
+class TcpInterfaceConfig;
 }
 namespace mqbcfg {
 class ClusterNode;
@@ -136,19 +134,28 @@ namespace mqbcfg {
 class DispatcherConfig;
 }
 namespace mqbcfg {
+class NetworkInterfaces;
+}
+namespace mqbcfg {
 class ReversedClusterConnection;
 }
 namespace mqbcfg {
-class TaskConfig;
+class StatPluginConfig;
 }
 namespace mqbcfg {
-class AppConfig;
+class TaskConfig;
 }
 namespace mqbcfg {
 class ClusterDefinition;
 }
 namespace mqbcfg {
 class ClusterProxyDefinition;
+}
+namespace mqbcfg {
+class StatsConfig;
+}
+namespace mqbcfg {
+class AppConfig;
 }
 namespace mqbcfg {
 class ClustersDefinition;
@@ -201,13 +208,15 @@ struct AllocatorType {
     // Write to the specified 'stream' the string representation of
     // the specified enumeration 'value'.  Return a reference to
     // the modifiable 'stream'.
-};
 
-// FREE OPERATORS
-inline bsl::ostream& operator<<(bsl::ostream&        stream,
-                                AllocatorType::Value rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
+    // HIDDEN FRIENDS
+    friend bsl::ostream& operator<<(bsl::ostream& stream, Value rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return AllocatorType::print(stream, rhs);
+    }
+};
 
 }  // close package namespace
 
@@ -254,33 +263,7 @@ class BmqconfConfig {
     BmqconfConfig();
     // Create an object of type 'BmqconfConfig' having the default value.
 
-    BmqconfConfig(const BmqconfConfig& original);
-    // Create an object of type 'BmqconfConfig' having the value of the
-    // specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    BmqconfConfig(BmqconfConfig&& original) = default;
-    // Create an object of type 'BmqconfConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~BmqconfConfig();
-    // Destroy this object.
-
     // MANIPULATORS
-    BmqconfConfig& operator=(const BmqconfConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    BmqconfConfig& operator=(BmqconfConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -363,30 +346,42 @@ class BmqconfConfig {
 
     int cacheTTLSeconds() const;
     // Return the value of the "CacheTTLSeconds" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const BmqconfConfig& lhs, const BmqconfConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.cacheTTLSeconds() == rhs.cacheTTLSeconds();
+    }
+
+    friend bool operator!=(const BmqconfConfig& lhs, const BmqconfConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&        stream,
+                                    const BmqconfConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&    hashAlg,
+                           const BmqconfConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'BmqconfConfig'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.cacheTTLSeconds());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const BmqconfConfig& lhs, const BmqconfConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const BmqconfConfig& lhs, const BmqconfConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&        stream,
-                                const BmqconfConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const BmqconfConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'BmqconfConfig'.
 
 }  // close package namespace
 
@@ -450,33 +445,7 @@ class ClusterAttributes {
     // Create an object of type 'ClusterAttributes' having the default
     // value.
 
-    ClusterAttributes(const ClusterAttributes& original);
-    // Create an object of type 'ClusterAttributes' having the value of the
-    // specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    ClusterAttributes(ClusterAttributes&& original) = default;
-    // Create an object of type 'ClusterAttributes' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~ClusterAttributes();
-    // Destroy this object.
-
     // MANIPULATORS
-    ClusterAttributes& operator=(const ClusterAttributes& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    ClusterAttributes& operator=(ClusterAttributes&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -566,32 +535,46 @@ class ClusterAttributes {
 
     bool isFSMWorkflow() const;
     // Return the value of the "IsFSMWorkflow" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ClusterAttributes& lhs,
+                           const ClusterAttributes& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isCSLModeEnabled() == rhs.isCSLModeEnabled() &&
+               lhs.isFSMWorkflow() == rhs.isFSMWorkflow();
+    }
+
+    friend bool operator!=(const ClusterAttributes& lhs,
+                           const ClusterAttributes& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&            stream,
+                                    const ClusterAttributes& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&        hashAlg,
+                           const ClusterAttributes& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ClusterAttributes'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.isCSLModeEnabled());
+        hashAppend(hashAlg, object.isFSMWorkflow());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ClusterAttributes& lhs,
-                       const ClusterAttributes& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ClusterAttributes& lhs,
-                       const ClusterAttributes& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&            stream,
-                                const ClusterAttributes& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const ClusterAttributes& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ClusterAttributes'.
 
 }  // close package namespace
 
@@ -637,6 +620,12 @@ class ClusterMonitorConfig {
     int d_thresholdMaster;
     int d_thresholdNode;
     int d_thresholdFailover;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const ClusterMonitorConfig& rhs) const;
 
   public:
     // TYPES
@@ -702,33 +691,7 @@ class ClusterMonitorConfig {
     // Create an object of type 'ClusterMonitorConfig' having the default
     // value.
 
-    ClusterMonitorConfig(const ClusterMonitorConfig& original);
-    // Create an object of type 'ClusterMonitorConfig' having the value of
-    // the specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    ClusterMonitorConfig(ClusterMonitorConfig&& original) = default;
-    // Create an object of type 'ClusterMonitorConfig' having the value of
-    // the specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~ClusterMonitorConfig();
-    // Destroy this object.
-
     // MANIPULATORS
-    ClusterMonitorConfig& operator=(const ClusterMonitorConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    ClusterMonitorConfig& operator=(ClusterMonitorConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -861,32 +824,43 @@ class ClusterMonitorConfig {
     int thresholdFailover() const;
     // Return the value of the "ThresholdFailover" attribute of this
     // object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ClusterMonitorConfig& lhs,
+                           const ClusterMonitorConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const ClusterMonitorConfig& lhs,
+                           const ClusterMonitorConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&               stream,
+                                    const ClusterMonitorConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&           hashAlg,
+                           const ClusterMonitorConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ClusterMonitorConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ClusterMonitorConfig& lhs,
-                       const ClusterMonitorConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ClusterMonitorConfig& lhs,
-                       const ClusterMonitorConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&               stream,
-                                const ClusterMonitorConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const ClusterMonitorConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ClusterMonitorConfig'.
 
 }  // close package namespace
 
@@ -905,6 +879,10 @@ class DispatcherProcessorParameters {
     int d_queueSize;
     int d_queueSizeLowWatermark;
     int d_queueSizeHighWatermark;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
 
   public:
     // TYPES
@@ -944,38 +922,7 @@ class DispatcherProcessorParameters {
     // Create an object of type 'DispatcherProcessorParameters' having the
     // default value.
 
-    DispatcherProcessorParameters(
-        const DispatcherProcessorParameters& original);
-    // Create an object of type 'DispatcherProcessorParameters' having the
-    // value of the specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    DispatcherProcessorParameters(DispatcherProcessorParameters&& original) =
-        default;
-    // Create an object of type 'DispatcherProcessorParameters' having the
-    // value of the specified 'original' object.  After performing this
-    // action, the 'original' object will be left in a valid, but
-    // unspecified state.
-#endif
-
-    ~DispatcherProcessorParameters();
-    // Destroy this object.
-
     // MANIPULATORS
-    DispatcherProcessorParameters&
-    operator=(const DispatcherProcessorParameters& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    DispatcherProcessorParameters&
-    operator=(DispatcherProcessorParameters&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -1074,33 +1021,45 @@ class DispatcherProcessorParameters {
     int queueSizeHighWatermark() const;
     // Return the value of the "QueueSizeHighWatermark" attribute of this
     // object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const DispatcherProcessorParameters& lhs,
+                           const DispatcherProcessorParameters& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.queueSize() == rhs.queueSize() &&
+               lhs.queueSizeLowWatermark() == rhs.queueSizeLowWatermark() &&
+               lhs.queueSizeHighWatermark() == rhs.queueSizeHighWatermark();
+    }
+
+    friend bool operator!=(const DispatcherProcessorParameters& lhs,
+                           const DispatcherProcessorParameters& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream,
+                                    const DispatcherProcessorParameters& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&                    hashAlg,
+                           const DispatcherProcessorParameters& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'DispatcherProcessorParameters'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const DispatcherProcessorParameters& lhs,
-                       const DispatcherProcessorParameters& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const DispatcherProcessorParameters& lhs,
-                       const DispatcherProcessorParameters& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&                        stream,
-                                const DispatcherProcessorParameters& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&                    hashAlg,
-                const DispatcherProcessorParameters& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'DispatcherProcessorParameters'.
 
 }  // close package namespace
 
@@ -1153,6 +1112,12 @@ class ElectorConfig {
     int d_heartbeatMissCount;
     int d_quorum;
     int d_leaderSyncDelayMs;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const ElectorConfig& rhs) const;
 
   public:
     // TYPES
@@ -1221,33 +1186,7 @@ class ElectorConfig {
     ElectorConfig();
     // Create an object of type 'ElectorConfig' having the default value.
 
-    ElectorConfig(const ElectorConfig& original);
-    // Create an object of type 'ElectorConfig' having the value of the
-    // specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    ElectorConfig(ElectorConfig&& original) = default;
-    // Create an object of type 'ElectorConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~ElectorConfig();
-    // Destroy this object.
-
     // MANIPULATORS
-    ElectorConfig& operator=(const ElectorConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    ElectorConfig& operator=(ElectorConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -1394,36 +1333,108 @@ class ElectorConfig {
     int leaderSyncDelayMs() const;
     // Return the value of the "LeaderSyncDelayMs" attribute of this
     // object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ElectorConfig& lhs, const ElectorConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const ElectorConfig& lhs, const ElectorConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&        stream,
+                                    const ElectorConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&    hashAlg,
+                           const ElectorConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ElectorConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ElectorConfig& lhs, const ElectorConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ElectorConfig& lhs, const ElectorConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&        stream,
-                                const ElectorConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const ElectorConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ElectorConfig'.
 
 }  // close package namespace
 
 // TRAITS
 
 BDLAT_DECL_SEQUENCE_WITH_BITWISEMOVEABLE_TRAITS(mqbcfg::ElectorConfig)
+
+namespace mqbcfg {
+
+// ================
+// class ExportMode
+// ================
+
+struct ExportMode {
+  public:
+    // TYPES
+    enum Value { E_PUSH = 0, E_PULL = 1 };
+
+    enum { NUM_ENUMERATORS = 2 };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const bdlat_EnumeratorInfo ENUMERATOR_INFO_ARRAY[];
+
+    // CLASS METHODS
+    static const char* toString(Value value);
+    // Return the string representation exactly matching the enumerator
+    // name corresponding to the specified enumeration 'value'.
+
+    static int fromString(Value* result, const char* string, int stringLength);
+    // Load into the specified 'result' the enumerator matching the
+    // specified 'string' of the specified 'stringLength'.  Return 0 on
+    // success, and a non-zero value with no effect on 'result' otherwise
+    // (i.e., 'string' does not match any enumerator).
+
+    static int fromString(Value* result, const bsl::string& string);
+    // Load into the specified 'result' the enumerator matching the
+    // specified 'string'.  Return 0 on success, and a non-zero value with
+    // no effect on 'result' otherwise (i.e., 'string' does not match any
+    // enumerator).
+
+    static int fromInt(Value* result, int number);
+    // Load into the specified 'result' the enumerator matching the
+    // specified 'number'.  Return 0 on success, and a non-zero value with
+    // no effect on 'result' otherwise (i.e., 'number' does not match any
+    // enumerator).
+
+    static bsl::ostream& print(bsl::ostream& stream, Value value);
+    // Write to the specified 'stream' the string representation of
+    // the specified enumeration 'value'.  Return a reference to
+    // the modifiable 'stream'.
+
+    // HIDDEN FRIENDS
+    friend bsl::ostream& operator<<(bsl::ostream& stream, Value rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return ExportMode::print(stream, rhs);
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_ENUMERATION_TRAITS(mqbcfg::ExportMode)
 
 namespace mqbcfg {
 
@@ -1451,6 +1462,12 @@ class Heartbeat {
     int d_downstreamBroker;
     int d_upstreamBroker;
     int d_clusterPeer;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const Heartbeat& rhs) const;
 
   public:
     // TYPES
@@ -1499,33 +1516,7 @@ class Heartbeat {
     Heartbeat();
     // Create an object of type 'Heartbeat' having the default value.
 
-    Heartbeat(const Heartbeat& original);
-    // Create an object of type 'Heartbeat' having the value of the
-    // specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    Heartbeat(Heartbeat&& original) = default;
-    // Create an object of type 'Heartbeat' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~Heartbeat();
-    // Destroy this object.
-
     // MANIPULATORS
-    Heartbeat& operator=(const Heartbeat& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    Heartbeat& operator=(Heartbeat&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -1629,35 +1620,287 @@ class Heartbeat {
 
     int clusterPeer() const;
     // Return the value of the "ClusterPeer" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Heartbeat& lhs, const Heartbeat& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const Heartbeat& lhs, const Heartbeat& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const Heartbeat& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Heartbeat& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Heartbeat'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const Heartbeat& lhs, const Heartbeat& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const Heartbeat& lhs, const Heartbeat& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Heartbeat& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Heartbeat& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'Heartbeat'.
 
 }  // close package namespace
 
 // TRAITS
 
 BDLAT_DECL_SEQUENCE_WITH_BITWISEMOVEABLE_TRAITS(mqbcfg::Heartbeat)
+
+namespace mqbcfg {
+
+// ===================
+// class LogDumpConfig
+// ===================
+
+class LogDumpConfig {
+    // INSTANCE DATA
+    bsl::string d_recordingLevel;
+    bsl::string d_triggerLevel;
+    int         d_recordBufferSize;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+  public:
+    // TYPES
+    enum {
+        ATTRIBUTE_ID_RECORD_BUFFER_SIZE = 0,
+        ATTRIBUTE_ID_RECORDING_LEVEL    = 1,
+        ATTRIBUTE_ID_TRIGGER_LEVEL      = 2
+    };
+
+    enum { NUM_ATTRIBUTES = 3 };
+
+    enum {
+        ATTRIBUTE_INDEX_RECORD_BUFFER_SIZE = 0,
+        ATTRIBUTE_INDEX_RECORDING_LEVEL    = 1,
+        ATTRIBUTE_INDEX_TRIGGER_LEVEL      = 2
+    };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const int DEFAULT_INITIALIZER_RECORD_BUFFER_SIZE;
+
+    static const char DEFAULT_INITIALIZER_RECORDING_LEVEL[];
+
+    static const char DEFAULT_INITIALIZER_TRIGGER_LEVEL[];
+
+    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
+
+  public:
+    // CLASS METHODS
+    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
+
+    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
+                                                          int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
+
+    // CREATORS
+    explicit LogDumpConfig(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'LogDumpConfig' having the default value.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+
+    LogDumpConfig(const LogDumpConfig& original,
+                  bslma::Allocator*    basicAllocator = 0);
+    // Create an object of type 'LogDumpConfig' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    LogDumpConfig(LogDumpConfig&& original) noexcept;
+    // Create an object of type 'LogDumpConfig' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+
+    LogDumpConfig(LogDumpConfig&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'LogDumpConfig' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+#endif
+
+    ~LogDumpConfig();
+    // Destroy this object.
+
+    // MANIPULATORS
+    LogDumpConfig& operator=(const LogDumpConfig& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    LogDumpConfig& operator=(LogDumpConfig&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
+#endif
+
+    void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator,
+                            const char*    name,
+                            int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    int& recordBufferSize();
+    // Return a reference to the modifiable "RecordBufferSize" attribute of
+    // this object.
+
+    bsl::string& recordingLevel();
+    // Return a reference to the modifiable "RecordingLevel" attribute of
+    // this object.
+
+    bsl::string& triggerLevel();
+    // Return a reference to the modifiable "TriggerLevel" attribute of
+    // this object.
+
+    // ACCESSORS
+    bsl::ostream&
+    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
+
+    template <typename t_ACCESSOR>
+    int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor,
+                        const char* name,
+                        int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    int recordBufferSize() const;
+    // Return the value of the "RecordBufferSize" attribute of this object.
+
+    const bsl::string& recordingLevel() const;
+    // Return a reference offering non-modifiable access to the
+    // "RecordingLevel" attribute of this object.
+
+    const bsl::string& triggerLevel() const;
+    // Return a reference offering non-modifiable access to the
+    // "TriggerLevel" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const LogDumpConfig& lhs, const LogDumpConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.recordBufferSize() == rhs.recordBufferSize() &&
+               lhs.recordingLevel() == rhs.recordingLevel() &&
+               lhs.triggerLevel() == rhs.triggerLevel();
+    }
+
+    friend bool operator!=(const LogDumpConfig& lhs, const LogDumpConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&        stream,
+                                    const LogDumpConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&    hashAlg,
+                           const LogDumpConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'LogDumpConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
+    mqbcfg::LogDumpConfig)
 
 namespace mqbcfg {
 
@@ -1709,13 +1952,15 @@ struct MasterAssignmentAlgorithm {
     // Write to the specified 'stream' the string representation of
     // the specified enumeration 'value'.  Return a reference to
     // the modifiable 'stream'.
-};
 
-// FREE OPERATORS
-inline bsl::ostream& operator<<(bsl::ostream&                    stream,
-                                MasterAssignmentAlgorithm::Value rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
+    // HIDDEN FRIENDS
+    friend bsl::ostream& operator<<(bsl::ostream& stream, Value rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return MasterAssignmentAlgorithm::print(stream, rhs);
+    }
+};
 
 }  // close package namespace
 
@@ -1740,6 +1985,10 @@ class MessagePropertiesV2 {
     int  d_minCppSdkVersion;
     int  d_minJavaSdkVersion;
     bool d_advertiseV2Support;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
 
   public:
     // TYPES
@@ -1785,33 +2034,7 @@ class MessagePropertiesV2 {
     // Create an object of type 'MessagePropertiesV2' having the default
     // value.
 
-    MessagePropertiesV2(const MessagePropertiesV2& original);
-    // Create an object of type 'MessagePropertiesV2' having the value of
-    // the specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    MessagePropertiesV2(MessagePropertiesV2&& original) = default;
-    // Create an object of type 'MessagePropertiesV2' having the value of
-    // the specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~MessagePropertiesV2();
-    // Destroy this object.
-
     // MANIPULATORS
-    MessagePropertiesV2& operator=(const MessagePropertiesV2& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    MessagePropertiesV2& operator=(MessagePropertiesV2&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -1910,32 +2133,45 @@ class MessagePropertiesV2 {
     int minJavaSdkVersion() const;
     // Return the value of the "MinJavaSdkVersion" attribute of this
     // object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const MessagePropertiesV2& lhs,
+                           const MessagePropertiesV2& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.advertiseV2Support() == rhs.advertiseV2Support() &&
+               lhs.minCppSdkVersion() == rhs.minCppSdkVersion() &&
+               lhs.minJavaSdkVersion() == rhs.minJavaSdkVersion();
+    }
+
+    friend bool operator!=(const MessagePropertiesV2& lhs,
+                           const MessagePropertiesV2& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&              stream,
+                                    const MessagePropertiesV2& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&          hashAlg,
+                           const MessagePropertiesV2& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'MessagePropertiesV2'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const MessagePropertiesV2& lhs,
-                       const MessagePropertiesV2& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const MessagePropertiesV2& lhs,
-                       const MessagePropertiesV2& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&              stream,
-                                const MessagePropertiesV2& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const MessagePropertiesV2& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'MessagePropertiesV2'.
 
 }  // close package namespace
 
@@ -1965,6 +2201,12 @@ class MessageThrottleConfig {
     unsigned int d_highThreshold;
     unsigned int d_lowInterval;
     unsigned int d_highInterval;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const MessageThrottleConfig& rhs) const;
 
   public:
     // TYPES
@@ -2014,33 +2256,7 @@ class MessageThrottleConfig {
     // Create an object of type 'MessageThrottleConfig' having the default
     // value.
 
-    MessageThrottleConfig(const MessageThrottleConfig& original);
-    // Create an object of type 'MessageThrottleConfig' having the value of
-    // the specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    MessageThrottleConfig(MessageThrottleConfig&& original) = default;
-    // Create an object of type 'MessageThrottleConfig' having the value of
-    // the specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~MessageThrottleConfig();
-    // Destroy this object.
-
     // MANIPULATORS
-    MessageThrottleConfig& operator=(const MessageThrottleConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    MessageThrottleConfig& operator=(MessageThrottleConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -2144,33 +2360,43 @@ class MessageThrottleConfig {
 
     unsigned int highInterval() const;
     // Return the value of the "HighInterval" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const MessageThrottleConfig& lhs,
+                           const MessageThrottleConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const MessageThrottleConfig& lhs,
+                           const MessageThrottleConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                stream,
+                                    const MessageThrottleConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&            hashAlg,
+                           const MessageThrottleConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'MessageThrottleConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const MessageThrottleConfig& lhs,
-                       const MessageThrottleConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const MessageThrottleConfig& lhs,
-                       const MessageThrottleConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&                stream,
-                                const MessageThrottleConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&            hashAlg,
-                const MessageThrottleConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'MessageThrottleConfig'.
 
 }  // close package namespace
 
@@ -2349,29 +2575,41 @@ class Plugins {
     const bsl::vector<bsl::string>& enabled() const;
     // Return a reference offering non-modifiable access to the "Enabled"
     // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Plugins& lhs, const Plugins& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.libraries() == rhs.libraries() &&
+               lhs.enabled() == rhs.enabled();
+    }
+
+    friend bool operator!=(const Plugins& lhs, const Plugins& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const Plugins& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const Plugins& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'Plugins'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.libraries());
+        hashAppend(hashAlg, object.enabled());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const Plugins& lhs, const Plugins& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const Plugins& lhs, const Plugins& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream& stream, const Plugins& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Plugins& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'Plugins'.
 
 }  // close package namespace
 
@@ -2440,6 +2678,12 @@ class QueueOperationsConfig {
     int d_stopTimeoutMs;
     int d_shutdownTimeoutMs;
     int d_ackWindowSize;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const QueueOperationsConfig& rhs) const;
 
   public:
     // TYPES
@@ -2521,33 +2765,7 @@ class QueueOperationsConfig {
     // Create an object of type 'QueueOperationsConfig' having the default
     // value.
 
-    QueueOperationsConfig(const QueueOperationsConfig& original);
-    // Create an object of type 'QueueOperationsConfig' having the value of
-    // the specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    QueueOperationsConfig(QueueOperationsConfig&& original) = default;
-    // Create an object of type 'QueueOperationsConfig' having the value of
-    // the specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~QueueOperationsConfig();
-    // Destroy this object.
-
     // MANIPULATORS
-    QueueOperationsConfig& operator=(const QueueOperationsConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    QueueOperationsConfig& operator=(QueueOperationsConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -2714,33 +2932,43 @@ class QueueOperationsConfig {
 
     int ackWindowSize() const;
     // Return the value of the "AckWindowSize" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const QueueOperationsConfig& lhs,
+                           const QueueOperationsConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const QueueOperationsConfig& lhs,
+                           const QueueOperationsConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                stream,
+                                    const QueueOperationsConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&            hashAlg,
+                           const QueueOperationsConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'QueueOperationsConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const QueueOperationsConfig& lhs,
-                       const QueueOperationsConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const QueueOperationsConfig& lhs,
-                       const QueueOperationsConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&                stream,
-                                const QueueOperationsConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&            hashAlg,
-                const QueueOperationsConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'QueueOperationsConfig'.
 
 }  // close package namespace
 
@@ -2929,30 +3157,46 @@ class ResolvedDomain {
     const bsl::string& clusterName() const;
     // Return a reference offering non-modifiable access to the
     // "ClusterName" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ResolvedDomain& lhs,
+                           const ResolvedDomain& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.resolvedName() == rhs.resolvedName() &&
+               lhs.clusterName() == rhs.clusterName();
+    }
+
+    friend bool operator!=(const ResolvedDomain& lhs,
+                           const ResolvedDomain& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&         stream,
+                                    const ResolvedDomain& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&     hashAlg,
+                           const ResolvedDomain& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ResolvedDomain'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.resolvedName());
+        hashAppend(hashAlg, object.clusterName());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ResolvedDomain& lhs, const ResolvedDomain& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ResolvedDomain& lhs, const ResolvedDomain& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&         stream,
-                                const ResolvedDomain& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const ResolvedDomain& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ResolvedDomain'.
 
 }  // close package namespace
 
@@ -2960,297 +3204,6 @@ void hashAppend(t_HASH_ALGORITHM& hashAlg, const ResolvedDomain& object);
 
 BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
     mqbcfg::ResolvedDomain)
-
-namespace mqbcfg {
-
-// ======================
-// class StatPluginConfig
-// ======================
-
-class StatPluginConfig {
-    // INSTANCE DATA
-    bsl::vector<bsl::string> d_hosts;
-    bsl::string              d_name;
-    bsl::string              d_namespacePrefix;
-    bsl::string              d_instanceId;
-    int                      d_queueSize;
-    int                      d_queueHighWatermark;
-    int                      d_queueLowWatermark;
-    int                      d_publishInterval;
-
-  public:
-    // TYPES
-    enum {
-        ATTRIBUTE_ID_NAME                 = 0,
-        ATTRIBUTE_ID_QUEUE_SIZE           = 1,
-        ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK = 2,
-        ATTRIBUTE_ID_QUEUE_LOW_WATERMARK  = 3,
-        ATTRIBUTE_ID_PUBLISH_INTERVAL     = 4,
-        ATTRIBUTE_ID_NAMESPACE_PREFIX     = 5,
-        ATTRIBUTE_ID_HOSTS                = 6,
-        ATTRIBUTE_ID_INSTANCE_ID          = 7
-    };
-
-    enum { NUM_ATTRIBUTES = 8 };
-
-    enum {
-        ATTRIBUTE_INDEX_NAME                 = 0,
-        ATTRIBUTE_INDEX_QUEUE_SIZE           = 1,
-        ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK = 2,
-        ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK  = 3,
-        ATTRIBUTE_INDEX_PUBLISH_INTERVAL     = 4,
-        ATTRIBUTE_INDEX_NAMESPACE_PREFIX     = 5,
-        ATTRIBUTE_INDEX_HOSTS                = 6,
-        ATTRIBUTE_INDEX_INSTANCE_ID          = 7
-    };
-
-    // CONSTANTS
-    static const char CLASS_NAME[];
-
-    static const char DEFAULT_INITIALIZER_NAME[];
-
-    static const int DEFAULT_INITIALIZER_QUEUE_SIZE;
-
-    static const int DEFAULT_INITIALIZER_QUEUE_HIGH_WATERMARK;
-
-    static const int DEFAULT_INITIALIZER_QUEUE_LOW_WATERMARK;
-
-    static const int DEFAULT_INITIALIZER_PUBLISH_INTERVAL;
-
-    static const char DEFAULT_INITIALIZER_NAMESPACE_PREFIX[];
-
-    static const char DEFAULT_INITIALIZER_INSTANCE_ID[];
-
-    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
-
-  public:
-    // CLASS METHODS
-    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
-    // Return attribute information for the attribute indicated by the
-    // specified 'id' if the attribute exists, and 0 otherwise.
-
-    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
-                                                          int nameLength);
-    // Return attribute information for the attribute indicated by the
-    // specified 'name' of the specified 'nameLength' if the attribute
-    // exists, and 0 otherwise.
-
-    // CREATORS
-    explicit StatPluginConfig(bslma::Allocator* basicAllocator = 0);
-    // Create an object of type 'StatPluginConfig' having the default
-    // value.  Use the optionally specified 'basicAllocator' to supply
-    // memory.  If 'basicAllocator' is 0, the currently installed default
-    // allocator is used.
-
-    StatPluginConfig(const StatPluginConfig& original,
-                     bslma::Allocator*       basicAllocator = 0);
-    // Create an object of type 'StatPluginConfig' having the value of the
-    // specified 'original' object.  Use the optionally specified
-    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
-    // currently installed default allocator is used.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    StatPluginConfig(StatPluginConfig&& original) noexcept;
-    // Create an object of type 'StatPluginConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-
-    StatPluginConfig(StatPluginConfig&& original,
-                     bslma::Allocator*  basicAllocator);
-    // Create an object of type 'StatPluginConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-    // Use the optionally specified 'basicAllocator' to supply memory.  If
-    // 'basicAllocator' is 0, the currently installed default allocator is
-    // used.
-#endif
-
-    ~StatPluginConfig();
-    // Destroy this object.
-
-    // MANIPULATORS
-    StatPluginConfig& operator=(const StatPluginConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    StatPluginConfig& operator=(StatPluginConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
-    void reset();
-    // Reset this object to the default value (i.e., its value upon
-    // default construction).
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttributes(t_MANIPULATOR& manipulator);
-    // Invoke the specified 'manipulator' sequentially on the address of
-    // each (modifiable) attribute of this object, supplying 'manipulator'
-    // with the corresponding attribute information structure until such
-    // invocation returns a non-zero value.  Return the value from the
-    // last invocation of 'manipulator' (i.e., the invocation that
-    // terminated the sequence).
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
-    // Invoke the specified 'manipulator' on the address of
-    // the (modifiable) attribute indicated by the specified 'id',
-    // supplying 'manipulator' with the corresponding attribute
-    // information structure.  Return the value returned from the
-    // invocation of 'manipulator' if 'id' identifies an attribute of this
-    // class, and -1 otherwise.
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttribute(t_MANIPULATOR& manipulator,
-                            const char*    name,
-                            int            nameLength);
-    // Invoke the specified 'manipulator' on the address of
-    // the (modifiable) attribute indicated by the specified 'name' of the
-    // specified 'nameLength', supplying 'manipulator' with the
-    // corresponding attribute information structure.  Return the value
-    // returned from the invocation of 'manipulator' if 'name' identifies
-    // an attribute of this class, and -1 otherwise.
-
-    bsl::string& name();
-    // Return a reference to the modifiable "Name" attribute of this
-    // object.
-
-    int& queueSize();
-    // Return a reference to the modifiable "QueueSize" attribute of this
-    // object.
-
-    int& queueHighWatermark();
-    // Return a reference to the modifiable "QueueHighWatermark" attribute
-    // of this object.
-
-    int& queueLowWatermark();
-    // Return a reference to the modifiable "QueueLowWatermark" attribute
-    // of this object.
-
-    int& publishInterval();
-    // Return a reference to the modifiable "PublishInterval" attribute of
-    // this object.
-
-    bsl::string& namespacePrefix();
-    // Return a reference to the modifiable "NamespacePrefix" attribute of
-    // this object.
-
-    bsl::vector<bsl::string>& hosts();
-    // Return a reference to the modifiable "Hosts" attribute of this
-    // object.
-
-    bsl::string& instanceId();
-    // Return a reference to the modifiable "InstanceId" attribute of this
-    // object.
-
-    // ACCESSORS
-    bsl::ostream&
-    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
-    // Format this object to the specified output 'stream' at the
-    // optionally specified indentation 'level' and return a reference to
-    // the modifiable 'stream'.  If 'level' is specified, optionally
-    // specify 'spacesPerLevel', the number of spaces per indentation level
-    // for this and all of its nested objects.  Each line is indented by
-    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
-    // negative, suppress indentation of the first line.  If
-    // 'spacesPerLevel' is negative, suppress line breaks and format the
-    // entire output on one line.  If 'stream' is initially invalid, this
-    // operation has no effect.  Note that a trailing newline is provided
-    // in multiline mode only.
-
-    template <typename t_ACCESSOR>
-    int accessAttributes(t_ACCESSOR& accessor) const;
-    // Invoke the specified 'accessor' sequentially on each
-    // (non-modifiable) attribute of this object, supplying 'accessor'
-    // with the corresponding attribute information structure until such
-    // invocation returns a non-zero value.  Return the value from the
-    // last invocation of 'accessor' (i.e., the invocation that terminated
-    // the sequence).
-
-    template <typename t_ACCESSOR>
-    int accessAttribute(t_ACCESSOR& accessor, int id) const;
-    // Invoke the specified 'accessor' on the (non-modifiable) attribute
-    // of this object indicated by the specified 'id', supplying 'accessor'
-    // with the corresponding attribute information structure.  Return the
-    // value returned from the invocation of 'accessor' if 'id' identifies
-    // an attribute of this class, and -1 otherwise.
-
-    template <typename t_ACCESSOR>
-    int accessAttribute(t_ACCESSOR& accessor,
-                        const char* name,
-                        int         nameLength) const;
-    // Invoke the specified 'accessor' on the (non-modifiable) attribute
-    // of this object indicated by the specified 'name' of the specified
-    // 'nameLength', supplying 'accessor' with the corresponding attribute
-    // information structure.  Return the value returned from the
-    // invocation of 'accessor' if 'name' identifies an attribute of this
-    // class, and -1 otherwise.
-
-    const bsl::string& name() const;
-    // Return a reference offering non-modifiable access to the "Name"
-    // attribute of this object.
-
-    int queueSize() const;
-    // Return the value of the "QueueSize" attribute of this object.
-
-    int queueHighWatermark() const;
-    // Return the value of the "QueueHighWatermark" attribute of this
-    // object.
-
-    int queueLowWatermark() const;
-    // Return the value of the "QueueLowWatermark" attribute of this
-    // object.
-
-    int publishInterval() const;
-    // Return the value of the "PublishInterval" attribute of this object.
-
-    const bsl::string& namespacePrefix() const;
-    // Return a reference offering non-modifiable access to the
-    // "NamespacePrefix" attribute of this object.
-
-    const bsl::vector<bsl::string>& hosts() const;
-    // Return a reference offering non-modifiable access to the "Hosts"
-    // attribute of this object.
-
-    const bsl::string& instanceId() const;
-    // Return a reference offering non-modifiable access to the
-    // "InstanceId" attribute of this object.
-};
-
-// FREE OPERATORS
-inline bool operator==(const StatPluginConfig& lhs,
-                       const StatPluginConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const StatPluginConfig& lhs,
-                       const StatPluginConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&           stream,
-                                const StatPluginConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const StatPluginConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'StatPluginConfig'.
-
-}  // close package namespace
-
-// TRAITS
-
-BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
-    mqbcfg::StatPluginConfig)
 
 namespace mqbcfg {
 
@@ -3265,6 +3218,12 @@ class StatsPrinterConfig {
     int         d_maxAgeDays;
     int         d_rotateBytes;
     int         d_rotateDays;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const StatsPrinterConfig& rhs) const;
 
   public:
     // TYPES
@@ -3466,32 +3425,43 @@ class StatsPrinterConfig {
 
     int rotateDays() const;
     // Return the value of the "RotateDays" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const StatsPrinterConfig& lhs,
+                           const StatsPrinterConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const StatsPrinterConfig& lhs,
+                           const StatsPrinterConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&             stream,
+                                    const StatsPrinterConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&         hashAlg,
+                           const StatsPrinterConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'StatsPrinterConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const StatsPrinterConfig& lhs,
-                       const StatsPrinterConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const StatsPrinterConfig& lhs,
-                       const StatsPrinterConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&             stream,
-                                const StatsPrinterConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const StatsPrinterConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'StatsPrinterConfig'.
 
 }  // close package namespace
 
@@ -3568,6 +3538,12 @@ class StorageSyncConfig {
     int d_fileChunkSize;
     int d_partitionSyncEventSize;
 
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const StorageSyncConfig& rhs) const;
+
   public:
     // TYPES
     enum {
@@ -3636,33 +3612,7 @@ class StorageSyncConfig {
     // Create an object of type 'StorageSyncConfig' having the default
     // value.
 
-    StorageSyncConfig(const StorageSyncConfig& original);
-    // Create an object of type 'StorageSyncConfig' having the value of the
-    // specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    StorageSyncConfig(StorageSyncConfig&& original) = default;
-    // Create an object of type 'StorageSyncConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~StorageSyncConfig();
-    // Destroy this object.
-
     // MANIPULATORS
-    StorageSyncConfig& operator=(const StorageSyncConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    StorageSyncConfig& operator=(StorageSyncConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -3809,32 +3759,43 @@ class StorageSyncConfig {
     int partitionSyncEventSize() const;
     // Return the value of the "PartitionSyncEventSize" attribute of this
     // object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const StorageSyncConfig& lhs,
+                           const StorageSyncConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const StorageSyncConfig& lhs,
+                           const StorageSyncConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&            stream,
+                                    const StorageSyncConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&        hashAlg,
+                           const StorageSyncConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'StorageSyncConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const StorageSyncConfig& lhs,
-                       const StorageSyncConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const StorageSyncConfig& lhs,
-                       const StorageSyncConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&            stream,
-                                const StorageSyncConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const StorageSyncConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'StorageSyncConfig'.
 
 }  // close package namespace
 
@@ -3854,6 +3815,12 @@ class SyslogConfig {
     bsl::string d_logFormat;
     bsl::string d_verbosity;
     bool        d_enabled;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const SyslogConfig& rhs) const;
 
   public:
     // TYPES
@@ -4043,29 +4010,41 @@ class SyslogConfig {
     const bsl::string& verbosity() const;
     // Return a reference offering non-modifiable access to the "Verbosity"
     // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const SyslogConfig& lhs, const SyslogConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const SyslogConfig& lhs, const SyslogConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&       stream,
+                                    const SyslogConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&   hashAlg,
+                           const SyslogConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'SyslogConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const SyslogConfig& lhs, const SyslogConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const SyslogConfig& lhs, const SyslogConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream& stream, const SyslogConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const SyslogConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'SyslogConfig'.
 
 }  // close package namespace
 
@@ -4241,33 +4220,44 @@ class TcpClusterNodeConnection {
     const bsl::string& endpoint() const;
     // Return a reference offering non-modifiable access to the "Endpoint"
     // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const TcpClusterNodeConnection& lhs,
+                           const TcpClusterNodeConnection& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.endpoint() == rhs.endpoint();
+    }
+
+    friend bool operator!=(const TcpClusterNodeConnection& lhs,
+                           const TcpClusterNodeConnection& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                   stream,
+                                    const TcpClusterNodeConnection& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&               hashAlg,
+                           const TcpClusterNodeConnection& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'TcpClusterNodeConnection'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.endpoint());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const TcpClusterNodeConnection& lhs,
-                       const TcpClusterNodeConnection& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const TcpClusterNodeConnection& lhs,
-                       const TcpClusterNodeConnection& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&                   stream,
-                                const TcpClusterNodeConnection& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&               hashAlg,
-                const TcpClusterNodeConnection& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'TcpClusterNodeConnection'.
 
 }  // close package namespace
 
@@ -4278,74 +4268,31 @@ BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
 
 namespace mqbcfg {
 
-// ========================
-// class TcpInterfaceConfig
-// ========================
+// ==========================
+// class TcpInterfaceListener
+// ==========================
 
-class TcpInterfaceConfig {
-    // lowWatermark.........: highWatermark........: Watermarks used for
-    // channels with a client or proxy.  nodeLowWatermark.....:
-    // nodeHighWatermark....: Reduced watermarks for communication between
-    // cluster nodes where BlazingMQ maintains its own cache.
-    // heartbeatIntervalMs..: How often (in milliseconds) to check if the
-    // channel received data, and emit heartbeat.  0 to globally disable.
-    // useNtf...............: Use the new NTF based TCP transport library
-    // instead of the existing one based on BTE
+class TcpInterfaceListener {
+    // This type describes the information needed for the broker to open a TCP
+    // listener.
+    // name.................: A name to associate this listener to.
+    // port.................: The port this listener will accept connections
+    // on.
 
     // INSTANCE DATA
-    bsls::Types::Int64 d_lowWatermark;
-    bsls::Types::Int64 d_highWatermark;
-    bsls::Types::Int64 d_nodeLowWatermark;
-    bsls::Types::Int64 d_nodeHighWatermark;
-    bsl::string        d_name;
-    int                d_port;
-    int                d_ioThreads;
-    int                d_maxConnections;
-    int                d_heartbeatIntervalMs;
-    bool               d_useNtf;
+    bsl::string d_name;
+    int         d_port;
 
   public:
     // TYPES
-    enum {
-        ATTRIBUTE_ID_NAME                  = 0,
-        ATTRIBUTE_ID_PORT                  = 1,
-        ATTRIBUTE_ID_IO_THREADS            = 2,
-        ATTRIBUTE_ID_MAX_CONNECTIONS       = 3,
-        ATTRIBUTE_ID_LOW_WATERMARK         = 4,
-        ATTRIBUTE_ID_HIGH_WATERMARK        = 5,
-        ATTRIBUTE_ID_NODE_LOW_WATERMARK    = 6,
-        ATTRIBUTE_ID_NODE_HIGH_WATERMARK   = 7,
-        ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS = 8,
-        ATTRIBUTE_ID_USE_NTF               = 9
-    };
+    enum { ATTRIBUTE_ID_NAME = 0, ATTRIBUTE_ID_PORT = 1 };
 
-    enum { NUM_ATTRIBUTES = 10 };
+    enum { NUM_ATTRIBUTES = 2 };
 
-    enum {
-        ATTRIBUTE_INDEX_NAME                  = 0,
-        ATTRIBUTE_INDEX_PORT                  = 1,
-        ATTRIBUTE_INDEX_IO_THREADS            = 2,
-        ATTRIBUTE_INDEX_MAX_CONNECTIONS       = 3,
-        ATTRIBUTE_INDEX_LOW_WATERMARK         = 4,
-        ATTRIBUTE_INDEX_HIGH_WATERMARK        = 5,
-        ATTRIBUTE_INDEX_NODE_LOW_WATERMARK    = 6,
-        ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK   = 7,
-        ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS = 8,
-        ATTRIBUTE_INDEX_USE_NTF               = 9
-    };
+    enum { ATTRIBUTE_INDEX_NAME = 0, ATTRIBUTE_INDEX_PORT = 1 };
 
     // CONSTANTS
     static const char CLASS_NAME[];
-
-    static const int DEFAULT_INITIALIZER_MAX_CONNECTIONS;
-
-    static const bsls::Types::Int64 DEFAULT_INITIALIZER_NODE_LOW_WATERMARK;
-
-    static const bsls::Types::Int64 DEFAULT_INITIALIZER_NODE_HIGH_WATERMARK;
-
-    static const int DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS;
-
-    static const bool DEFAULT_INITIALIZER_USE_NTF;
 
     static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
 
@@ -4362,29 +4309,29 @@ class TcpInterfaceConfig {
     // exists, and 0 otherwise.
 
     // CREATORS
-    explicit TcpInterfaceConfig(bslma::Allocator* basicAllocator = 0);
-    // Create an object of type 'TcpInterfaceConfig' having the default
+    explicit TcpInterfaceListener(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'TcpInterfaceListener' having the default
     // value.  Use the optionally specified 'basicAllocator' to supply
     // memory.  If 'basicAllocator' is 0, the currently installed default
     // allocator is used.
 
-    TcpInterfaceConfig(const TcpInterfaceConfig& original,
-                       bslma::Allocator*         basicAllocator = 0);
-    // Create an object of type 'TcpInterfaceConfig' having the value of
+    TcpInterfaceListener(const TcpInterfaceListener& original,
+                         bslma::Allocator*           basicAllocator = 0);
+    // Create an object of type 'TcpInterfaceListener' having the value of
     // the specified 'original' object.  Use the optionally specified
     // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
     // currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    TcpInterfaceConfig(TcpInterfaceConfig&& original) noexcept;
-    // Create an object of type 'TcpInterfaceConfig' having the value of
+    TcpInterfaceListener(TcpInterfaceListener&& original) noexcept;
+    // Create an object of type 'TcpInterfaceListener' having the value of
     // the specified 'original' object.  After performing this action, the
     // 'original' object will be left in a valid, but unspecified state.
 
-    TcpInterfaceConfig(TcpInterfaceConfig&& original,
-                       bslma::Allocator*    basicAllocator);
-    // Create an object of type 'TcpInterfaceConfig' having the value of
+    TcpInterfaceListener(TcpInterfaceListener&& original,
+                         bslma::Allocator*      basicAllocator);
+    // Create an object of type 'TcpInterfaceListener' having the value of
     // the specified 'original' object.  After performing this action, the
     // 'original' object will be left in a valid, but unspecified state.
     // Use the optionally specified 'basicAllocator' to supply memory.  If
@@ -4392,16 +4339,16 @@ class TcpInterfaceConfig {
     // used.
 #endif
 
-    ~TcpInterfaceConfig();
+    ~TcpInterfaceListener();
     // Destroy this object.
 
     // MANIPULATORS
-    TcpInterfaceConfig& operator=(const TcpInterfaceConfig& rhs);
+    TcpInterfaceListener& operator=(const TcpInterfaceListener& rhs);
     // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    TcpInterfaceConfig& operator=(TcpInterfaceConfig&& rhs);
+    TcpInterfaceListener& operator=(TcpInterfaceListener&& rhs);
     // Assign to this object the value of the specified 'rhs' object.
     // After performing this action, the 'rhs' object will be left in a
     // valid, but unspecified state.
@@ -4446,38 +4393,6 @@ class TcpInterfaceConfig {
 
     int& port();
     // Return a reference to the modifiable "Port" attribute of this
-    // object.
-
-    int& ioThreads();
-    // Return a reference to the modifiable "IoThreads" attribute of this
-    // object.
-
-    int& maxConnections();
-    // Return a reference to the modifiable "MaxConnections" attribute of
-    // this object.
-
-    bsls::Types::Int64& lowWatermark();
-    // Return a reference to the modifiable "LowWatermark" attribute of
-    // this object.
-
-    bsls::Types::Int64& highWatermark();
-    // Return a reference to the modifiable "HighWatermark" attribute of
-    // this object.
-
-    bsls::Types::Int64& nodeLowWatermark();
-    // Return a reference to the modifiable "NodeLowWatermark" attribute of
-    // this object.
-
-    bsls::Types::Int64& nodeHighWatermark();
-    // Return a reference to the modifiable "NodeHighWatermark" attribute
-    // of this object.
-
-    int& heartbeatIntervalMs();
-    // Return a reference to the modifiable "HeartbeatIntervalMs" attribute
-    // of this object.
-
-    bool& useNtf();
-    // Return a reference to the modifiable "UseNtf" attribute of this
     // object.
 
     // ACCESSORS
@@ -4530,64 +4445,51 @@ class TcpInterfaceConfig {
     int port() const;
     // Return the value of the "Port" attribute of this object.
 
-    int ioThreads() const;
-    // Return the value of the "IoThreads" attribute of this object.
+    // HIDDEN FRIENDS
+    friend bool operator==(const TcpInterfaceListener& lhs,
+                           const TcpInterfaceListener& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.name() == rhs.name() && lhs.port() == rhs.port();
+    }
 
-    int maxConnections() const;
-    // Return the value of the "MaxConnections" attribute of this object.
+    friend bool operator!=(const TcpInterfaceListener& lhs,
+                           const TcpInterfaceListener& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
 
-    bsls::Types::Int64 lowWatermark() const;
-    // Return the value of the "LowWatermark" attribute of this object.
+    friend bsl::ostream& operator<<(bsl::ostream&               stream,
+                                    const TcpInterfaceListener& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
 
-    bsls::Types::Int64 highWatermark() const;
-    // Return the value of the "HighWatermark" attribute of this object.
-
-    bsls::Types::Int64 nodeLowWatermark() const;
-    // Return the value of the "NodeLowWatermark" attribute of this object.
-
-    bsls::Types::Int64 nodeHighWatermark() const;
-    // Return the value of the "NodeHighWatermark" attribute of this
-    // object.
-
-    int heartbeatIntervalMs() const;
-    // Return the value of the "HeartbeatIntervalMs" attribute of this
-    // object.
-
-    bool useNtf() const;
-    // Return the value of the "UseNtf" attribute of this object.
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&           hashAlg,
+                           const TcpInterfaceListener& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'TcpInterfaceListener'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.name());
+        hashAppend(hashAlg, object.port());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const TcpInterfaceConfig& lhs,
-                       const TcpInterfaceConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const TcpInterfaceConfig& lhs,
-                       const TcpInterfaceConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&             stream,
-                                const TcpInterfaceConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const TcpInterfaceConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'TcpInterfaceConfig'.
 
 }  // close package namespace
 
 // TRAITS
 
 BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
-    mqbcfg::TcpInterfaceConfig)
+    mqbcfg::TcpInterfaceListener)
 
 namespace mqbcfg {
 
@@ -4767,33 +4669,46 @@ class VirtualClusterInformation {
 
     int selfNodeId() const;
     // Return the value of the "SelfNodeId" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const VirtualClusterInformation& lhs,
+                           const VirtualClusterInformation& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.name() == rhs.name() &&
+               lhs.selfNodeId() == rhs.selfNodeId();
+    }
+
+    friend bool operator!=(const VirtualClusterInformation& lhs,
+                           const VirtualClusterInformation& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                    stream,
+                                    const VirtualClusterInformation& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&                hashAlg,
+                           const VirtualClusterInformation& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'VirtualClusterInformation'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.name());
+        hashAppend(hashAlg, object.selfNodeId());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const VirtualClusterInformation& lhs,
-                       const VirtualClusterInformation& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const VirtualClusterInformation& lhs,
-                       const VirtualClusterInformation& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&                    stream,
-                                const VirtualClusterInformation& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                const VirtualClusterInformation& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'VirtualClusterInformation'.
 
 }  // close package namespace
 
@@ -4810,7 +4725,7 @@ namespace mqbcfg {
 
 class ClusterNodeConnection {
     // Choice of all the various transport mode available to establish
-    // connetivity with a node.
+    // connectivity with a node.
     // tcp.: TCP connectivity
 
     // INSTANCE DATA
@@ -4820,6 +4735,12 @@ class ClusterNodeConnection {
 
     int               d_selectionId;
     bslma::Allocator* d_allocator_p;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const ClusterNodeConnection& rhs) const;
 
   public:
     // TYPES
@@ -4971,32 +4892,46 @@ class ClusterNodeConnection {
 
     const char* selectionName() const;
     // Return the symbolic name of the current selection of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ClusterNodeConnection& lhs,
+                           const ClusterNodeConnection& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects have the same
+    // value, and 'false' otherwise.  Two 'ClusterNodeConnection' objects
+    // have the same value if either the selections in both objects have
+    // the same ids and the same values, or both selections are undefined.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const ClusterNodeConnection& lhs,
+                           const ClusterNodeConnection& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' objects do not have
+    // the same values, as determined by 'operator==', and 'false'
+    // otherwise.
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                stream,
+                                    const ClusterNodeConnection& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&            hashAlg,
+                           const ClusterNodeConnection& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ClusterNodeConnection'.
+    {
+        return object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ClusterNodeConnection& lhs,
-                       const ClusterNodeConnection& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' objects have the same
-// value, and 'false' otherwise.  Two 'ClusterNodeConnection' objects have the
-// same value if either the selections in both objects have the same ids and
-// the same values, or both selections are undefined.
-
-inline bool operator!=(const ClusterNodeConnection& lhs,
-                       const ClusterNodeConnection& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' objects do not have the
-// same values, as determined by 'operator==', and 'false' otherwise.
-
-inline bsl::ostream& operator<<(bsl::ostream&                stream,
-                                const ClusterNodeConnection& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&            hashAlg,
-                const ClusterNodeConnection& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ClusterNodeConnection'.
 
 }  // close package namespace
 
@@ -5052,34 +4987,7 @@ class DispatcherProcessorConfig {
     // Create an object of type 'DispatcherProcessorConfig' having the
     // default value.
 
-    DispatcherProcessorConfig(const DispatcherProcessorConfig& original);
-    // Create an object of type 'DispatcherProcessorConfig' having the
-    // value of the specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    DispatcherProcessorConfig(DispatcherProcessorConfig&& original) = default;
-    // Create an object of type 'DispatcherProcessorConfig' having the
-    // value of the specified 'original' object.  After performing this
-    // action, the 'original' object will be left in a valid, but
-    // unspecified state.
-#endif
-
-    ~DispatcherProcessorConfig();
-    // Destroy this object.
-
     // MANIPULATORS
-    DispatcherProcessorConfig& operator=(const DispatcherProcessorConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    DispatcherProcessorConfig& operator=(DispatcherProcessorConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -5170,33 +5078,46 @@ class DispatcherProcessorConfig {
     const DispatcherProcessorParameters& processorConfig() const;
     // Return a reference offering non-modifiable access to the
     // "ProcessorConfig" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const DispatcherProcessorConfig& lhs,
+                           const DispatcherProcessorConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.numProcessors() == rhs.numProcessors() &&
+               lhs.processorConfig() == rhs.processorConfig();
+    }
+
+    friend bool operator!=(const DispatcherProcessorConfig& lhs,
+                           const DispatcherProcessorConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                    stream,
+                                    const DispatcherProcessorConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&                hashAlg,
+                           const DispatcherProcessorConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'DispatcherProcessorConfig'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.numProcessors());
+        hashAppend(hashAlg, object.processorConfig());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const DispatcherProcessorConfig& lhs,
-                       const DispatcherProcessorConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const DispatcherProcessorConfig& lhs,
-                       const DispatcherProcessorConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&                    stream,
-                                const DispatcherProcessorConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                const DispatcherProcessorConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'DispatcherProcessorConfig'.
 
 }  // close package namespace
 
@@ -5221,8 +5142,15 @@ class LogController {
     bsl::string              d_bslsLogSeverityThreshold;
     bsl::string              d_consoleSeverityThreshold;
     SyslogConfig             d_syslog;
+    LogDumpConfig            d_logDump;
     int                      d_fileMaxAgeDays;
     int                      d_rotationBytes;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const LogController& rhs) const;
 
   public:
     // TYPES
@@ -5236,10 +5164,11 @@ class LogController {
         ATTRIBUTE_ID_BSLS_LOG_SEVERITY_THRESHOLD = 6,
         ATTRIBUTE_ID_CONSOLE_SEVERITY_THRESHOLD  = 7,
         ATTRIBUTE_ID_CATEGORIES                  = 8,
-        ATTRIBUTE_ID_SYSLOG                      = 9
+        ATTRIBUTE_ID_SYSLOG                      = 9,
+        ATTRIBUTE_ID_LOG_DUMP                    = 10
     };
 
-    enum { NUM_ATTRIBUTES = 10 };
+    enum { NUM_ATTRIBUTES = 11 };
 
     enum {
         ATTRIBUTE_INDEX_FILE_NAME                   = 0,
@@ -5251,7 +5180,8 @@ class LogController {
         ATTRIBUTE_INDEX_BSLS_LOG_SEVERITY_THRESHOLD = 6,
         ATTRIBUTE_INDEX_CONSOLE_SEVERITY_THRESHOLD  = 7,
         ATTRIBUTE_INDEX_CATEGORIES                  = 8,
-        ATTRIBUTE_INDEX_SYSLOG                      = 9
+        ATTRIBUTE_INDEX_SYSLOG                      = 9,
+        ATTRIBUTE_INDEX_LOG_DUMP                    = 10
     };
 
     // CONSTANTS
@@ -5391,6 +5321,10 @@ class LogController {
     // Return a reference to the modifiable "Syslog" attribute of this
     // object.
 
+    LogDumpConfig& logDump();
+    // Return a reference to the modifiable "LogDump" attribute of this
+    // object.
+
     // ACCESSORS
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
@@ -5471,30 +5405,45 @@ class LogController {
     const SyslogConfig& syslog() const;
     // Return a reference offering non-modifiable access to the "Syslog"
     // attribute of this object.
+
+    const LogDumpConfig& logDump() const;
+    // Return a reference offering non-modifiable access to the "LogDump"
+    // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const LogController& lhs, const LogController& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const LogController& lhs, const LogController& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&        stream,
+                                    const LogController& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&    hashAlg,
+                           const LogController& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'LogController'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const LogController& lhs, const LogController& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const LogController& lhs, const LogController& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&        stream,
-                                const LogController& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const LogController& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'LogController'.
 
 }  // close package namespace
 
@@ -5502,213 +5451,6 @@ void hashAppend(t_HASH_ALGORITHM& hashAlg, const LogController& object);
 
 BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
     mqbcfg::LogController)
-
-namespace mqbcfg {
-
-// =======================
-// class NetworkInterfaces
-// =======================
-
-class NetworkInterfaces {
-    // INSTANCE DATA
-    bdlb::NullableValue<TcpInterfaceConfig> d_tcpInterface;
-    Heartbeat                               d_heartbeats;
-
-  public:
-    // TYPES
-    enum { ATTRIBUTE_ID_HEARTBEATS = 0, ATTRIBUTE_ID_TCP_INTERFACE = 1 };
-
-    enum { NUM_ATTRIBUTES = 2 };
-
-    enum { ATTRIBUTE_INDEX_HEARTBEATS = 0, ATTRIBUTE_INDEX_TCP_INTERFACE = 1 };
-
-    // CONSTANTS
-    static const char CLASS_NAME[];
-
-    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
-
-  public:
-    // CLASS METHODS
-    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
-    // Return attribute information for the attribute indicated by the
-    // specified 'id' if the attribute exists, and 0 otherwise.
-
-    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
-                                                          int nameLength);
-    // Return attribute information for the attribute indicated by the
-    // specified 'name' of the specified 'nameLength' if the attribute
-    // exists, and 0 otherwise.
-
-    // CREATORS
-    explicit NetworkInterfaces(bslma::Allocator* basicAllocator = 0);
-    // Create an object of type 'NetworkInterfaces' having the default
-    // value.  Use the optionally specified 'basicAllocator' to supply
-    // memory.  If 'basicAllocator' is 0, the currently installed default
-    // allocator is used.
-
-    NetworkInterfaces(const NetworkInterfaces& original,
-                      bslma::Allocator*        basicAllocator = 0);
-    // Create an object of type 'NetworkInterfaces' having the value of the
-    // specified 'original' object.  Use the optionally specified
-    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
-    // currently installed default allocator is used.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    NetworkInterfaces(NetworkInterfaces&& original) noexcept;
-    // Create an object of type 'NetworkInterfaces' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-
-    NetworkInterfaces(NetworkInterfaces&& original,
-                      bslma::Allocator*   basicAllocator);
-    // Create an object of type 'NetworkInterfaces' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-    // Use the optionally specified 'basicAllocator' to supply memory.  If
-    // 'basicAllocator' is 0, the currently installed default allocator is
-    // used.
-#endif
-
-    ~NetworkInterfaces();
-    // Destroy this object.
-
-    // MANIPULATORS
-    NetworkInterfaces& operator=(const NetworkInterfaces& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    NetworkInterfaces& operator=(NetworkInterfaces&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
-    void reset();
-    // Reset this object to the default value (i.e., its value upon
-    // default construction).
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttributes(t_MANIPULATOR& manipulator);
-    // Invoke the specified 'manipulator' sequentially on the address of
-    // each (modifiable) attribute of this object, supplying 'manipulator'
-    // with the corresponding attribute information structure until such
-    // invocation returns a non-zero value.  Return the value from the
-    // last invocation of 'manipulator' (i.e., the invocation that
-    // terminated the sequence).
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
-    // Invoke the specified 'manipulator' on the address of
-    // the (modifiable) attribute indicated by the specified 'id',
-    // supplying 'manipulator' with the corresponding attribute
-    // information structure.  Return the value returned from the
-    // invocation of 'manipulator' if 'id' identifies an attribute of this
-    // class, and -1 otherwise.
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttribute(t_MANIPULATOR& manipulator,
-                            const char*    name,
-                            int            nameLength);
-    // Invoke the specified 'manipulator' on the address of
-    // the (modifiable) attribute indicated by the specified 'name' of the
-    // specified 'nameLength', supplying 'manipulator' with the
-    // corresponding attribute information structure.  Return the value
-    // returned from the invocation of 'manipulator' if 'name' identifies
-    // an attribute of this class, and -1 otherwise.
-
-    Heartbeat& heartbeats();
-    // Return a reference to the modifiable "Heartbeats" attribute of this
-    // object.
-
-    bdlb::NullableValue<TcpInterfaceConfig>& tcpInterface();
-    // Return a reference to the modifiable "TcpInterface" attribute of
-    // this object.
-
-    // ACCESSORS
-    bsl::ostream&
-    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
-    // Format this object to the specified output 'stream' at the
-    // optionally specified indentation 'level' and return a reference to
-    // the modifiable 'stream'.  If 'level' is specified, optionally
-    // specify 'spacesPerLevel', the number of spaces per indentation level
-    // for this and all of its nested objects.  Each line is indented by
-    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
-    // negative, suppress indentation of the first line.  If
-    // 'spacesPerLevel' is negative, suppress line breaks and format the
-    // entire output on one line.  If 'stream' is initially invalid, this
-    // operation has no effect.  Note that a trailing newline is provided
-    // in multiline mode only.
-
-    template <typename t_ACCESSOR>
-    int accessAttributes(t_ACCESSOR& accessor) const;
-    // Invoke the specified 'accessor' sequentially on each
-    // (non-modifiable) attribute of this object, supplying 'accessor'
-    // with the corresponding attribute information structure until such
-    // invocation returns a non-zero value.  Return the value from the
-    // last invocation of 'accessor' (i.e., the invocation that terminated
-    // the sequence).
-
-    template <typename t_ACCESSOR>
-    int accessAttribute(t_ACCESSOR& accessor, int id) const;
-    // Invoke the specified 'accessor' on the (non-modifiable) attribute
-    // of this object indicated by the specified 'id', supplying 'accessor'
-    // with the corresponding attribute information structure.  Return the
-    // value returned from the invocation of 'accessor' if 'id' identifies
-    // an attribute of this class, and -1 otherwise.
-
-    template <typename t_ACCESSOR>
-    int accessAttribute(t_ACCESSOR& accessor,
-                        const char* name,
-                        int         nameLength) const;
-    // Invoke the specified 'accessor' on the (non-modifiable) attribute
-    // of this object indicated by the specified 'name' of the specified
-    // 'nameLength', supplying 'accessor' with the corresponding attribute
-    // information structure.  Return the value returned from the
-    // invocation of 'accessor' if 'name' identifies an attribute of this
-    // class, and -1 otherwise.
-
-    const Heartbeat& heartbeats() const;
-    // Return a reference offering non-modifiable access to the
-    // "Heartbeats" attribute of this object.
-
-    const bdlb::NullableValue<TcpInterfaceConfig>& tcpInterface() const;
-    // Return a reference offering non-modifiable access to the
-    // "TcpInterface" attribute of this object.
-};
-
-// FREE OPERATORS
-inline bool operator==(const NetworkInterfaces& lhs,
-                       const NetworkInterfaces& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const NetworkInterfaces& lhs,
-                       const NetworkInterfaces& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&            stream,
-                                const NetworkInterfaces& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const NetworkInterfaces& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'NetworkInterfaces'.
-
-}  // close package namespace
-
-// TRAITS
-
-BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
-    mqbcfg::NetworkInterfaces)
 
 namespace mqbcfg {
 
@@ -5725,6 +5467,7 @@ class PartitionConfig {
     // maxDataFileSize......: maximum size of partitions' data file
     // maxJournalFileSize...: maximum size of partitions' journal file
     // maxQlistFileSize.....: maximum size of partitions' qlist file
+    // maxCSLFileSize.......: maximum size of partitions' CSL file
     // preallocate..........: flag to indicate whether files should be
     // preallocated on disk maxArchivedFileSets..: maximum number of archived
     // file sets per partition to keep prefaultPages........: flag to indicate
@@ -5737,6 +5480,7 @@ class PartitionConfig {
     bsls::Types::Uint64 d_maxDataFileSize;
     bsls::Types::Uint64 d_maxJournalFileSize;
     bsls::Types::Uint64 d_maxQlistFileSize;
+    bsls::Types::Uint64 d_maxCSLFileSize;
     bsl::string         d_location;
     bsl::string         d_archiveLocation;
     StorageSyncConfig   d_syncConfig;
@@ -5745,6 +5489,12 @@ class PartitionConfig {
     bool                d_preallocate;
     bool                d_prefaultPages;
     bool                d_flushAtShutdown;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const PartitionConfig& rhs) const;
 
   public:
     // TYPES
@@ -5755,14 +5505,15 @@ class PartitionConfig {
         ATTRIBUTE_ID_MAX_DATA_FILE_SIZE     = 3,
         ATTRIBUTE_ID_MAX_JOURNAL_FILE_SIZE  = 4,
         ATTRIBUTE_ID_MAX_QLIST_FILE_SIZE    = 5,
-        ATTRIBUTE_ID_PREALLOCATE            = 6,
-        ATTRIBUTE_ID_MAX_ARCHIVED_FILE_SETS = 7,
-        ATTRIBUTE_ID_PREFAULT_PAGES         = 8,
-        ATTRIBUTE_ID_FLUSH_AT_SHUTDOWN      = 9,
-        ATTRIBUTE_ID_SYNC_CONFIG            = 10
+        ATTRIBUTE_ID_MAX_C_S_L_FILE_SIZE    = 6,
+        ATTRIBUTE_ID_PREALLOCATE            = 7,
+        ATTRIBUTE_ID_MAX_ARCHIVED_FILE_SETS = 8,
+        ATTRIBUTE_ID_PREFAULT_PAGES         = 9,
+        ATTRIBUTE_ID_FLUSH_AT_SHUTDOWN      = 10,
+        ATTRIBUTE_ID_SYNC_CONFIG            = 11
     };
 
-    enum { NUM_ATTRIBUTES = 11 };
+    enum { NUM_ATTRIBUTES = 12 };
 
     enum {
         ATTRIBUTE_INDEX_NUM_PARTITIONS         = 0,
@@ -5771,15 +5522,18 @@ class PartitionConfig {
         ATTRIBUTE_INDEX_MAX_DATA_FILE_SIZE     = 3,
         ATTRIBUTE_INDEX_MAX_JOURNAL_FILE_SIZE  = 4,
         ATTRIBUTE_INDEX_MAX_QLIST_FILE_SIZE    = 5,
-        ATTRIBUTE_INDEX_PREALLOCATE            = 6,
-        ATTRIBUTE_INDEX_MAX_ARCHIVED_FILE_SETS = 7,
-        ATTRIBUTE_INDEX_PREFAULT_PAGES         = 8,
-        ATTRIBUTE_INDEX_FLUSH_AT_SHUTDOWN      = 9,
-        ATTRIBUTE_INDEX_SYNC_CONFIG            = 10
+        ATTRIBUTE_INDEX_MAX_C_S_L_FILE_SIZE    = 6,
+        ATTRIBUTE_INDEX_PREALLOCATE            = 7,
+        ATTRIBUTE_INDEX_MAX_ARCHIVED_FILE_SETS = 8,
+        ATTRIBUTE_INDEX_PREFAULT_PAGES         = 9,
+        ATTRIBUTE_INDEX_FLUSH_AT_SHUTDOWN      = 10,
+        ATTRIBUTE_INDEX_SYNC_CONFIG            = 11
     };
 
     // CONSTANTS
     static const char CLASS_NAME[];
+
+    static const bsls::Types::Uint64 DEFAULT_INITIALIZER_MAX_C_S_L_FILE_SIZE;
 
     static const bool DEFAULT_INITIALIZER_PREALLOCATE;
 
@@ -5904,6 +5658,10 @@ class PartitionConfig {
     // Return a reference to the modifiable "MaxQlistFileSize" attribute of
     // this object.
 
+    bsls::Types::Uint64& maxCSLFileSize();
+    // Return a reference to the modifiable "MaxCSLFileSize" attribute of
+    // this object.
+
     bool& preallocate();
     // Return a reference to the modifiable "Preallocate" attribute of this
     // object.
@@ -5988,6 +5746,9 @@ class PartitionConfig {
     bsls::Types::Uint64 maxQlistFileSize() const;
     // Return the value of the "MaxQlistFileSize" attribute of this object.
 
+    bsls::Types::Uint64 maxCSLFileSize() const;
+    // Return the value of the "MaxCSLFileSize" attribute of this object.
+
     bool preallocate() const;
     // Return the value of the "Preallocate" attribute of this object.
 
@@ -6004,30 +5765,43 @@ class PartitionConfig {
     const StorageSyncConfig& syncConfig() const;
     // Return a reference offering non-modifiable access to the
     // "SyncConfig" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const PartitionConfig& lhs,
+                           const PartitionConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const PartitionConfig& lhs,
+                           const PartitionConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&          stream,
+                                    const PartitionConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&      hashAlg,
+                           const PartitionConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'PartitionConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const PartitionConfig& lhs, const PartitionConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const PartitionConfig& lhs, const PartitionConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&          stream,
-                                const PartitionConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const PartitionConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'PartitionConfig'.
 
 }  // close package namespace
 
@@ -6038,36 +5812,44 @@ BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
 
 namespace mqbcfg {
 
-// =================
-// class StatsConfig
-// =================
+// ================================
+// class StatPluginConfigPrometheus
+// ================================
 
-class StatsConfig {
+class StatPluginConfigPrometheus {
     // INSTANCE DATA
-    bsl::vector<StatPluginConfig> d_plugins;
-    StatsPrinterConfig            d_printer;
-    int                           d_snapshotInterval;
+    bsl::string       d_host;
+    int               d_port;
+    ExportMode::Value d_mode;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
 
   public:
     // TYPES
     enum {
-        ATTRIBUTE_ID_SNAPSHOT_INTERVAL = 0,
-        ATTRIBUTE_ID_PLUGINS           = 1,
-        ATTRIBUTE_ID_PRINTER           = 2
+        ATTRIBUTE_ID_MODE = 0,
+        ATTRIBUTE_ID_HOST = 1,
+        ATTRIBUTE_ID_PORT = 2
     };
 
     enum { NUM_ATTRIBUTES = 3 };
 
     enum {
-        ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL = 0,
-        ATTRIBUTE_INDEX_PLUGINS           = 1,
-        ATTRIBUTE_INDEX_PRINTER           = 2
+        ATTRIBUTE_INDEX_MODE = 0,
+        ATTRIBUTE_INDEX_HOST = 1,
+        ATTRIBUTE_INDEX_PORT = 2
     };
 
     // CONSTANTS
     static const char CLASS_NAME[];
 
-    static const int DEFAULT_INITIALIZER_SNAPSHOT_INTERVAL;
+    static const ExportMode::Value DEFAULT_INITIALIZER_MODE;
+
+    static const char DEFAULT_INITIALIZER_HOST[];
+
+    static const int DEFAULT_INITIALIZER_PORT;
 
     static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
 
@@ -6084,45 +5866,48 @@ class StatsConfig {
     // exists, and 0 otherwise.
 
     // CREATORS
-    explicit StatsConfig(bslma::Allocator* basicAllocator = 0);
-    // Create an object of type 'StatsConfig' having the default value.
-    // Use the optionally specified 'basicAllocator' to supply memory.  If
-    // 'basicAllocator' is 0, the currently installed default allocator is
-    // used.
+    explicit StatPluginConfigPrometheus(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'StatPluginConfigPrometheus' having the
+    // default value.  Use the optionally specified 'basicAllocator' to
+    // supply memory.  If 'basicAllocator' is 0, the currently installed
+    // default allocator is used.
 
-    StatsConfig(const StatsConfig& original,
-                bslma::Allocator*  basicAllocator = 0);
-    // Create an object of type 'StatsConfig' having the value of the
-    // specified 'original' object.  Use the optionally specified
-    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
-    // currently installed default allocator is used.
+    StatPluginConfigPrometheus(const StatPluginConfigPrometheus& original,
+                               bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'StatPluginConfigPrometheus' having the
+    // value of the specified 'original' object.  Use the optionally
+    // specified 'basicAllocator' to supply memory.  If 'basicAllocator' is
+    // 0, the currently installed default allocator is used.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    StatsConfig(StatsConfig&& original) noexcept;
-    // Create an object of type 'StatsConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
+    StatPluginConfigPrometheus(StatPluginConfigPrometheus&& original) noexcept;
+    // Create an object of type 'StatPluginConfigPrometheus' having the
+    // value of the specified 'original' object.  After performing this
+    // action, the 'original' object will be left in a valid, but
+    // unspecified state.
 
-    StatsConfig(StatsConfig&& original, bslma::Allocator* basicAllocator);
-    // Create an object of type 'StatsConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-    // Use the optionally specified 'basicAllocator' to supply memory.  If
-    // 'basicAllocator' is 0, the currently installed default allocator is
-    // used.
+    StatPluginConfigPrometheus(StatPluginConfigPrometheus&& original,
+                               bslma::Allocator*            basicAllocator);
+    // Create an object of type 'StatPluginConfigPrometheus' having the
+    // value of the specified 'original' object.  After performing this
+    // action, the 'original' object will be left in a valid, but
+    // unspecified state.  Use the optionally specified 'basicAllocator' to
+    // supply memory.  If 'basicAllocator' is 0, the currently installed
+    // default allocator is used.
 #endif
 
-    ~StatsConfig();
+    ~StatPluginConfigPrometheus();
     // Destroy this object.
 
     // MANIPULATORS
-    StatsConfig& operator=(const StatsConfig& rhs);
+    StatPluginConfigPrometheus&
+    operator=(const StatPluginConfigPrometheus& rhs);
     // Assign to this object the value of the specified 'rhs' object.
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    StatsConfig& operator=(StatsConfig&& rhs);
+    StatPluginConfigPrometheus& operator=(StatPluginConfigPrometheus&& rhs);
     // Assign to this object the value of the specified 'rhs' object.
     // After performing this action, the 'rhs' object will be left in a
     // valid, but unspecified state.
@@ -6161,16 +5946,16 @@ class StatsConfig {
     // returned from the invocation of 'manipulator' if 'name' identifies
     // an attribute of this class, and -1 otherwise.
 
-    int& snapshotInterval();
-    // Return a reference to the modifiable "SnapshotInterval" attribute of
-    // this object.
-
-    bsl::vector<StatPluginConfig>& plugins();
-    // Return a reference to the modifiable "Plugins" attribute of this
+    ExportMode::Value& mode();
+    // Return a reference to the modifiable "Mode" attribute of this
     // object.
 
-    StatsPrinterConfig& printer();
-    // Return a reference to the modifiable "Printer" attribute of this
+    bsl::string& host();
+    // Return a reference to the modifiable "Host" attribute of this
+    // object.
+
+    int& port();
+    // Return a reference to the modifiable "Port" attribute of this
     // object.
 
     // ACCESSORS
@@ -6216,45 +6001,392 @@ class StatsConfig {
     // invocation of 'accessor' if 'name' identifies an attribute of this
     // class, and -1 otherwise.
 
-    int snapshotInterval() const;
-    // Return the value of the "SnapshotInterval" attribute of this object.
+    ExportMode::Value mode() const;
+    // Return the value of the "Mode" attribute of this object.
 
-    const bsl::vector<StatPluginConfig>& plugins() const;
-    // Return a reference offering non-modifiable access to the "Plugins"
+    const bsl::string& host() const;
+    // Return a reference offering non-modifiable access to the "Host"
     // attribute of this object.
 
-    const StatsPrinterConfig& printer() const;
-    // Return a reference offering non-modifiable access to the "Printer"
-    // attribute of this object.
+    int port() const;
+    // Return the value of the "Port" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const StatPluginConfigPrometheus& lhs,
+                           const StatPluginConfigPrometheus& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.mode() == rhs.mode() && lhs.host() == rhs.host() &&
+               lhs.port() == rhs.port();
+    }
+
+    friend bool operator!=(const StatPluginConfigPrometheus& lhs,
+                           const StatPluginConfigPrometheus& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                     stream,
+                                    const StatPluginConfigPrometheus& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&                 hashAlg,
+                           const StatPluginConfigPrometheus& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'StatPluginConfigPrometheus'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const StatsConfig& lhs, const StatsConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const StatsConfig& lhs, const StatsConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream& stream, const StatsConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const StatsConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'StatsConfig'.
 
 }  // close package namespace
 
 // TRAITS
 
-BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(mqbcfg::StatsConfig)
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
+    mqbcfg::StatPluginConfigPrometheus)
+
+namespace mqbcfg {
+
+// ========================
+// class TcpInterfaceConfig
+// ========================
+
+class TcpInterfaceConfig {
+    // name.................: The name of the TCP session manager.
+    // port.................: (Deprecated) The port to receive connections.
+    // lowWatermark.........: highWatermark........: Watermarks used for
+    // channels with a client or proxy.  nodeLowWatermark.....:
+    // nodeHighWatermark....: Reduced watermarks for communication between
+    // cluster nodes where BlazingMQ maintains its own cache.
+    // heartbeatIntervalMs..: How often (in milliseconds) to check if the
+    // channel received data, and emit heartbeat.  0 to globally disable.
+    // listeners: A list of listener interfaces to receive TCP connections
+    // from.  When non-empty this option overrides the listener specified by
+    // port.
+
+    // INSTANCE DATA
+    bsls::Types::Int64                d_lowWatermark;
+    bsls::Types::Int64                d_highWatermark;
+    bsls::Types::Int64                d_nodeLowWatermark;
+    bsls::Types::Int64                d_nodeHighWatermark;
+    bsl::vector<TcpInterfaceListener> d_listeners;
+    bsl::string                       d_name;
+    int                               d_port;
+    int                               d_ioThreads;
+    int                               d_maxConnections;
+    int                               d_heartbeatIntervalMs;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const TcpInterfaceConfig& rhs) const;
+
+  public:
+    // TYPES
+    enum {
+        ATTRIBUTE_ID_NAME                  = 0,
+        ATTRIBUTE_ID_PORT                  = 1,
+        ATTRIBUTE_ID_IO_THREADS            = 2,
+        ATTRIBUTE_ID_MAX_CONNECTIONS       = 3,
+        ATTRIBUTE_ID_LOW_WATERMARK         = 4,
+        ATTRIBUTE_ID_HIGH_WATERMARK        = 5,
+        ATTRIBUTE_ID_NODE_LOW_WATERMARK    = 6,
+        ATTRIBUTE_ID_NODE_HIGH_WATERMARK   = 7,
+        ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS = 8,
+        ATTRIBUTE_ID_LISTENERS             = 9
+    };
+
+    enum { NUM_ATTRIBUTES = 10 };
+
+    enum {
+        ATTRIBUTE_INDEX_NAME                  = 0,
+        ATTRIBUTE_INDEX_PORT                  = 1,
+        ATTRIBUTE_INDEX_IO_THREADS            = 2,
+        ATTRIBUTE_INDEX_MAX_CONNECTIONS       = 3,
+        ATTRIBUTE_INDEX_LOW_WATERMARK         = 4,
+        ATTRIBUTE_INDEX_HIGH_WATERMARK        = 5,
+        ATTRIBUTE_INDEX_NODE_LOW_WATERMARK    = 6,
+        ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK   = 7,
+        ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS = 8,
+        ATTRIBUTE_INDEX_LISTENERS             = 9
+    };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const int DEFAULT_INITIALIZER_MAX_CONNECTIONS;
+
+    static const bsls::Types::Int64 DEFAULT_INITIALIZER_NODE_LOW_WATERMARK;
+
+    static const bsls::Types::Int64 DEFAULT_INITIALIZER_NODE_HIGH_WATERMARK;
+
+    static const int DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS;
+
+    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
+
+  public:
+    // CLASS METHODS
+    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
+
+    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
+                                                          int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
+
+    // CREATORS
+    explicit TcpInterfaceConfig(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'TcpInterfaceConfig' having the default
+    // value.  Use the optionally specified 'basicAllocator' to supply
+    // memory.  If 'basicAllocator' is 0, the currently installed default
+    // allocator is used.
+
+    TcpInterfaceConfig(const TcpInterfaceConfig& original,
+                       bslma::Allocator*         basicAllocator = 0);
+    // Create an object of type 'TcpInterfaceConfig' having the value of
+    // the specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    TcpInterfaceConfig(TcpInterfaceConfig&& original) noexcept;
+    // Create an object of type 'TcpInterfaceConfig' having the value of
+    // the specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+
+    TcpInterfaceConfig(TcpInterfaceConfig&& original,
+                       bslma::Allocator*    basicAllocator);
+    // Create an object of type 'TcpInterfaceConfig' having the value of
+    // the specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+#endif
+
+    ~TcpInterfaceConfig();
+    // Destroy this object.
+
+    // MANIPULATORS
+    TcpInterfaceConfig& operator=(const TcpInterfaceConfig& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    TcpInterfaceConfig& operator=(TcpInterfaceConfig&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
+#endif
+
+    void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator,
+                            const char*    name,
+                            int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    bsl::string& name();
+    // Return a reference to the modifiable "Name" attribute of this
+    // object.
+
+    int& port();
+    // Return a reference to the modifiable "Port" attribute of this
+    // object.
+
+    int& ioThreads();
+    // Return a reference to the modifiable "IoThreads" attribute of this
+    // object.
+
+    int& maxConnections();
+    // Return a reference to the modifiable "MaxConnections" attribute of
+    // this object.
+
+    bsls::Types::Int64& lowWatermark();
+    // Return a reference to the modifiable "LowWatermark" attribute of
+    // this object.
+
+    bsls::Types::Int64& highWatermark();
+    // Return a reference to the modifiable "HighWatermark" attribute of
+    // this object.
+
+    bsls::Types::Int64& nodeLowWatermark();
+    // Return a reference to the modifiable "NodeLowWatermark" attribute of
+    // this object.
+
+    bsls::Types::Int64& nodeHighWatermark();
+    // Return a reference to the modifiable "NodeHighWatermark" attribute
+    // of this object.
+
+    int& heartbeatIntervalMs();
+    // Return a reference to the modifiable "HeartbeatIntervalMs" attribute
+    // of this object.
+
+    bsl::vector<TcpInterfaceListener>& listeners();
+    // Return a reference to the modifiable "Listeners" attribute of this
+    // object.
+
+    // ACCESSORS
+    bsl::ostream&
+    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
+
+    template <typename t_ACCESSOR>
+    int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor,
+                        const char* name,
+                        int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    const bsl::string& name() const;
+    // Return a reference offering non-modifiable access to the "Name"
+    // attribute of this object.
+
+    int port() const;
+    // Return the value of the "Port" attribute of this object.
+
+    int ioThreads() const;
+    // Return the value of the "IoThreads" attribute of this object.
+
+    int maxConnections() const;
+    // Return the value of the "MaxConnections" attribute of this object.
+
+    bsls::Types::Int64 lowWatermark() const;
+    // Return the value of the "LowWatermark" attribute of this object.
+
+    bsls::Types::Int64 highWatermark() const;
+    // Return the value of the "HighWatermark" attribute of this object.
+
+    bsls::Types::Int64 nodeLowWatermark() const;
+    // Return the value of the "NodeLowWatermark" attribute of this object.
+
+    bsls::Types::Int64 nodeHighWatermark() const;
+    // Return the value of the "NodeHighWatermark" attribute of this
+    // object.
+
+    int heartbeatIntervalMs() const;
+    // Return the value of the "HeartbeatIntervalMs" attribute of this
+    // object.
+
+    const bsl::vector<TcpInterfaceListener>& listeners() const;
+    // Return a reference offering non-modifiable access to the "Listeners"
+    // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const TcpInterfaceConfig& lhs,
+                           const TcpInterfaceConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const TcpInterfaceConfig& lhs,
+                           const TcpInterfaceConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&             stream,
+                                    const TcpInterfaceConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&         hashAlg,
+                           const TcpInterfaceConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'TcpInterfaceConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
+    mqbcfg::TcpInterfaceConfig)
 
 namespace mqbcfg {
 
@@ -6274,6 +6406,12 @@ class ClusterNode {
     bsl::string           d_dataCenter;
     ClusterNodeConnection d_transport;
     int                   d_id;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const ClusterNode& rhs) const;
 
   public:
     // TYPES
@@ -6460,29 +6598,40 @@ class ClusterNode {
     const ClusterNodeConnection& transport() const;
     // Return a reference offering non-modifiable access to the "Transport"
     // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ClusterNode& lhs, const ClusterNode& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const ClusterNode& lhs, const ClusterNode& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&      stream,
+                                    const ClusterNode& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&  hashAlg,
+                           const ClusterNode& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'ClusterNode'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ClusterNode& lhs, const ClusterNode& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ClusterNode& lhs, const ClusterNode& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream& stream, const ClusterNode& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const ClusterNode& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ClusterNode'.
 
 }  // close package namespace
 
@@ -6501,6 +6650,10 @@ class DispatcherConfig {
     DispatcherProcessorConfig d_sessions;
     DispatcherProcessorConfig d_queues;
     DispatcherProcessorConfig d_clusters;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
 
   public:
     // TYPES
@@ -6540,33 +6693,7 @@ class DispatcherConfig {
     // Create an object of type 'DispatcherConfig' having the default
     // value.
 
-    DispatcherConfig(const DispatcherConfig& original);
-    // Create an object of type 'DispatcherConfig' having the value of the
-    // specified 'original' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    DispatcherConfig(DispatcherConfig&& original) = default;
-    // Create an object of type 'DispatcherConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-#endif
-
-    ~DispatcherConfig();
-    // Destroy this object.
-
     // MANIPULATORS
-    DispatcherConfig& operator=(const DispatcherConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    DispatcherConfig& operator=(DispatcherConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
     void reset();
     // Reset this object to the default value (i.e., its value upon
     // default construction).
@@ -6666,38 +6793,272 @@ class DispatcherConfig {
     const DispatcherProcessorConfig& clusters() const;
     // Return a reference offering non-modifiable access to the "Clusters"
     // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const DispatcherConfig& lhs,
+                           const DispatcherConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.sessions() == rhs.sessions() &&
+               lhs.queues() == rhs.queues() &&
+               lhs.clusters() == rhs.clusters();
+    }
+
+    friend bool operator!=(const DispatcherConfig& lhs,
+                           const DispatcherConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&           stream,
+                                    const DispatcherConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&       hashAlg,
+                           const DispatcherConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'DispatcherConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const DispatcherConfig& lhs,
-                       const DispatcherConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const DispatcherConfig& lhs,
-                       const DispatcherConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&           stream,
-                                const DispatcherConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const DispatcherConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'DispatcherConfig'.
 
 }  // close package namespace
 
 // TRAITS
 
 BDLAT_DECL_SEQUENCE_WITH_BITWISEMOVEABLE_TRAITS(mqbcfg::DispatcherConfig)
+
+namespace mqbcfg {
+
+// =======================
+// class NetworkInterfaces
+// =======================
+
+class NetworkInterfaces {
+    // INSTANCE DATA
+    bdlb::NullableValue<TcpInterfaceConfig> d_tcpInterface;
+    Heartbeat                               d_heartbeats;
+
+  public:
+    // TYPES
+    enum { ATTRIBUTE_ID_HEARTBEATS = 0, ATTRIBUTE_ID_TCP_INTERFACE = 1 };
+
+    enum { NUM_ATTRIBUTES = 2 };
+
+    enum { ATTRIBUTE_INDEX_HEARTBEATS = 0, ATTRIBUTE_INDEX_TCP_INTERFACE = 1 };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
+
+  public:
+    // CLASS METHODS
+    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
+
+    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
+                                                          int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
+
+    // CREATORS
+    explicit NetworkInterfaces(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'NetworkInterfaces' having the default
+    // value.  Use the optionally specified 'basicAllocator' to supply
+    // memory.  If 'basicAllocator' is 0, the currently installed default
+    // allocator is used.
+
+    NetworkInterfaces(const NetworkInterfaces& original,
+                      bslma::Allocator*        basicAllocator = 0);
+    // Create an object of type 'NetworkInterfaces' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    NetworkInterfaces(NetworkInterfaces&& original) noexcept;
+    // Create an object of type 'NetworkInterfaces' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+
+    NetworkInterfaces(NetworkInterfaces&& original,
+                      bslma::Allocator*   basicAllocator);
+    // Create an object of type 'NetworkInterfaces' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+#endif
+
+    ~NetworkInterfaces();
+    // Destroy this object.
+
+    // MANIPULATORS
+    NetworkInterfaces& operator=(const NetworkInterfaces& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    NetworkInterfaces& operator=(NetworkInterfaces&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
+#endif
+
+    void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator,
+                            const char*    name,
+                            int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    Heartbeat& heartbeats();
+    // Return a reference to the modifiable "Heartbeats" attribute of this
+    // object.
+
+    bdlb::NullableValue<TcpInterfaceConfig>& tcpInterface();
+    // Return a reference to the modifiable "TcpInterface" attribute of
+    // this object.
+
+    // ACCESSORS
+    bsl::ostream&
+    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
+
+    template <typename t_ACCESSOR>
+    int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor,
+                        const char* name,
+                        int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    const Heartbeat& heartbeats() const;
+    // Return a reference offering non-modifiable access to the
+    // "Heartbeats" attribute of this object.
+
+    const bdlb::NullableValue<TcpInterfaceConfig>& tcpInterface() const;
+    // Return a reference offering non-modifiable access to the
+    // "TcpInterface" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const NetworkInterfaces& lhs,
+                           const NetworkInterfaces& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.heartbeats() == rhs.heartbeats() &&
+               lhs.tcpInterface() == rhs.tcpInterface();
+    }
+
+    friend bool operator!=(const NetworkInterfaces& lhs,
+                           const NetworkInterfaces& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&            stream,
+                                    const NetworkInterfaces& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&        hashAlg,
+                           const NetworkInterfaces& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'NetworkInterfaces'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.heartbeats());
+        hashAppend(hashAlg, object.tcpInterface());
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
+    mqbcfg::NetworkInterfaces)
 
 namespace mqbcfg {
 
@@ -6877,33 +7238,46 @@ class ReversedClusterConnection {
     const bsl::vector<ClusterNodeConnection>& connections() const;
     // Return a reference offering non-modifiable access to the
     // "Connections" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ReversedClusterConnection& lhs,
+                           const ReversedClusterConnection& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.name() == rhs.name() &&
+               lhs.connections() == rhs.connections();
+    }
+
+    friend bool operator!=(const ReversedClusterConnection& lhs,
+                           const ReversedClusterConnection& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                    stream,
+                                    const ReversedClusterConnection& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&                hashAlg,
+                           const ReversedClusterConnection& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ReversedClusterConnection'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.name());
+        hashAppend(hashAlg, object.connections());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ReversedClusterConnection& lhs,
-                       const ReversedClusterConnection& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ReversedClusterConnection& lhs,
-                       const ReversedClusterConnection& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&                    stream,
-                                const ReversedClusterConnection& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                const ReversedClusterConnection& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ReversedClusterConnection'.
 
 }  // close package namespace
 
@@ -6911,6 +7285,326 @@ void hashAppend(t_HASH_ALGORITHM&                hashAlg,
 
 BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
     mqbcfg::ReversedClusterConnection)
+
+namespace mqbcfg {
+
+// ======================
+// class StatPluginConfig
+// ======================
+
+class StatPluginConfig {
+    // INSTANCE DATA
+    bsl::vector<bsl::string>                        d_hosts;
+    bsl::string                                     d_name;
+    bsl::string                                     d_namespacePrefix;
+    bsl::string                                     d_instanceId;
+    bdlb::NullableValue<StatPluginConfigPrometheus> d_prometheusSpecific;
+    int                                             d_queueSize;
+    int                                             d_queueHighWatermark;
+    int                                             d_queueLowWatermark;
+    int                                             d_publishInterval;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const StatPluginConfig& rhs) const;
+
+  public:
+    // TYPES
+    enum {
+        ATTRIBUTE_ID_NAME                 = 0,
+        ATTRIBUTE_ID_QUEUE_SIZE           = 1,
+        ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK = 2,
+        ATTRIBUTE_ID_QUEUE_LOW_WATERMARK  = 3,
+        ATTRIBUTE_ID_PUBLISH_INTERVAL     = 4,
+        ATTRIBUTE_ID_NAMESPACE_PREFIX     = 5,
+        ATTRIBUTE_ID_HOSTS                = 6,
+        ATTRIBUTE_ID_INSTANCE_ID          = 7,
+        ATTRIBUTE_ID_PROMETHEUS_SPECIFIC  = 8
+    };
+
+    enum { NUM_ATTRIBUTES = 9 };
+
+    enum {
+        ATTRIBUTE_INDEX_NAME                 = 0,
+        ATTRIBUTE_INDEX_QUEUE_SIZE           = 1,
+        ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK = 2,
+        ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK  = 3,
+        ATTRIBUTE_INDEX_PUBLISH_INTERVAL     = 4,
+        ATTRIBUTE_INDEX_NAMESPACE_PREFIX     = 5,
+        ATTRIBUTE_INDEX_HOSTS                = 6,
+        ATTRIBUTE_INDEX_INSTANCE_ID          = 7,
+        ATTRIBUTE_INDEX_PROMETHEUS_SPECIFIC  = 8
+    };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const char DEFAULT_INITIALIZER_NAME[];
+
+    static const int DEFAULT_INITIALIZER_QUEUE_SIZE;
+
+    static const int DEFAULT_INITIALIZER_QUEUE_HIGH_WATERMARK;
+
+    static const int DEFAULT_INITIALIZER_QUEUE_LOW_WATERMARK;
+
+    static const int DEFAULT_INITIALIZER_PUBLISH_INTERVAL;
+
+    static const char DEFAULT_INITIALIZER_NAMESPACE_PREFIX[];
+
+    static const char DEFAULT_INITIALIZER_INSTANCE_ID[];
+
+    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
+
+  public:
+    // CLASS METHODS
+    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
+
+    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
+                                                          int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
+
+    // CREATORS
+    explicit StatPluginConfig(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'StatPluginConfig' having the default
+    // value.  Use the optionally specified 'basicAllocator' to supply
+    // memory.  If 'basicAllocator' is 0, the currently installed default
+    // allocator is used.
+
+    StatPluginConfig(const StatPluginConfig& original,
+                     bslma::Allocator*       basicAllocator = 0);
+    // Create an object of type 'StatPluginConfig' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    StatPluginConfig(StatPluginConfig&& original) noexcept;
+    // Create an object of type 'StatPluginConfig' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+
+    StatPluginConfig(StatPluginConfig&& original,
+                     bslma::Allocator*  basicAllocator);
+    // Create an object of type 'StatPluginConfig' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+#endif
+
+    ~StatPluginConfig();
+    // Destroy this object.
+
+    // MANIPULATORS
+    StatPluginConfig& operator=(const StatPluginConfig& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    StatPluginConfig& operator=(StatPluginConfig&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
+#endif
+
+    void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator,
+                            const char*    name,
+                            int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    bsl::string& name();
+    // Return a reference to the modifiable "Name" attribute of this
+    // object.
+
+    int& queueSize();
+    // Return a reference to the modifiable "QueueSize" attribute of this
+    // object.
+
+    int& queueHighWatermark();
+    // Return a reference to the modifiable "QueueHighWatermark" attribute
+    // of this object.
+
+    int& queueLowWatermark();
+    // Return a reference to the modifiable "QueueLowWatermark" attribute
+    // of this object.
+
+    int& publishInterval();
+    // Return a reference to the modifiable "PublishInterval" attribute of
+    // this object.
+
+    bsl::string& namespacePrefix();
+    // Return a reference to the modifiable "NamespacePrefix" attribute of
+    // this object.
+
+    bsl::vector<bsl::string>& hosts();
+    // Return a reference to the modifiable "Hosts" attribute of this
+    // object.
+
+    bsl::string& instanceId();
+    // Return a reference to the modifiable "InstanceId" attribute of this
+    // object.
+
+    bdlb::NullableValue<StatPluginConfigPrometheus>& prometheusSpecific();
+    // Return a reference to the modifiable "PrometheusSpecific" attribute
+    // of this object.
+
+    // ACCESSORS
+    bsl::ostream&
+    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
+
+    template <typename t_ACCESSOR>
+    int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor,
+                        const char* name,
+                        int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    const bsl::string& name() const;
+    // Return a reference offering non-modifiable access to the "Name"
+    // attribute of this object.
+
+    int queueSize() const;
+    // Return the value of the "QueueSize" attribute of this object.
+
+    int queueHighWatermark() const;
+    // Return the value of the "QueueHighWatermark" attribute of this
+    // object.
+
+    int queueLowWatermark() const;
+    // Return the value of the "QueueLowWatermark" attribute of this
+    // object.
+
+    int publishInterval() const;
+    // Return the value of the "PublishInterval" attribute of this object.
+
+    const bsl::string& namespacePrefix() const;
+    // Return a reference offering non-modifiable access to the
+    // "NamespacePrefix" attribute of this object.
+
+    const bsl::vector<bsl::string>& hosts() const;
+    // Return a reference offering non-modifiable access to the "Hosts"
+    // attribute of this object.
+
+    const bsl::string& instanceId() const;
+    // Return a reference offering non-modifiable access to the
+    // "InstanceId" attribute of this object.
+
+    const bdlb::NullableValue<StatPluginConfigPrometheus>&
+    prometheusSpecific() const;
+    // Return a reference offering non-modifiable access to the
+    // "PrometheusSpecific" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const StatPluginConfig& lhs,
+                           const StatPluginConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const StatPluginConfig& lhs,
+                           const StatPluginConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&           stream,
+                                    const StatPluginConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&       hashAlg,
+                           const StatPluginConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'StatPluginConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
+    mqbcfg::StatPluginConfig)
 
 namespace mqbcfg {
 
@@ -6923,6 +7617,10 @@ class TaskConfig {
     bsls::Types::Uint64  d_allocationLimit;
     LogController        d_logController;
     AllocatorType::Value d_allocatorType;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
 
   public:
     // TYPES
@@ -7099,411 +7797,47 @@ class TaskConfig {
     const LogController& logController() const;
     // Return a reference offering non-modifiable access to the
     // "LogController" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const TaskConfig& lhs, const TaskConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.allocatorType() == rhs.allocatorType() &&
+               lhs.allocationLimit() == rhs.allocationLimit() &&
+               lhs.logController() == rhs.logController();
+    }
+
+    friend bool operator!=(const TaskConfig& lhs, const TaskConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&     stream,
+                                    const TaskConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const TaskConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'TaskConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const TaskConfig& lhs, const TaskConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const TaskConfig& lhs, const TaskConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream& stream, const TaskConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const TaskConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'TaskConfig'.
 
 }  // close package namespace
 
 // TRAITS
 
 BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(mqbcfg::TaskConfig)
-
-namespace mqbcfg {
-
-// ===============
-// class AppConfig
-// ===============
-
-class AppConfig {
-    // Top level typ for the broker's configuration.
-    // brokerInstanceName...: name of the broker instance
-    // brokerVersion........: version of the broker configVersion........:
-    // version of the bmqbrkr.cfg config etcDir...............: directory
-    // containing the json config files hostName.............: name of the
-    // current host hostTags.............: tags of the current host
-    // hostDataCenter.......: datacenter the current host resides in
-    // isRunningOnDev.......: true if running on dev logsObserverMaxSize..:
-    // maximum number of log records to keep latencyMonitorDomain.: common part
-    // of all latemon domains dispatcherConfig.....: configuration for the
-    // dispatcher stats................: configuration for the stats
-    // networkInterfaces....: configuration for the network interfaces
-    // bmqconfConfig........: configuration for bmqconf plugins..............:
-    // configuration for the plugins msgPropertiesSupport.: information about
-    // if/how to advertise support for v2 message properties
-
-    // INSTANCE DATA
-    bsl::string         d_brokerInstanceName;
-    bsl::string         d_etcDir;
-    bsl::string         d_hostName;
-    bsl::string         d_hostTags;
-    bsl::string         d_hostDataCenter;
-    bsl::string         d_latencyMonitorDomain;
-    StatsConfig         d_stats;
-    Plugins             d_plugins;
-    NetworkInterfaces   d_networkInterfaces;
-    MessagePropertiesV2 d_messagePropertiesV2;
-    DispatcherConfig    d_dispatcherConfig;
-    BmqconfConfig       d_bmqconfConfig;
-    int                 d_brokerVersion;
-    int                 d_configVersion;
-    int                 d_logsObserverMaxSize;
-    bool                d_isRunningOnDev;
-
-  public:
-    // TYPES
-    enum {
-        ATTRIBUTE_ID_BROKER_INSTANCE_NAME   = 0,
-        ATTRIBUTE_ID_BROKER_VERSION         = 1,
-        ATTRIBUTE_ID_CONFIG_VERSION         = 2,
-        ATTRIBUTE_ID_ETC_DIR                = 3,
-        ATTRIBUTE_ID_HOST_NAME              = 4,
-        ATTRIBUTE_ID_HOST_TAGS              = 5,
-        ATTRIBUTE_ID_HOST_DATA_CENTER       = 6,
-        ATTRIBUTE_ID_IS_RUNNING_ON_DEV      = 7,
-        ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE = 8,
-        ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN = 9,
-        ATTRIBUTE_ID_DISPATCHER_CONFIG      = 10,
-        ATTRIBUTE_ID_STATS                  = 11,
-        ATTRIBUTE_ID_NETWORK_INTERFACES     = 12,
-        ATTRIBUTE_ID_BMQCONF_CONFIG         = 13,
-        ATTRIBUTE_ID_PLUGINS                = 14,
-        ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2  = 15
-    };
-
-    enum { NUM_ATTRIBUTES = 16 };
-
-    enum {
-        ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME   = 0,
-        ATTRIBUTE_INDEX_BROKER_VERSION         = 1,
-        ATTRIBUTE_INDEX_CONFIG_VERSION         = 2,
-        ATTRIBUTE_INDEX_ETC_DIR                = 3,
-        ATTRIBUTE_INDEX_HOST_NAME              = 4,
-        ATTRIBUTE_INDEX_HOST_TAGS              = 5,
-        ATTRIBUTE_INDEX_HOST_DATA_CENTER       = 6,
-        ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV      = 7,
-        ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE = 8,
-        ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN = 9,
-        ATTRIBUTE_INDEX_DISPATCHER_CONFIG      = 10,
-        ATTRIBUTE_INDEX_STATS                  = 11,
-        ATTRIBUTE_INDEX_NETWORK_INTERFACES     = 12,
-        ATTRIBUTE_INDEX_BMQCONF_CONFIG         = 13,
-        ATTRIBUTE_INDEX_PLUGINS                = 14,
-        ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2  = 15
-    };
-
-    // CONSTANTS
-    static const char CLASS_NAME[];
-
-    static const char DEFAULT_INITIALIZER_LATENCY_MONITOR_DOMAIN[];
-
-    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
-
-  public:
-    // CLASS METHODS
-    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
-    // Return attribute information for the attribute indicated by the
-    // specified 'id' if the attribute exists, and 0 otherwise.
-
-    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
-                                                          int nameLength);
-    // Return attribute information for the attribute indicated by the
-    // specified 'name' of the specified 'nameLength' if the attribute
-    // exists, and 0 otherwise.
-
-    // CREATORS
-    explicit AppConfig(bslma::Allocator* basicAllocator = 0);
-    // Create an object of type 'AppConfig' having the default value.  Use
-    // the optionally specified 'basicAllocator' to supply memory.  If
-    // 'basicAllocator' is 0, the currently installed default allocator is
-    // used.
-
-    AppConfig(const AppConfig& original, bslma::Allocator* basicAllocator = 0);
-    // Create an object of type 'AppConfig' having the value of the
-    // specified 'original' object.  Use the optionally specified
-    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
-    // currently installed default allocator is used.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    AppConfig(AppConfig&& original) noexcept;
-    // Create an object of type 'AppConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-
-    AppConfig(AppConfig&& original, bslma::Allocator* basicAllocator);
-    // Create an object of type 'AppConfig' having the value of the
-    // specified 'original' object.  After performing this action, the
-    // 'original' object will be left in a valid, but unspecified state.
-    // Use the optionally specified 'basicAllocator' to supply memory.  If
-    // 'basicAllocator' is 0, the currently installed default allocator is
-    // used.
-#endif
-
-    ~AppConfig();
-    // Destroy this object.
-
-    // MANIPULATORS
-    AppConfig& operator=(const AppConfig& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-    AppConfig& operator=(AppConfig&& rhs);
-    // Assign to this object the value of the specified 'rhs' object.
-    // After performing this action, the 'rhs' object will be left in a
-    // valid, but unspecified state.
-#endif
-
-    void reset();
-    // Reset this object to the default value (i.e., its value upon
-    // default construction).
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttributes(t_MANIPULATOR& manipulator);
-    // Invoke the specified 'manipulator' sequentially on the address of
-    // each (modifiable) attribute of this object, supplying 'manipulator'
-    // with the corresponding attribute information structure until such
-    // invocation returns a non-zero value.  Return the value from the
-    // last invocation of 'manipulator' (i.e., the invocation that
-    // terminated the sequence).
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
-    // Invoke the specified 'manipulator' on the address of
-    // the (modifiable) attribute indicated by the specified 'id',
-    // supplying 'manipulator' with the corresponding attribute
-    // information structure.  Return the value returned from the
-    // invocation of 'manipulator' if 'id' identifies an attribute of this
-    // class, and -1 otherwise.
-
-    template <typename t_MANIPULATOR>
-    int manipulateAttribute(t_MANIPULATOR& manipulator,
-                            const char*    name,
-                            int            nameLength);
-    // Invoke the specified 'manipulator' on the address of
-    // the (modifiable) attribute indicated by the specified 'name' of the
-    // specified 'nameLength', supplying 'manipulator' with the
-    // corresponding attribute information structure.  Return the value
-    // returned from the invocation of 'manipulator' if 'name' identifies
-    // an attribute of this class, and -1 otherwise.
-
-    bsl::string& brokerInstanceName();
-    // Return a reference to the modifiable "BrokerInstanceName" attribute
-    // of this object.
-
-    int& brokerVersion();
-    // Return a reference to the modifiable "BrokerVersion" attribute of
-    // this object.
-
-    int& configVersion();
-    // Return a reference to the modifiable "ConfigVersion" attribute of
-    // this object.
-
-    bsl::string& etcDir();
-    // Return a reference to the modifiable "EtcDir" attribute of this
-    // object.
-
-    bsl::string& hostName();
-    // Return a reference to the modifiable "HostName" attribute of this
-    // object.
-
-    bsl::string& hostTags();
-    // Return a reference to the modifiable "HostTags" attribute of this
-    // object.
-
-    bsl::string& hostDataCenter();
-    // Return a reference to the modifiable "HostDataCenter" attribute of
-    // this object.
-
-    bool& isRunningOnDev();
-    // Return a reference to the modifiable "IsRunningOnDev" attribute of
-    // this object.
-
-    int& logsObserverMaxSize();
-    // Return a reference to the modifiable "LogsObserverMaxSize" attribute
-    // of this object.
-
-    bsl::string& latencyMonitorDomain();
-    // Return a reference to the modifiable "LatencyMonitorDomain"
-    // attribute of this object.
-
-    DispatcherConfig& dispatcherConfig();
-    // Return a reference to the modifiable "DispatcherConfig" attribute of
-    // this object.
-
-    StatsConfig& stats();
-    // Return a reference to the modifiable "Stats" attribute of this
-    // object.
-
-    NetworkInterfaces& networkInterfaces();
-    // Return a reference to the modifiable "NetworkInterfaces" attribute
-    // of this object.
-
-    BmqconfConfig& bmqconfConfig();
-    // Return a reference to the modifiable "BmqconfConfig" attribute of
-    // this object.
-
-    Plugins& plugins();
-    // Return a reference to the modifiable "Plugins" attribute of this
-    // object.
-
-    MessagePropertiesV2& messagePropertiesV2();
-    // Return a reference to the modifiable "MessagePropertiesV2" attribute
-    // of this object.
-
-    // ACCESSORS
-    bsl::ostream&
-    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
-    // Format this object to the specified output 'stream' at the
-    // optionally specified indentation 'level' and return a reference to
-    // the modifiable 'stream'.  If 'level' is specified, optionally
-    // specify 'spacesPerLevel', the number of spaces per indentation level
-    // for this and all of its nested objects.  Each line is indented by
-    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
-    // negative, suppress indentation of the first line.  If
-    // 'spacesPerLevel' is negative, suppress line breaks and format the
-    // entire output on one line.  If 'stream' is initially invalid, this
-    // operation has no effect.  Note that a trailing newline is provided
-    // in multiline mode only.
-
-    template <typename t_ACCESSOR>
-    int accessAttributes(t_ACCESSOR& accessor) const;
-    // Invoke the specified 'accessor' sequentially on each
-    // (non-modifiable) attribute of this object, supplying 'accessor'
-    // with the corresponding attribute information structure until such
-    // invocation returns a non-zero value.  Return the value from the
-    // last invocation of 'accessor' (i.e., the invocation that terminated
-    // the sequence).
-
-    template <typename t_ACCESSOR>
-    int accessAttribute(t_ACCESSOR& accessor, int id) const;
-    // Invoke the specified 'accessor' on the (non-modifiable) attribute
-    // of this object indicated by the specified 'id', supplying 'accessor'
-    // with the corresponding attribute information structure.  Return the
-    // value returned from the invocation of 'accessor' if 'id' identifies
-    // an attribute of this class, and -1 otherwise.
-
-    template <typename t_ACCESSOR>
-    int accessAttribute(t_ACCESSOR& accessor,
-                        const char* name,
-                        int         nameLength) const;
-    // Invoke the specified 'accessor' on the (non-modifiable) attribute
-    // of this object indicated by the specified 'name' of the specified
-    // 'nameLength', supplying 'accessor' with the corresponding attribute
-    // information structure.  Return the value returned from the
-    // invocation of 'accessor' if 'name' identifies an attribute of this
-    // class, and -1 otherwise.
-
-    const bsl::string& brokerInstanceName() const;
-    // Return a reference offering non-modifiable access to the
-    // "BrokerInstanceName" attribute of this object.
-
-    int brokerVersion() const;
-    // Return the value of the "BrokerVersion" attribute of this object.
-
-    int configVersion() const;
-    // Return the value of the "ConfigVersion" attribute of this object.
-
-    const bsl::string& etcDir() const;
-    // Return a reference offering non-modifiable access to the "EtcDir"
-    // attribute of this object.
-
-    const bsl::string& hostName() const;
-    // Return a reference offering non-modifiable access to the "HostName"
-    // attribute of this object.
-
-    const bsl::string& hostTags() const;
-    // Return a reference offering non-modifiable access to the "HostTags"
-    // attribute of this object.
-
-    const bsl::string& hostDataCenter() const;
-    // Return a reference offering non-modifiable access to the
-    // "HostDataCenter" attribute of this object.
-
-    bool isRunningOnDev() const;
-    // Return the value of the "IsRunningOnDev" attribute of this object.
-
-    int logsObserverMaxSize() const;
-    // Return the value of the "LogsObserverMaxSize" attribute of this
-    // object.
-
-    const bsl::string& latencyMonitorDomain() const;
-    // Return a reference offering non-modifiable access to the
-    // "LatencyMonitorDomain" attribute of this object.
-
-    const DispatcherConfig& dispatcherConfig() const;
-    // Return a reference offering non-modifiable access to the
-    // "DispatcherConfig" attribute of this object.
-
-    const StatsConfig& stats() const;
-    // Return a reference offering non-modifiable access to the "Stats"
-    // attribute of this object.
-
-    const NetworkInterfaces& networkInterfaces() const;
-    // Return a reference offering non-modifiable access to the
-    // "NetworkInterfaces" attribute of this object.
-
-    const BmqconfConfig& bmqconfConfig() const;
-    // Return a reference offering non-modifiable access to the
-    // "BmqconfConfig" attribute of this object.
-
-    const Plugins& plugins() const;
-    // Return a reference offering non-modifiable access to the "Plugins"
-    // attribute of this object.
-
-    const MessagePropertiesV2& messagePropertiesV2() const;
-    // Return a reference offering non-modifiable access to the
-    // "MessagePropertiesV2" attribute of this object.
-};
-
-// FREE OPERATORS
-inline bool operator==(const AppConfig& lhs, const AppConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const AppConfig& lhs, const AppConfig& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream& stream, const AppConfig& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const AppConfig& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'AppConfig'.
-
-}  // close package namespace
-
-// TRAITS
-
-BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(mqbcfg::AppConfig)
 
 namespace mqbcfg {
 
@@ -7533,6 +7867,12 @@ class ClusterDefinition {
     ClusterMonitorConfig             d_clusterMonitorConfig;
     MasterAssignmentAlgorithm::Value d_masterAssignment;
     ClusterAttributes                d_clusterAttributes;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const ClusterDefinition& rhs) const;
 
   public:
     // TYPES
@@ -7771,32 +8111,43 @@ class ClusterDefinition {
     const MessageThrottleConfig& messageThrottleConfig() const;
     // Return a reference offering non-modifiable access to the
     // "MessageThrottleConfig" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ClusterDefinition& lhs,
+                           const ClusterDefinition& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const ClusterDefinition& lhs,
+                           const ClusterDefinition& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&            stream,
+                                    const ClusterDefinition& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&        hashAlg,
+                           const ClusterDefinition& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ClusterDefinition'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ClusterDefinition& lhs,
-                       const ClusterDefinition& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ClusterDefinition& lhs,
-                       const ClusterDefinition& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&            stream,
-                                const ClusterDefinition& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const ClusterDefinition& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ClusterDefinition'.
 
 }  // close package namespace
 
@@ -7825,6 +8176,12 @@ class ClusterProxyDefinition {
     QueueOperationsConfig    d_queueOperations;
     MessageThrottleConfig    d_messageThrottleConfig;
     ClusterMonitorConfig     d_clusterMonitorConfig;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const ClusterProxyDefinition& rhs) const;
 
   public:
     // TYPES
@@ -8025,33 +8382,43 @@ class ClusterProxyDefinition {
     const MessageThrottleConfig& messageThrottleConfig() const;
     // Return a reference offering non-modifiable access to the
     // "MessageThrottleConfig" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ClusterProxyDefinition& lhs,
+                           const ClusterProxyDefinition& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const ClusterProxyDefinition& lhs,
+                           const ClusterProxyDefinition& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&                 stream,
+                                    const ClusterProxyDefinition& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&             hashAlg,
+                           const ClusterProxyDefinition& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ClusterProxyDefinition'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ClusterProxyDefinition& lhs,
-                       const ClusterProxyDefinition& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ClusterProxyDefinition& lhs,
-                       const ClusterProxyDefinition& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&                 stream,
-                                const ClusterProxyDefinition& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM&             hashAlg,
-                const ClusterProxyDefinition& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ClusterProxyDefinition'.
 
 }  // close package namespace
 
@@ -8059,6 +8426,676 @@ void hashAppend(t_HASH_ALGORITHM&             hashAlg,
 
 BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
     mqbcfg::ClusterProxyDefinition)
+
+namespace mqbcfg {
+
+// =================
+// class StatsConfig
+// =================
+
+class StatsConfig {
+    // INSTANCE DATA
+    bsl::vector<StatPluginConfig> d_plugins;
+    StatsPrinterConfig            d_printer;
+    int                           d_snapshotInterval;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+  public:
+    // TYPES
+    enum {
+        ATTRIBUTE_ID_SNAPSHOT_INTERVAL = 0,
+        ATTRIBUTE_ID_PLUGINS           = 1,
+        ATTRIBUTE_ID_PRINTER           = 2
+    };
+
+    enum { NUM_ATTRIBUTES = 3 };
+
+    enum {
+        ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL = 0,
+        ATTRIBUTE_INDEX_PLUGINS           = 1,
+        ATTRIBUTE_INDEX_PRINTER           = 2
+    };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const int DEFAULT_INITIALIZER_SNAPSHOT_INTERVAL;
+
+    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
+
+  public:
+    // CLASS METHODS
+    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
+
+    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
+                                                          int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
+
+    // CREATORS
+    explicit StatsConfig(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'StatsConfig' having the default value.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+
+    StatsConfig(const StatsConfig& original,
+                bslma::Allocator*  basicAllocator = 0);
+    // Create an object of type 'StatsConfig' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    StatsConfig(StatsConfig&& original) noexcept;
+    // Create an object of type 'StatsConfig' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+
+    StatsConfig(StatsConfig&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'StatsConfig' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+#endif
+
+    ~StatsConfig();
+    // Destroy this object.
+
+    // MANIPULATORS
+    StatsConfig& operator=(const StatsConfig& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    StatsConfig& operator=(StatsConfig&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
+#endif
+
+    void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator,
+                            const char*    name,
+                            int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    int& snapshotInterval();
+    // Return a reference to the modifiable "SnapshotInterval" attribute of
+    // this object.
+
+    bsl::vector<StatPluginConfig>& plugins();
+    // Return a reference to the modifiable "Plugins" attribute of this
+    // object.
+
+    StatsPrinterConfig& printer();
+    // Return a reference to the modifiable "Printer" attribute of this
+    // object.
+
+    // ACCESSORS
+    bsl::ostream&
+    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
+
+    template <typename t_ACCESSOR>
+    int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor,
+                        const char* name,
+                        int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    int snapshotInterval() const;
+    // Return the value of the "SnapshotInterval" attribute of this object.
+
+    const bsl::vector<StatPluginConfig>& plugins() const;
+    // Return a reference offering non-modifiable access to the "Plugins"
+    // attribute of this object.
+
+    const StatsPrinterConfig& printer() const;
+    // Return a reference offering non-modifiable access to the "Printer"
+    // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const StatsConfig& lhs, const StatsConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.snapshotInterval() == rhs.snapshotInterval() &&
+               lhs.plugins() == rhs.plugins() &&
+               lhs.printer() == rhs.printer();
+    }
+
+    friend bool operator!=(const StatsConfig& lhs, const StatsConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&      stream,
+                                    const StatsConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&  hashAlg,
+                           const StatsConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'StatsConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(mqbcfg::StatsConfig)
+
+namespace mqbcfg {
+
+// ===============
+// class AppConfig
+// ===============
+
+class AppConfig {
+    // Top level type for the broker's configuration.
+    // brokerInstanceName...: name of the broker instance
+    // brokerVersion........: version of the broker configVersion........:
+    // version of the bmqbrkr.cfg config etcDir...............: directory
+    // containing the json config files hostName.............: name of the
+    // current host hostTags.............: tags of the current host
+    // hostDataCenter.......: datacenter the current host resides in
+    // isRunningOnDev.......: true if running on dev logsObserverMaxSize..:
+    // maximum number of log records to keep latencyMonitorDomain.: common part
+    // of all latemon domains dispatcherConfig.....: configuration for the
+    // dispatcher stats................: configuration for the stats
+    // networkInterfaces....: configuration for the network interfaces
+    // bmqconfConfig........: configuration for bmqconf plugins..............:
+    // configuration for the plugins msgPropertiesSupport.: information about
+    // if/how to advertise support for v2 message properties
+    // configureStream......: send new ConfigureStream instead of old
+    // ConfigureQueue advertiseSubscriptions.: temporarily control use of
+    // ConfigureStream in SDK routeCommandTimeoutMs: maximum amount of time to
+    // wait for a routed command's response
+
+    // INSTANCE DATA
+    bsl::string         d_brokerInstanceName;
+    bsl::string         d_etcDir;
+    bsl::string         d_hostName;
+    bsl::string         d_hostTags;
+    bsl::string         d_hostDataCenter;
+    bsl::string         d_latencyMonitorDomain;
+    StatsConfig         d_stats;
+    Plugins             d_plugins;
+    NetworkInterfaces   d_networkInterfaces;
+    MessagePropertiesV2 d_messagePropertiesV2;
+    DispatcherConfig    d_dispatcherConfig;
+    BmqconfConfig       d_bmqconfConfig;
+    int                 d_brokerVersion;
+    int                 d_configVersion;
+    int                 d_logsObserverMaxSize;
+    int                 d_routeCommandTimeoutMs;
+    bool                d_isRunningOnDev;
+    bool                d_configureStream;
+    bool                d_advertiseSubscriptions;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const AppConfig& rhs) const;
+
+  public:
+    // TYPES
+    enum {
+        ATTRIBUTE_ID_BROKER_INSTANCE_NAME     = 0,
+        ATTRIBUTE_ID_BROKER_VERSION           = 1,
+        ATTRIBUTE_ID_CONFIG_VERSION           = 2,
+        ATTRIBUTE_ID_ETC_DIR                  = 3,
+        ATTRIBUTE_ID_HOST_NAME                = 4,
+        ATTRIBUTE_ID_HOST_TAGS                = 5,
+        ATTRIBUTE_ID_HOST_DATA_CENTER         = 6,
+        ATTRIBUTE_ID_IS_RUNNING_ON_DEV        = 7,
+        ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE   = 8,
+        ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN   = 9,
+        ATTRIBUTE_ID_DISPATCHER_CONFIG        = 10,
+        ATTRIBUTE_ID_STATS                    = 11,
+        ATTRIBUTE_ID_NETWORK_INTERFACES       = 12,
+        ATTRIBUTE_ID_BMQCONF_CONFIG           = 13,
+        ATTRIBUTE_ID_PLUGINS                  = 14,
+        ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2    = 15,
+        ATTRIBUTE_ID_CONFIGURE_STREAM         = 16,
+        ATTRIBUTE_ID_ADVERTISE_SUBSCRIPTIONS  = 17,
+        ATTRIBUTE_ID_ROUTE_COMMAND_TIMEOUT_MS = 18
+    };
+
+    enum { NUM_ATTRIBUTES = 19 };
+
+    enum {
+        ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME     = 0,
+        ATTRIBUTE_INDEX_BROKER_VERSION           = 1,
+        ATTRIBUTE_INDEX_CONFIG_VERSION           = 2,
+        ATTRIBUTE_INDEX_ETC_DIR                  = 3,
+        ATTRIBUTE_INDEX_HOST_NAME                = 4,
+        ATTRIBUTE_INDEX_HOST_TAGS                = 5,
+        ATTRIBUTE_INDEX_HOST_DATA_CENTER         = 6,
+        ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV        = 7,
+        ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE   = 8,
+        ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN   = 9,
+        ATTRIBUTE_INDEX_DISPATCHER_CONFIG        = 10,
+        ATTRIBUTE_INDEX_STATS                    = 11,
+        ATTRIBUTE_INDEX_NETWORK_INTERFACES       = 12,
+        ATTRIBUTE_INDEX_BMQCONF_CONFIG           = 13,
+        ATTRIBUTE_INDEX_PLUGINS                  = 14,
+        ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2    = 15,
+        ATTRIBUTE_INDEX_CONFIGURE_STREAM         = 16,
+        ATTRIBUTE_INDEX_ADVERTISE_SUBSCRIPTIONS  = 17,
+        ATTRIBUTE_INDEX_ROUTE_COMMAND_TIMEOUT_MS = 18
+    };
+
+    // CONSTANTS
+    static const char CLASS_NAME[];
+
+    static const char DEFAULT_INITIALIZER_LATENCY_MONITOR_DOMAIN[];
+
+    static const bool DEFAULT_INITIALIZER_CONFIGURE_STREAM;
+
+    static const bool DEFAULT_INITIALIZER_ADVERTISE_SUBSCRIPTIONS;
+
+    static const int DEFAULT_INITIALIZER_ROUTE_COMMAND_TIMEOUT_MS;
+
+    static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
+
+  public:
+    // CLASS METHODS
+    static const bdlat_AttributeInfo* lookupAttributeInfo(int id);
+    // Return attribute information for the attribute indicated by the
+    // specified 'id' if the attribute exists, and 0 otherwise.
+
+    static const bdlat_AttributeInfo* lookupAttributeInfo(const char* name,
+                                                          int nameLength);
+    // Return attribute information for the attribute indicated by the
+    // specified 'name' of the specified 'nameLength' if the attribute
+    // exists, and 0 otherwise.
+
+    // CREATORS
+    explicit AppConfig(bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'AppConfig' having the default value.  Use
+    // the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+
+    AppConfig(const AppConfig& original, bslma::Allocator* basicAllocator = 0);
+    // Create an object of type 'AppConfig' having the value of the
+    // specified 'original' object.  Use the optionally specified
+    // 'basicAllocator' to supply memory.  If 'basicAllocator' is 0, the
+    // currently installed default allocator is used.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    AppConfig(AppConfig&& original) noexcept;
+    // Create an object of type 'AppConfig' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+
+    AppConfig(AppConfig&& original, bslma::Allocator* basicAllocator);
+    // Create an object of type 'AppConfig' having the value of the
+    // specified 'original' object.  After performing this action, the
+    // 'original' object will be left in a valid, but unspecified state.
+    // Use the optionally specified 'basicAllocator' to supply memory.  If
+    // 'basicAllocator' is 0, the currently installed default allocator is
+    // used.
+#endif
+
+    ~AppConfig();
+    // Destroy this object.
+
+    // MANIPULATORS
+    AppConfig& operator=(const AppConfig& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+    AppConfig& operator=(AppConfig&& rhs);
+    // Assign to this object the value of the specified 'rhs' object.
+    // After performing this action, the 'rhs' object will be left in a
+    // valid, but unspecified state.
+#endif
+
+    void reset();
+    // Reset this object to the default value (i.e., its value upon
+    // default construction).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttributes(t_MANIPULATOR& manipulator);
+    // Invoke the specified 'manipulator' sequentially on the address of
+    // each (modifiable) attribute of this object, supplying 'manipulator'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'manipulator' (i.e., the invocation that
+    // terminated the sequence).
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator, int id);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'id',
+    // supplying 'manipulator' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'manipulator' if 'id' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    template <typename t_MANIPULATOR>
+    int manipulateAttribute(t_MANIPULATOR& manipulator,
+                            const char*    name,
+                            int            nameLength);
+    // Invoke the specified 'manipulator' on the address of
+    // the (modifiable) attribute indicated by the specified 'name' of the
+    // specified 'nameLength', supplying 'manipulator' with the
+    // corresponding attribute information structure.  Return the value
+    // returned from the invocation of 'manipulator' if 'name' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    bsl::string& brokerInstanceName();
+    // Return a reference to the modifiable "BrokerInstanceName" attribute
+    // of this object.
+
+    int& brokerVersion();
+    // Return a reference to the modifiable "BrokerVersion" attribute of
+    // this object.
+
+    int& configVersion();
+    // Return a reference to the modifiable "ConfigVersion" attribute of
+    // this object.
+
+    bsl::string& etcDir();
+    // Return a reference to the modifiable "EtcDir" attribute of this
+    // object.
+
+    bsl::string& hostName();
+    // Return a reference to the modifiable "HostName" attribute of this
+    // object.
+
+    bsl::string& hostTags();
+    // Return a reference to the modifiable "HostTags" attribute of this
+    // object.
+
+    bsl::string& hostDataCenter();
+    // Return a reference to the modifiable "HostDataCenter" attribute of
+    // this object.
+
+    bool& isRunningOnDev();
+    // Return a reference to the modifiable "IsRunningOnDev" attribute of
+    // this object.
+
+    int& logsObserverMaxSize();
+    // Return a reference to the modifiable "LogsObserverMaxSize" attribute
+    // of this object.
+
+    bsl::string& latencyMonitorDomain();
+    // Return a reference to the modifiable "LatencyMonitorDomain"
+    // attribute of this object.
+
+    DispatcherConfig& dispatcherConfig();
+    // Return a reference to the modifiable "DispatcherConfig" attribute of
+    // this object.
+
+    StatsConfig& stats();
+    // Return a reference to the modifiable "Stats" attribute of this
+    // object.
+
+    NetworkInterfaces& networkInterfaces();
+    // Return a reference to the modifiable "NetworkInterfaces" attribute
+    // of this object.
+
+    BmqconfConfig& bmqconfConfig();
+    // Return a reference to the modifiable "BmqconfConfig" attribute of
+    // this object.
+
+    Plugins& plugins();
+    // Return a reference to the modifiable "Plugins" attribute of this
+    // object.
+
+    MessagePropertiesV2& messagePropertiesV2();
+    // Return a reference to the modifiable "MessagePropertiesV2" attribute
+    // of this object.
+
+    bool& configureStream();
+    // Return a reference to the modifiable "ConfigureStream" attribute of
+    // this object.
+
+    bool& advertiseSubscriptions();
+    // Return a reference to the modifiable "AdvertiseSubscriptions"
+    // attribute of this object.
+
+    int& routeCommandTimeoutMs();
+    // Return a reference to the modifiable "RouteCommandTimeoutMs"
+    // attribute of this object.
+
+    // ACCESSORS
+    bsl::ostream&
+    print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
+    // Format this object to the specified output 'stream' at the
+    // optionally specified indentation 'level' and return a reference to
+    // the modifiable 'stream'.  If 'level' is specified, optionally
+    // specify 'spacesPerLevel', the number of spaces per indentation level
+    // for this and all of its nested objects.  Each line is indented by
+    // the absolute value of 'level * spacesPerLevel'.  If 'level' is
+    // negative, suppress indentation of the first line.  If
+    // 'spacesPerLevel' is negative, suppress line breaks and format the
+    // entire output on one line.  If 'stream' is initially invalid, this
+    // operation has no effect.  Note that a trailing newline is provided
+    // in multiline mode only.
+
+    template <typename t_ACCESSOR>
+    int accessAttributes(t_ACCESSOR& accessor) const;
+    // Invoke the specified 'accessor' sequentially on each
+    // (non-modifiable) attribute of this object, supplying 'accessor'
+    // with the corresponding attribute information structure until such
+    // invocation returns a non-zero value.  Return the value from the
+    // last invocation of 'accessor' (i.e., the invocation that terminated
+    // the sequence).
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor, int id) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'id', supplying 'accessor'
+    // with the corresponding attribute information structure.  Return the
+    // value returned from the invocation of 'accessor' if 'id' identifies
+    // an attribute of this class, and -1 otherwise.
+
+    template <typename t_ACCESSOR>
+    int accessAttribute(t_ACCESSOR& accessor,
+                        const char* name,
+                        int         nameLength) const;
+    // Invoke the specified 'accessor' on the (non-modifiable) attribute
+    // of this object indicated by the specified 'name' of the specified
+    // 'nameLength', supplying 'accessor' with the corresponding attribute
+    // information structure.  Return the value returned from the
+    // invocation of 'accessor' if 'name' identifies an attribute of this
+    // class, and -1 otherwise.
+
+    const bsl::string& brokerInstanceName() const;
+    // Return a reference offering non-modifiable access to the
+    // "BrokerInstanceName" attribute of this object.
+
+    int brokerVersion() const;
+    // Return the value of the "BrokerVersion" attribute of this object.
+
+    int configVersion() const;
+    // Return the value of the "ConfigVersion" attribute of this object.
+
+    const bsl::string& etcDir() const;
+    // Return a reference offering non-modifiable access to the "EtcDir"
+    // attribute of this object.
+
+    const bsl::string& hostName() const;
+    // Return a reference offering non-modifiable access to the "HostName"
+    // attribute of this object.
+
+    const bsl::string& hostTags() const;
+    // Return a reference offering non-modifiable access to the "HostTags"
+    // attribute of this object.
+
+    const bsl::string& hostDataCenter() const;
+    // Return a reference offering non-modifiable access to the
+    // "HostDataCenter" attribute of this object.
+
+    bool isRunningOnDev() const;
+    // Return the value of the "IsRunningOnDev" attribute of this object.
+
+    int logsObserverMaxSize() const;
+    // Return the value of the "LogsObserverMaxSize" attribute of this
+    // object.
+
+    const bsl::string& latencyMonitorDomain() const;
+    // Return a reference offering non-modifiable access to the
+    // "LatencyMonitorDomain" attribute of this object.
+
+    const DispatcherConfig& dispatcherConfig() const;
+    // Return a reference offering non-modifiable access to the
+    // "DispatcherConfig" attribute of this object.
+
+    const StatsConfig& stats() const;
+    // Return a reference offering non-modifiable access to the "Stats"
+    // attribute of this object.
+
+    const NetworkInterfaces& networkInterfaces() const;
+    // Return a reference offering non-modifiable access to the
+    // "NetworkInterfaces" attribute of this object.
+
+    const BmqconfConfig& bmqconfConfig() const;
+    // Return a reference offering non-modifiable access to the
+    // "BmqconfConfig" attribute of this object.
+
+    const Plugins& plugins() const;
+    // Return a reference offering non-modifiable access to the "Plugins"
+    // attribute of this object.
+
+    const MessagePropertiesV2& messagePropertiesV2() const;
+    // Return a reference offering non-modifiable access to the
+    // "MessagePropertiesV2" attribute of this object.
+
+    bool configureStream() const;
+    // Return the value of the "ConfigureStream" attribute of this object.
+
+    bool advertiseSubscriptions() const;
+    // Return the value of the "AdvertiseSubscriptions" attribute of this
+    // object.
+
+    int routeCommandTimeoutMs() const;
+    // Return the value of the "RouteCommandTimeoutMs" attribute of this
+    // object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const AppConfig& lhs, const AppConfig& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const AppConfig& lhs, const AppConfig& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream& stream, const AppConfig& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM& hashAlg, const AppConfig& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for 'AppConfig'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
+};
+
+}  // close package namespace
+
+// TRAITS
+
+BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(mqbcfg::AppConfig)
 
 namespace mqbcfg {
 
@@ -8085,6 +9122,12 @@ class ClustersDefinition {
     bsl::vector<ReversedClusterConnection> d_reversedClusterConnections;
     bsl::vector<ClusterProxyDefinition>    d_proxyClusters;
     bsl::vector<ClusterDefinition>         d_myClusters;
+
+    // PRIVATE ACCESSORS
+    template <typename t_HASH_ALGORITHM>
+    void hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const;
+
+    bool isEqualTo(const ClustersDefinition& rhs) const;
 
   public:
     // TYPES
@@ -8285,32 +9328,43 @@ class ClustersDefinition {
     reversedClusterConnections() const;
     // Return a reference offering non-modifiable access to the
     // "ReversedClusterConnections" attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const ClustersDefinition& lhs,
+                           const ClustersDefinition& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.isEqualTo(rhs);
+    }
+
+    friend bool operator!=(const ClustersDefinition& lhs,
+                           const ClustersDefinition& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&             stream,
+                                    const ClustersDefinition& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&         hashAlg,
+                           const ClustersDefinition& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'ClustersDefinition'.
+    {
+        object.hashAppendImpl(hashAlg);
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const ClustersDefinition& lhs,
-                       const ClustersDefinition& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const ClustersDefinition& lhs,
-                       const ClustersDefinition& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&             stream,
-                                const ClustersDefinition& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const ClustersDefinition& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'ClustersDefinition'.
 
 }  // close package namespace
 
@@ -8491,30 +9545,44 @@ class Configuration {
     const AppConfig& appConfig() const;
     // Return a reference offering non-modifiable access to the "AppConfig"
     // attribute of this object.
+
+    // HIDDEN FRIENDS
+    friend bool operator==(const Configuration& lhs, const Configuration& rhs)
+    // Return 'true' if the specified 'lhs' and 'rhs' attribute objects
+    // have the same value, and 'false' otherwise.  Two attribute objects
+    // have the same value if each respective attribute has the same value.
+    {
+        return lhs.taskConfig() == rhs.taskConfig() &&
+               lhs.appConfig() == rhs.appConfig();
+    }
+
+    friend bool operator!=(const Configuration& lhs, const Configuration& rhs)
+    // Returns '!(lhs == rhs)'
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bsl::ostream& operator<<(bsl::ostream&        stream,
+                                    const Configuration& rhs)
+    // Format the specified 'rhs' to the specified output 'stream' and
+    // return a reference to the modifiable 'stream'.
+    {
+        return rhs.print(stream, 0, -1);
+    }
+
+    template <typename t_HASH_ALGORITHM>
+    friend void hashAppend(t_HASH_ALGORITHM&    hashAlg,
+                           const Configuration& object)
+    // Pass the specified 'object' to the specified 'hashAlg'.  This
+    // function integrates with the 'bslh' modular hashing system and
+    // effectively provides a 'bsl::hash' specialization for
+    // 'Configuration'.
+    {
+        using bslh::hashAppend;
+        hashAppend(hashAlg, object.taskConfig());
+        hashAppend(hashAlg, object.appConfig());
+    }
 };
-
-// FREE OPERATORS
-inline bool operator==(const Configuration& lhs, const Configuration& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects have
-// the same value, and 'false' otherwise.  Two attribute objects have the
-// same value if each respective attribute has the same value.
-
-inline bool operator!=(const Configuration& lhs, const Configuration& rhs);
-// Return 'true' if the specified 'lhs' and 'rhs' attribute objects do not
-// have the same value, and 'false' otherwise.  Two attribute objects do
-// not have the same value if one or more respective attributes differ in
-// values.
-
-inline bsl::ostream& operator<<(bsl::ostream&        stream,
-                                const Configuration& rhs);
-// Format the specified 'rhs' to the specified output 'stream' and
-// return a reference to the modifiable 'stream'.
-
-template <typename t_HASH_ALGORITHM>
-void hashAppend(t_HASH_ALGORITHM& hashAlg, const Configuration& object);
-// Pass the specified 'object' to the specified 'hashAlg'.  This function
-// integrates with the 'bslh' modular hashing system and effectively
-// provides a 'bsl::hash' specialization for 'Configuration'.
 
 }  // close package namespace
 
@@ -8524,7 +9592,7 @@ BDLAT_DECL_SEQUENCE_WITH_ALLOCATOR_BITWISEMOVEABLE_TRAITS(
     mqbcfg::Configuration)
 
 // ============================================================================
-//                         INLINE FUNCTION DEFINITIONS
+//                          INLINE DEFINITIONS
 // ============================================================================
 
 namespace mqbcfg {
@@ -8799,6 +9867,35 @@ inline bool ClusterAttributes::isFSMWorkflow() const
 // --------------------------
 // class ClusterMonitorConfig
 // --------------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void ClusterMonitorConfig::hashAppendImpl(
+    t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->maxTimeLeader());
+    hashAppend(hashAlgorithm, this->maxTimeMaster());
+    hashAppend(hashAlgorithm, this->maxTimeNode());
+    hashAppend(hashAlgorithm, this->maxTimeFailover());
+    hashAppend(hashAlgorithm, this->thresholdLeader());
+    hashAppend(hashAlgorithm, this->thresholdMaster());
+    hashAppend(hashAlgorithm, this->thresholdNode());
+    hashAppend(hashAlgorithm, this->thresholdFailover());
+}
+
+inline bool
+ClusterMonitorConfig::isEqualTo(const ClusterMonitorConfig& rhs) const
+{
+    return this->maxTimeLeader() == rhs.maxTimeLeader() &&
+           this->maxTimeMaster() == rhs.maxTimeMaster() &&
+           this->maxTimeNode() == rhs.maxTimeNode() &&
+           this->maxTimeFailover() == rhs.maxTimeFailover() &&
+           this->thresholdLeader() == rhs.thresholdLeader() &&
+           this->thresholdMaster() == rhs.thresholdMaster() &&
+           this->thresholdNode() == rhs.thresholdNode() &&
+           this->thresholdFailover() == rhs.thresholdFailover();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -9129,6 +10226,17 @@ inline int ClusterMonitorConfig::thresholdFailover() const
 // class DispatcherProcessorParameters
 // -----------------------------------
 
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void DispatcherProcessorParameters::hashAppendImpl(
+    t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->queueSize());
+    hashAppend(hashAlgorithm, this->queueSizeLowWatermark());
+    hashAppend(hashAlgorithm, this->queueSizeHighWatermark());
+}
+
 // CLASS METHODS
 // MANIPULATORS
 template <typename t_MANIPULATOR>
@@ -9306,6 +10414,36 @@ inline int DispatcherProcessorParameters::queueSizeHighWatermark() const
 // -------------------
 // class ElectorConfig
 // -------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void ElectorConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->initialWaitTimeoutMs());
+    hashAppend(hashAlgorithm, this->maxRandomWaitTimeoutMs());
+    hashAppend(hashAlgorithm, this->scoutingResultTimeoutMs());
+    hashAppend(hashAlgorithm, this->electionResultTimeoutMs());
+    hashAppend(hashAlgorithm, this->heartbeatBroadcastPeriodMs());
+    hashAppend(hashAlgorithm, this->heartbeatCheckPeriodMs());
+    hashAppend(hashAlgorithm, this->heartbeatMissCount());
+    hashAppend(hashAlgorithm, this->quorum());
+    hashAppend(hashAlgorithm, this->leaderSyncDelayMs());
+}
+
+inline bool ElectorConfig::isEqualTo(const ElectorConfig& rhs) const
+{
+    return this->initialWaitTimeoutMs() == rhs.initialWaitTimeoutMs() &&
+           this->maxRandomWaitTimeoutMs() == rhs.maxRandomWaitTimeoutMs() &&
+           this->scoutingResultTimeoutMs() == rhs.scoutingResultTimeoutMs() &&
+           this->electionResultTimeoutMs() == rhs.electionResultTimeoutMs() &&
+           this->heartbeatBroadcastPeriodMs() ==
+               rhs.heartbeatBroadcastPeriodMs() &&
+           this->heartbeatCheckPeriodMs() == rhs.heartbeatCheckPeriodMs() &&
+           this->heartbeatMissCount() == rhs.heartbeatMissCount() &&
+           this->quorum() == rhs.quorum() &&
+           this->leaderSyncDelayMs() == rhs.leaderSyncDelayMs();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -9677,9 +10815,46 @@ inline int ElectorConfig::leaderSyncDelayMs() const
     return d_leaderSyncDelayMs;
 }
 
+// ----------------
+// class ExportMode
+// ----------------
+
+// CLASS METHODS
+inline int ExportMode::fromString(Value* result, const bsl::string& string)
+{
+    return fromString(result,
+                      string.c_str(),
+                      static_cast<int>(string.length()));
+}
+
+inline bsl::ostream& ExportMode::print(bsl::ostream&     stream,
+                                       ExportMode::Value value)
+{
+    return stream << toString(value);
+}
+
 // ---------------
 // class Heartbeat
 // ---------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void Heartbeat::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->client());
+    hashAppend(hashAlgorithm, this->downstreamBroker());
+    hashAppend(hashAlgorithm, this->upstreamBroker());
+    hashAppend(hashAlgorithm, this->clusterPeer());
+}
+
+inline bool Heartbeat::isEqualTo(const Heartbeat& rhs) const
+{
+    return this->client() == rhs.client() &&
+           this->downstreamBroker() == rhs.downstreamBroker() &&
+           this->upstreamBroker() == rhs.upstreamBroker() &&
+           this->clusterPeer() == rhs.clusterPeer();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -9873,6 +11048,186 @@ inline int Heartbeat::clusterPeer() const
     return d_clusterPeer;
 }
 
+// -------------------
+// class LogDumpConfig
+// -------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void LogDumpConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->recordBufferSize());
+    hashAppend(hashAlgorithm, this->recordingLevel());
+    hashAppend(hashAlgorithm, this->triggerLevel());
+}
+
+// CLASS METHODS
+// MANIPULATORS
+template <typename t_MANIPULATOR>
+int LogDumpConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
+{
+    int ret;
+
+    ret = manipulator(
+        &d_recordBufferSize,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORD_BUFFER_SIZE]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_recordingLevel,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORDING_LEVEL]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_triggerLevel,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TRIGGER_LEVEL]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_MANIPULATOR>
+int LogDumpConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_RECORD_BUFFER_SIZE: {
+        return manipulator(
+            &d_recordBufferSize,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORD_BUFFER_SIZE]);
+    }
+    case ATTRIBUTE_ID_RECORDING_LEVEL: {
+        return manipulator(
+            &d_recordingLevel,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORDING_LEVEL]);
+    }
+    case ATTRIBUTE_ID_TRIGGER_LEVEL: {
+        return manipulator(
+            &d_triggerLevel,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TRIGGER_LEVEL]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_MANIPULATOR>
+int LogDumpConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                       const char*    name,
+                                       int            nameLength)
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return manipulateAttribute(manipulator, attributeInfo->d_id);
+}
+
+inline int& LogDumpConfig::recordBufferSize()
+{
+    return d_recordBufferSize;
+}
+
+inline bsl::string& LogDumpConfig::recordingLevel()
+{
+    return d_recordingLevel;
+}
+
+inline bsl::string& LogDumpConfig::triggerLevel()
+{
+    return d_triggerLevel;
+}
+
+// ACCESSORS
+template <typename t_ACCESSOR>
+int LogDumpConfig::accessAttributes(t_ACCESSOR& accessor) const
+{
+    int ret;
+
+    ret = accessor(d_recordBufferSize,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORD_BUFFER_SIZE]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_recordingLevel,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORDING_LEVEL]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_triggerLevel,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TRIGGER_LEVEL]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_ACCESSOR>
+int LogDumpConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_RECORD_BUFFER_SIZE: {
+        return accessor(
+            d_recordBufferSize,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORD_BUFFER_SIZE]);
+    }
+    case ATTRIBUTE_ID_RECORDING_LEVEL: {
+        return accessor(d_recordingLevel,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORDING_LEVEL]);
+    }
+    case ATTRIBUTE_ID_TRIGGER_LEVEL: {
+        return accessor(d_triggerLevel,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TRIGGER_LEVEL]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_ACCESSOR>
+int LogDumpConfig::accessAttribute(t_ACCESSOR& accessor,
+                                   const char* name,
+                                   int         nameLength) const
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return accessAttribute(accessor, attributeInfo->d_id);
+}
+
+inline int LogDumpConfig::recordBufferSize() const
+{
+    return d_recordBufferSize;
+}
+
+inline const bsl::string& LogDumpConfig::recordingLevel() const
+{
+    return d_recordingLevel;
+}
+
+inline const bsl::string& LogDumpConfig::triggerLevel() const
+{
+    return d_triggerLevel;
+}
+
 // -------------------------------
 // class MasterAssignmentAlgorithm
 // -------------------------------
@@ -9896,6 +11251,16 @@ MasterAssignmentAlgorithm::print(bsl::ostream&                    stream,
 // -------------------------
 // class MessagePropertiesV2
 // -------------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void MessagePropertiesV2::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->advertiseV2Support());
+    hashAppend(hashAlgorithm, this->minCppSdkVersion());
+    hashAppend(hashAlgorithm, this->minJavaSdkVersion());
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -10071,6 +11436,27 @@ inline int MessagePropertiesV2::minJavaSdkVersion() const
 // ---------------------------
 // class MessageThrottleConfig
 // ---------------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void MessageThrottleConfig::hashAppendImpl(
+    t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->lowThreshold());
+    hashAppend(hashAlgorithm, this->highThreshold());
+    hashAppend(hashAlgorithm, this->lowInterval());
+    hashAppend(hashAlgorithm, this->highInterval());
+}
+
+inline bool
+MessageThrottleConfig::isEqualTo(const MessageThrottleConfig& rhs) const
+{
+    return this->lowThreshold() == rhs.lowThreshold() &&
+           this->highThreshold() == rhs.highThreshold() &&
+           this->lowInterval() == rhs.lowInterval() &&
+           this->highInterval() == rhs.highInterval();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -10404,6 +11790,44 @@ inline const bsl::vector<bsl::string>& Plugins::enabled() const
 // ---------------------------
 // class QueueOperationsConfig
 // ---------------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void QueueOperationsConfig::hashAppendImpl(
+    t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->openTimeoutMs());
+    hashAppend(hashAlgorithm, this->configureTimeoutMs());
+    hashAppend(hashAlgorithm, this->closeTimeoutMs());
+    hashAppend(hashAlgorithm, this->reopenTimeoutMs());
+    hashAppend(hashAlgorithm, this->reopenRetryIntervalMs());
+    hashAppend(hashAlgorithm, this->reopenMaxAttempts());
+    hashAppend(hashAlgorithm, this->assignmentTimeoutMs());
+    hashAppend(hashAlgorithm, this->keepaliveDurationMs());
+    hashAppend(hashAlgorithm, this->consumptionMonitorPeriodMs());
+    hashAppend(hashAlgorithm, this->stopTimeoutMs());
+    hashAppend(hashAlgorithm, this->shutdownTimeoutMs());
+    hashAppend(hashAlgorithm, this->ackWindowSize());
+}
+
+inline bool
+QueueOperationsConfig::isEqualTo(const QueueOperationsConfig& rhs) const
+{
+    return this->openTimeoutMs() == rhs.openTimeoutMs() &&
+           this->configureTimeoutMs() == rhs.configureTimeoutMs() &&
+           this->closeTimeoutMs() == rhs.closeTimeoutMs() &&
+           this->reopenTimeoutMs() == rhs.reopenTimeoutMs() &&
+           this->reopenRetryIntervalMs() == rhs.reopenRetryIntervalMs() &&
+           this->reopenMaxAttempts() == rhs.reopenMaxAttempts() &&
+           this->assignmentTimeoutMs() == rhs.assignmentTimeoutMs() &&
+           this->keepaliveDurationMs() == rhs.keepaliveDurationMs() &&
+           this->consumptionMonitorPeriodMs() ==
+               rhs.consumptionMonitorPeriodMs() &&
+           this->stopTimeoutMs() == rhs.stopTimeoutMs() &&
+           this->shutdownTimeoutMs() == rhs.shutdownTimeoutMs() &&
+           this->ackWindowSize() == rhs.ackWindowSize();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -11006,328 +12430,30 @@ inline const bsl::string& ResolvedDomain::clusterName() const
     return d_clusterName;
 }
 
-// ----------------------
-// class StatPluginConfig
-// ----------------------
-
-// CLASS METHODS
-// MANIPULATORS
-template <typename t_MANIPULATOR>
-int StatPluginConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
-{
-    int ret;
-
-    ret = manipulator(&d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_queueSize,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_queueHighWatermark,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_queueLowWatermark,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_publishInterval,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_namespacePrefix,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_hosts, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_instanceId,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID]);
-    if (ret) {
-        return ret;
-    }
-
-    return 0;
-}
-
-template <typename t_MANIPULATOR>
-int StatPluginConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
-{
-    enum { NOT_FOUND = -1 };
-
-    switch (id) {
-    case ATTRIBUTE_ID_NAME: {
-        return manipulator(&d_name,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
-    }
-    case ATTRIBUTE_ID_QUEUE_SIZE: {
-        return manipulator(&d_queueSize,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE]);
-    }
-    case ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK: {
-        return manipulator(
-            &d_queueHighWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_QUEUE_LOW_WATERMARK: {
-        return manipulator(
-            &d_queueLowWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_PUBLISH_INTERVAL: {
-        return manipulator(
-            &d_publishInterval,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL]);
-    }
-    case ATTRIBUTE_ID_NAMESPACE_PREFIX: {
-        return manipulator(
-            &d_namespacePrefix,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX]);
-    }
-    case ATTRIBUTE_ID_HOSTS: {
-        return manipulator(&d_hosts,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS]);
-    }
-    case ATTRIBUTE_ID_INSTANCE_ID: {
-        return manipulator(&d_instanceId,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID]);
-    }
-    default: return NOT_FOUND;
-    }
-}
-
-template <typename t_MANIPULATOR>
-int StatPluginConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
-                                          const char*    name,
-                                          int            nameLength)
-{
-    enum { NOT_FOUND = -1 };
-
-    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
-                                                                   nameLength);
-    if (0 == attributeInfo) {
-        return NOT_FOUND;
-    }
-
-    return manipulateAttribute(manipulator, attributeInfo->d_id);
-}
-
-inline bsl::string& StatPluginConfig::name()
-{
-    return d_name;
-}
-
-inline int& StatPluginConfig::queueSize()
-{
-    return d_queueSize;
-}
-
-inline int& StatPluginConfig::queueHighWatermark()
-{
-    return d_queueHighWatermark;
-}
-
-inline int& StatPluginConfig::queueLowWatermark()
-{
-    return d_queueLowWatermark;
-}
-
-inline int& StatPluginConfig::publishInterval()
-{
-    return d_publishInterval;
-}
-
-inline bsl::string& StatPluginConfig::namespacePrefix()
-{
-    return d_namespacePrefix;
-}
-
-inline bsl::vector<bsl::string>& StatPluginConfig::hosts()
-{
-    return d_hosts;
-}
-
-inline bsl::string& StatPluginConfig::instanceId()
-{
-    return d_instanceId;
-}
-
-// ACCESSORS
-template <typename t_ACCESSOR>
-int StatPluginConfig::accessAttributes(t_ACCESSOR& accessor) const
-{
-    int ret;
-
-    ret = accessor(d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_queueSize,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_queueHighWatermark,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_queueLowWatermark,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_publishInterval,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_namespacePrefix,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_hosts, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_instanceId,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID]);
-    if (ret) {
-        return ret;
-    }
-
-    return 0;
-}
-
-template <typename t_ACCESSOR>
-int StatPluginConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
-{
-    enum { NOT_FOUND = -1 };
-
-    switch (id) {
-    case ATTRIBUTE_ID_NAME: {
-        return accessor(d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
-    }
-    case ATTRIBUTE_ID_QUEUE_SIZE: {
-        return accessor(d_queueSize,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE]);
-    }
-    case ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK: {
-        return accessor(
-            d_queueHighWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_QUEUE_LOW_WATERMARK: {
-        return accessor(
-            d_queueLowWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_PUBLISH_INTERVAL: {
-        return accessor(
-            d_publishInterval,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL]);
-    }
-    case ATTRIBUTE_ID_NAMESPACE_PREFIX: {
-        return accessor(
-            d_namespacePrefix,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX]);
-    }
-    case ATTRIBUTE_ID_HOSTS: {
-        return accessor(d_hosts, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS]);
-    }
-    case ATTRIBUTE_ID_INSTANCE_ID: {
-        return accessor(d_instanceId,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID]);
-    }
-    default: return NOT_FOUND;
-    }
-}
-
-template <typename t_ACCESSOR>
-int StatPluginConfig::accessAttribute(t_ACCESSOR& accessor,
-                                      const char* name,
-                                      int         nameLength) const
-{
-    enum { NOT_FOUND = -1 };
-
-    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
-                                                                   nameLength);
-    if (0 == attributeInfo) {
-        return NOT_FOUND;
-    }
-
-    return accessAttribute(accessor, attributeInfo->d_id);
-}
-
-inline const bsl::string& StatPluginConfig::name() const
-{
-    return d_name;
-}
-
-inline int StatPluginConfig::queueSize() const
-{
-    return d_queueSize;
-}
-
-inline int StatPluginConfig::queueHighWatermark() const
-{
-    return d_queueHighWatermark;
-}
-
-inline int StatPluginConfig::queueLowWatermark() const
-{
-    return d_queueLowWatermark;
-}
-
-inline int StatPluginConfig::publishInterval() const
-{
-    return d_publishInterval;
-}
-
-inline const bsl::string& StatPluginConfig::namespacePrefix() const
-{
-    return d_namespacePrefix;
-}
-
-inline const bsl::vector<bsl::string>& StatPluginConfig::hosts() const
-{
-    return d_hosts;
-}
-
-inline const bsl::string& StatPluginConfig::instanceId() const
-{
-    return d_instanceId;
-}
-
 // ------------------------
 // class StatsPrinterConfig
 // ------------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void StatsPrinterConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->printInterval());
+    hashAppend(hashAlgorithm, this->file());
+    hashAppend(hashAlgorithm, this->maxAgeDays());
+    hashAppend(hashAlgorithm, this->rotateBytes());
+    hashAppend(hashAlgorithm, this->rotateDays());
+}
+
+inline bool StatsPrinterConfig::isEqualTo(const StatsPrinterConfig& rhs) const
+{
+    return this->printInterval() == rhs.printInterval() &&
+           this->file() == rhs.file() &&
+           this->maxAgeDays() == rhs.maxAgeDays() &&
+           this->rotateBytes() == rhs.rotateBytes() &&
+           this->rotateDays() == rhs.rotateDays();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -11551,6 +12677,38 @@ inline int StatsPrinterConfig::rotateDays() const
 // -----------------------
 // class StorageSyncConfig
 // -----------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void StorageSyncConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->startupRecoveryMaxDurationMs());
+    hashAppend(hashAlgorithm, this->maxAttemptsStorageSync());
+    hashAppend(hashAlgorithm, this->storageSyncReqTimeoutMs());
+    hashAppend(hashAlgorithm, this->masterSyncMaxDurationMs());
+    hashAppend(hashAlgorithm, this->partitionSyncStateReqTimeoutMs());
+    hashAppend(hashAlgorithm, this->partitionSyncDataReqTimeoutMs());
+    hashAppend(hashAlgorithm, this->startupWaitDurationMs());
+    hashAppend(hashAlgorithm, this->fileChunkSize());
+    hashAppend(hashAlgorithm, this->partitionSyncEventSize());
+}
+
+inline bool StorageSyncConfig::isEqualTo(const StorageSyncConfig& rhs) const
+{
+    return this->startupRecoveryMaxDurationMs() ==
+               rhs.startupRecoveryMaxDurationMs() &&
+           this->maxAttemptsStorageSync() == rhs.maxAttemptsStorageSync() &&
+           this->storageSyncReqTimeoutMs() == rhs.storageSyncReqTimeoutMs() &&
+           this->masterSyncMaxDurationMs() == rhs.masterSyncMaxDurationMs() &&
+           this->partitionSyncStateReqTimeoutMs() ==
+               rhs.partitionSyncStateReqTimeoutMs() &&
+           this->partitionSyncDataReqTimeoutMs() ==
+               rhs.partitionSyncDataReqTimeoutMs() &&
+           this->startupWaitDurationMs() == rhs.startupWaitDurationMs() &&
+           this->fileChunkSize() == rhs.fileChunkSize() &&
+           this->partitionSyncEventSize() == rhs.partitionSyncEventSize();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -11938,6 +13096,25 @@ inline int StorageSyncConfig::partitionSyncEventSize() const
 // class SyslogConfig
 // ------------------
 
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void SyslogConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->enabled());
+    hashAppend(hashAlgorithm, this->appName());
+    hashAppend(hashAlgorithm, this->logFormat());
+    hashAppend(hashAlgorithm, this->verbosity());
+}
+
+inline bool SyslogConfig::isEqualTo(const SyslogConfig& rhs) const
+{
+    return this->enabled() == rhs.enabled() &&
+           this->appName() == rhs.appName() &&
+           this->logFormat() == rhs.logFormat() &&
+           this->verbosity() == rhs.verbosity();
+}
+
 // CLASS METHODS
 // MANIPULATORS
 template <typename t_MANIPULATOR>
@@ -12233,14 +13410,14 @@ inline const bsl::string& TcpClusterNodeConnection::endpoint() const
     return d_endpoint;
 }
 
-// ------------------------
-// class TcpInterfaceConfig
-// ------------------------
+// --------------------------
+// class TcpInterfaceListener
+// --------------------------
 
 // CLASS METHODS
 // MANIPULATORS
 template <typename t_MANIPULATOR>
-int TcpInterfaceConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
+int TcpInterfaceListener::manipulateAttributes(t_MANIPULATOR& manipulator)
 {
     int ret;
 
@@ -12254,62 +13431,12 @@ int TcpInterfaceConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
         return ret;
     }
 
-    ret = manipulator(&d_ioThreads,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_maxConnections,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_lowWatermark,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_highWatermark,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_nodeLowWatermark,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_nodeHighWatermark,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_heartbeatIntervalMs,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_useNtf,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_USE_NTF]);
-    if (ret) {
-        return ret;
-    }
-
     return 0;
 }
 
 template <typename t_MANIPULATOR>
-int TcpInterfaceConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+int TcpInterfaceListener::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                              int            id)
 {
     enum { NOT_FOUND = -1 };
 
@@ -12322,52 +13449,14 @@ int TcpInterfaceConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
         return manipulator(&d_port,
                            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
     }
-    case ATTRIBUTE_ID_IO_THREADS: {
-        return manipulator(&d_ioThreads,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS]);
-    }
-    case ATTRIBUTE_ID_MAX_CONNECTIONS: {
-        return manipulator(
-            &d_maxConnections,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS]);
-    }
-    case ATTRIBUTE_ID_LOW_WATERMARK: {
-        return manipulator(
-            &d_lowWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_HIGH_WATERMARK: {
-        return manipulator(
-            &d_highWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_NODE_LOW_WATERMARK: {
-        return manipulator(
-            &d_nodeLowWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_NODE_HIGH_WATERMARK: {
-        return manipulator(
-            &d_nodeHighWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS: {
-        return manipulator(
-            &d_heartbeatIntervalMs,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
-    }
-    case ATTRIBUTE_ID_USE_NTF: {
-        return manipulator(&d_useNtf,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_USE_NTF]);
-    }
     default: return NOT_FOUND;
     }
 }
 
 template <typename t_MANIPULATOR>
-int TcpInterfaceConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
-                                            const char*    name,
-                                            int            nameLength)
+int TcpInterfaceListener::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                              const char*    name,
+                                              int            nameLength)
 {
     enum { NOT_FOUND = -1 };
 
@@ -12380,59 +13469,19 @@ int TcpInterfaceConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
     return manipulateAttribute(manipulator, attributeInfo->d_id);
 }
 
-inline bsl::string& TcpInterfaceConfig::name()
+inline bsl::string& TcpInterfaceListener::name()
 {
     return d_name;
 }
 
-inline int& TcpInterfaceConfig::port()
+inline int& TcpInterfaceListener::port()
 {
     return d_port;
 }
 
-inline int& TcpInterfaceConfig::ioThreads()
-{
-    return d_ioThreads;
-}
-
-inline int& TcpInterfaceConfig::maxConnections()
-{
-    return d_maxConnections;
-}
-
-inline bsls::Types::Int64& TcpInterfaceConfig::lowWatermark()
-{
-    return d_lowWatermark;
-}
-
-inline bsls::Types::Int64& TcpInterfaceConfig::highWatermark()
-{
-    return d_highWatermark;
-}
-
-inline bsls::Types::Int64& TcpInterfaceConfig::nodeLowWatermark()
-{
-    return d_nodeLowWatermark;
-}
-
-inline bsls::Types::Int64& TcpInterfaceConfig::nodeHighWatermark()
-{
-    return d_nodeHighWatermark;
-}
-
-inline int& TcpInterfaceConfig::heartbeatIntervalMs()
-{
-    return d_heartbeatIntervalMs;
-}
-
-inline bool& TcpInterfaceConfig::useNtf()
-{
-    return d_useNtf;
-}
-
 // ACCESSORS
 template <typename t_ACCESSOR>
-int TcpInterfaceConfig::accessAttributes(t_ACCESSOR& accessor) const
+int TcpInterfaceListener::accessAttributes(t_ACCESSOR& accessor) const
 {
     int ret;
 
@@ -12446,59 +13495,11 @@ int TcpInterfaceConfig::accessAttributes(t_ACCESSOR& accessor) const
         return ret;
     }
 
-    ret = accessor(d_ioThreads,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_maxConnections,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_lowWatermark,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_highWatermark,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_nodeLowWatermark,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_nodeHighWatermark,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(
-        d_heartbeatIntervalMs,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_useNtf, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_USE_NTF]);
-    if (ret) {
-        return ret;
-    }
-
     return 0;
 }
 
 template <typename t_ACCESSOR>
-int TcpInterfaceConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
+int TcpInterfaceListener::accessAttribute(t_ACCESSOR& accessor, int id) const
 {
     enum { NOT_FOUND = -1 };
 
@@ -12509,49 +13510,14 @@ int TcpInterfaceConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
     case ATTRIBUTE_ID_PORT: {
         return accessor(d_port, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
     }
-    case ATTRIBUTE_ID_IO_THREADS: {
-        return accessor(d_ioThreads,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS]);
-    }
-    case ATTRIBUTE_ID_MAX_CONNECTIONS: {
-        return accessor(d_maxConnections,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS]);
-    }
-    case ATTRIBUTE_ID_LOW_WATERMARK: {
-        return accessor(d_lowWatermark,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_HIGH_WATERMARK: {
-        return accessor(d_highWatermark,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_NODE_LOW_WATERMARK: {
-        return accessor(
-            d_nodeLowWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_NODE_HIGH_WATERMARK: {
-        return accessor(
-            d_nodeHighWatermark,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK]);
-    }
-    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS: {
-        return accessor(
-            d_heartbeatIntervalMs,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
-    }
-    case ATTRIBUTE_ID_USE_NTF: {
-        return accessor(d_useNtf,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_USE_NTF]);
-    }
     default: return NOT_FOUND;
     }
 }
 
 template <typename t_ACCESSOR>
-int TcpInterfaceConfig::accessAttribute(t_ACCESSOR& accessor,
-                                        const char* name,
-                                        int         nameLength) const
+int TcpInterfaceListener::accessAttribute(t_ACCESSOR& accessor,
+                                          const char* name,
+                                          int         nameLength) const
 {
     enum { NOT_FOUND = -1 };
 
@@ -12564,54 +13530,14 @@ int TcpInterfaceConfig::accessAttribute(t_ACCESSOR& accessor,
     return accessAttribute(accessor, attributeInfo->d_id);
 }
 
-inline const bsl::string& TcpInterfaceConfig::name() const
+inline const bsl::string& TcpInterfaceListener::name() const
 {
     return d_name;
 }
 
-inline int TcpInterfaceConfig::port() const
+inline int TcpInterfaceListener::port() const
 {
     return d_port;
-}
-
-inline int TcpInterfaceConfig::ioThreads() const
-{
-    return d_ioThreads;
-}
-
-inline int TcpInterfaceConfig::maxConnections() const
-{
-    return d_maxConnections;
-}
-
-inline bsls::Types::Int64 TcpInterfaceConfig::lowWatermark() const
-{
-    return d_lowWatermark;
-}
-
-inline bsls::Types::Int64 TcpInterfaceConfig::highWatermark() const
-{
-    return d_highWatermark;
-}
-
-inline bsls::Types::Int64 TcpInterfaceConfig::nodeLowWatermark() const
-{
-    return d_nodeLowWatermark;
-}
-
-inline bsls::Types::Int64 TcpInterfaceConfig::nodeHighWatermark() const
-{
-    return d_nodeHighWatermark;
-}
-
-inline int TcpInterfaceConfig::heartbeatIntervalMs() const
-{
-    return d_heartbeatIntervalMs;
-}
-
-inline bool TcpInterfaceConfig::useNtf() const
-{
-    return d_useNtf;
 }
 
 // -------------------------------
@@ -12753,6 +13679,39 @@ inline int VirtualClusterInformation::selfNodeId() const
 // ---------------------------
 
 // CLASS METHODS
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void ClusterNodeConnection::hashAppendImpl(
+    t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    typedef ClusterNodeConnection Class;
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->selectionId());
+    switch (this->selectionId()) {
+    case Class::SELECTION_ID_TCP:
+        hashAppend(hashAlgorithm, this->tcp());
+        break;
+    default: BSLS_ASSERT(this->selectionId() == Class::SELECTION_ID_UNDEFINED);
+    }
+}
+
+inline bool
+ClusterNodeConnection::isEqualTo(const ClusterNodeConnection& rhs) const
+{
+    typedef ClusterNodeConnection Class;
+    if (this->selectionId() == rhs.selectionId()) {
+        switch (rhs.selectionId()) {
+        case Class::SELECTION_ID_TCP: return this->tcp() == rhs.tcp();
+        default:
+            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
 // CREATORS
 inline ClusterNodeConnection::ClusterNodeConnection(
     bslma::Allocator* basicAllocator)
@@ -12966,6 +13925,40 @@ DispatcherProcessorConfig::processorConfig() const
 // class LogController
 // -------------------
 
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void LogController::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->fileName());
+    hashAppend(hashAlgorithm, this->fileMaxAgeDays());
+    hashAppend(hashAlgorithm, this->rotationBytes());
+    hashAppend(hashAlgorithm, this->logfileFormat());
+    hashAppend(hashAlgorithm, this->consoleFormat());
+    hashAppend(hashAlgorithm, this->loggingVerbosity());
+    hashAppend(hashAlgorithm, this->bslsLogSeverityThreshold());
+    hashAppend(hashAlgorithm, this->consoleSeverityThreshold());
+    hashAppend(hashAlgorithm, this->categories());
+    hashAppend(hashAlgorithm, this->syslog());
+    hashAppend(hashAlgorithm, this->logDump());
+}
+
+inline bool LogController::isEqualTo(const LogController& rhs) const
+{
+    return this->fileName() == rhs.fileName() &&
+           this->fileMaxAgeDays() == rhs.fileMaxAgeDays() &&
+           this->rotationBytes() == rhs.rotationBytes() &&
+           this->logfileFormat() == rhs.logfileFormat() &&
+           this->consoleFormat() == rhs.consoleFormat() &&
+           this->loggingVerbosity() == rhs.loggingVerbosity() &&
+           this->bslsLogSeverityThreshold() ==
+               rhs.bslsLogSeverityThreshold() &&
+           this->consoleSeverityThreshold() ==
+               rhs.consoleSeverityThreshold() &&
+           this->categories() == rhs.categories() &&
+           this->syslog() == rhs.syslog() && this->logDump() == rhs.logDump();
+}
+
 // CLASS METHODS
 // MANIPULATORS
 template <typename t_MANIPULATOR>
@@ -13034,6 +14027,12 @@ int LogController::manipulateAttributes(t_MANIPULATOR& manipulator)
         return ret;
     }
 
+    ret = manipulator(&d_logDump,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOG_DUMP]);
+    if (ret) {
+        return ret;
+    }
+
     return 0;
 }
 
@@ -13089,6 +14088,10 @@ int LogController::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
     case ATTRIBUTE_ID_SYSLOG: {
         return manipulator(&d_syslog,
                            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SYSLOG]);
+    }
+    case ATTRIBUTE_ID_LOG_DUMP: {
+        return manipulator(&d_logDump,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOG_DUMP]);
     }
     default: return NOT_FOUND;
     }
@@ -13160,6 +14163,11 @@ inline SyslogConfig& LogController::syslog()
     return d_syslog;
 }
 
+inline LogDumpConfig& LogController::logDump()
+{
+    return d_logDump;
+}
+
 // ACCESSORS
 template <typename t_ACCESSOR>
 int LogController::accessAttributes(t_ACCESSOR& accessor) const
@@ -13227,6 +14235,11 @@ int LogController::accessAttributes(t_ACCESSOR& accessor) const
         return ret;
     }
 
+    ret = accessor(d_logDump, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOG_DUMP]);
+    if (ret) {
+        return ret;
+    }
+
     return 0;
 }
 
@@ -13279,6 +14292,10 @@ int LogController::accessAttribute(t_ACCESSOR& accessor, int id) const
     case ATTRIBUTE_ID_SYSLOG: {
         return accessor(d_syslog,
                         ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SYSLOG]);
+    }
+    case ATTRIBUTE_ID_LOG_DUMP: {
+        return accessor(d_logDump,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOG_DUMP]);
     }
     default: return NOT_FOUND;
     }
@@ -13350,147 +14367,49 @@ inline const SyslogConfig& LogController::syslog() const
     return d_syslog;
 }
 
-// -----------------------
-// class NetworkInterfaces
-// -----------------------
-
-// CLASS METHODS
-// MANIPULATORS
-template <typename t_MANIPULATOR>
-int NetworkInterfaces::manipulateAttributes(t_MANIPULATOR& manipulator)
+inline const LogDumpConfig& LogController::logDump() const
 {
-    int ret;
-
-    ret = manipulator(&d_heartbeats,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_tcpInterface,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE]);
-    if (ret) {
-        return ret;
-    }
-
-    return 0;
-}
-
-template <typename t_MANIPULATOR>
-int NetworkInterfaces::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
-{
-    enum { NOT_FOUND = -1 };
-
-    switch (id) {
-    case ATTRIBUTE_ID_HEARTBEATS: {
-        return manipulator(&d_heartbeats,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS]);
-    }
-    case ATTRIBUTE_ID_TCP_INTERFACE: {
-        return manipulator(
-            &d_tcpInterface,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE]);
-    }
-    default: return NOT_FOUND;
-    }
-}
-
-template <typename t_MANIPULATOR>
-int NetworkInterfaces::manipulateAttribute(t_MANIPULATOR& manipulator,
-                                           const char*    name,
-                                           int            nameLength)
-{
-    enum { NOT_FOUND = -1 };
-
-    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
-                                                                   nameLength);
-    if (0 == attributeInfo) {
-        return NOT_FOUND;
-    }
-
-    return manipulateAttribute(manipulator, attributeInfo->d_id);
-}
-
-inline Heartbeat& NetworkInterfaces::heartbeats()
-{
-    return d_heartbeats;
-}
-
-inline bdlb::NullableValue<TcpInterfaceConfig>&
-NetworkInterfaces::tcpInterface()
-{
-    return d_tcpInterface;
-}
-
-// ACCESSORS
-template <typename t_ACCESSOR>
-int NetworkInterfaces::accessAttributes(t_ACCESSOR& accessor) const
-{
-    int ret;
-
-    ret = accessor(d_heartbeats,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_tcpInterface,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE]);
-    if (ret) {
-        return ret;
-    }
-
-    return 0;
-}
-
-template <typename t_ACCESSOR>
-int NetworkInterfaces::accessAttribute(t_ACCESSOR& accessor, int id) const
-{
-    enum { NOT_FOUND = -1 };
-
-    switch (id) {
-    case ATTRIBUTE_ID_HEARTBEATS: {
-        return accessor(d_heartbeats,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS]);
-    }
-    case ATTRIBUTE_ID_TCP_INTERFACE: {
-        return accessor(d_tcpInterface,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE]);
-    }
-    default: return NOT_FOUND;
-    }
-}
-
-template <typename t_ACCESSOR>
-int NetworkInterfaces::accessAttribute(t_ACCESSOR& accessor,
-                                       const char* name,
-                                       int         nameLength) const
-{
-    enum { NOT_FOUND = -1 };
-
-    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
-                                                                   nameLength);
-    if (0 == attributeInfo) {
-        return NOT_FOUND;
-    }
-
-    return accessAttribute(accessor, attributeInfo->d_id);
-}
-
-inline const Heartbeat& NetworkInterfaces::heartbeats() const
-{
-    return d_heartbeats;
-}
-
-inline const bdlb::NullableValue<TcpInterfaceConfig>&
-NetworkInterfaces::tcpInterface() const
-{
-    return d_tcpInterface;
+    return d_logDump;
 }
 
 // ---------------------
 // class PartitionConfig
 // ---------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void PartitionConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->numPartitions());
+    hashAppend(hashAlgorithm, this->location());
+    hashAppend(hashAlgorithm, this->archiveLocation());
+    hashAppend(hashAlgorithm, this->maxDataFileSize());
+    hashAppend(hashAlgorithm, this->maxJournalFileSize());
+    hashAppend(hashAlgorithm, this->maxQlistFileSize());
+    hashAppend(hashAlgorithm, this->maxCSLFileSize());
+    hashAppend(hashAlgorithm, this->preallocate());
+    hashAppend(hashAlgorithm, this->maxArchivedFileSets());
+    hashAppend(hashAlgorithm, this->prefaultPages());
+    hashAppend(hashAlgorithm, this->flushAtShutdown());
+    hashAppend(hashAlgorithm, this->syncConfig());
+}
+
+inline bool PartitionConfig::isEqualTo(const PartitionConfig& rhs) const
+{
+    return this->numPartitions() == rhs.numPartitions() &&
+           this->location() == rhs.location() &&
+           this->archiveLocation() == rhs.archiveLocation() &&
+           this->maxDataFileSize() == rhs.maxDataFileSize() &&
+           this->maxJournalFileSize() == rhs.maxJournalFileSize() &&
+           this->maxQlistFileSize() == rhs.maxQlistFileSize() &&
+           this->maxCSLFileSize() == rhs.maxCSLFileSize() &&
+           this->preallocate() == rhs.preallocate() &&
+           this->maxArchivedFileSets() == rhs.maxArchivedFileSets() &&
+           this->prefaultPages() == rhs.prefaultPages() &&
+           this->flushAtShutdown() == rhs.flushAtShutdown() &&
+           this->syncConfig() == rhs.syncConfig();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -13534,6 +14453,13 @@ int PartitionConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
     ret = manipulator(
         &d_maxQlistFileSize,
         ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_QLIST_FILE_SIZE]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_maxCSLFileSize,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_C_S_L_FILE_SIZE]);
     if (ret) {
         return ret;
     }
@@ -13606,6 +14532,11 @@ int PartitionConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
         return manipulator(
             &d_maxQlistFileSize,
             ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_QLIST_FILE_SIZE]);
+    }
+    case ATTRIBUTE_ID_MAX_C_S_L_FILE_SIZE: {
+        return manipulator(
+            &d_maxCSLFileSize,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_C_S_L_FILE_SIZE]);
     }
     case ATTRIBUTE_ID_PREALLOCATE: {
         return manipulator(&d_preallocate,
@@ -13680,6 +14611,11 @@ inline bsls::Types::Uint64& PartitionConfig::maxQlistFileSize()
     return d_maxQlistFileSize;
 }
 
+inline bsls::Types::Uint64& PartitionConfig::maxCSLFileSize()
+{
+    return d_maxCSLFileSize;
+}
+
 inline bool& PartitionConfig::preallocate()
 {
     return d_preallocate;
@@ -13743,6 +14679,12 @@ int PartitionConfig::accessAttributes(t_ACCESSOR& accessor) const
 
     ret = accessor(d_maxQlistFileSize,
                    ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_QLIST_FILE_SIZE]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_maxCSLFileSize,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_C_S_L_FILE_SIZE]);
     if (ret) {
         return ret;
     }
@@ -13814,6 +14756,11 @@ int PartitionConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
         return accessor(
             d_maxQlistFileSize,
             ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_QLIST_FILE_SIZE]);
+    }
+    case ATTRIBUTE_ID_MAX_C_S_L_FILE_SIZE: {
+        return accessor(
+            d_maxCSLFileSize,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_C_S_L_FILE_SIZE]);
     }
     case ATTRIBUTE_ID_PREALLOCATE: {
         return accessor(d_preallocate,
@@ -13887,6 +14834,11 @@ inline bsls::Types::Uint64 PartitionConfig::maxQlistFileSize() const
     return d_maxQlistFileSize;
 }
 
+inline bsls::Types::Uint64 PartitionConfig::maxCSLFileSize() const
+{
+    return d_maxCSLFileSize;
+}
+
 inline bool PartitionConfig::preallocate() const
 {
     return d_preallocate;
@@ -13912,31 +14864,40 @@ inline const StorageSyncConfig& PartitionConfig::syncConfig() const
     return d_syncConfig;
 }
 
-// -----------------
-// class StatsConfig
-// -----------------
+// --------------------------------
+// class StatPluginConfigPrometheus
+// --------------------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void StatPluginConfigPrometheus::hashAppendImpl(
+    t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->mode());
+    hashAppend(hashAlgorithm, this->host());
+    hashAppend(hashAlgorithm, this->port());
+}
 
 // CLASS METHODS
 // MANIPULATORS
 template <typename t_MANIPULATOR>
-int StatsConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
+int StatPluginConfigPrometheus::manipulateAttributes(
+    t_MANIPULATOR& manipulator)
 {
     int ret;
 
-    ret = manipulator(&d_snapshotInterval,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL]);
+    ret = manipulator(&d_mode, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MODE]);
     if (ret) {
         return ret;
     }
 
-    ret = manipulator(&d_plugins,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    ret = manipulator(&d_host, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST]);
     if (ret) {
         return ret;
     }
 
-    ret = manipulator(&d_printer,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER]);
+    ret = manipulator(&d_port, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
     if (ret) {
         return ret;
     }
@@ -13945,32 +14906,32 @@ int StatsConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
 }
 
 template <typename t_MANIPULATOR>
-int StatsConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+int StatPluginConfigPrometheus::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                                    int            id)
 {
     enum { NOT_FOUND = -1 };
 
     switch (id) {
-    case ATTRIBUTE_ID_SNAPSHOT_INTERVAL: {
-        return manipulator(
-            &d_snapshotInterval,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL]);
+    case ATTRIBUTE_ID_MODE: {
+        return manipulator(&d_mode,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MODE]);
     }
-    case ATTRIBUTE_ID_PLUGINS: {
-        return manipulator(&d_plugins,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    case ATTRIBUTE_ID_HOST: {
+        return manipulator(&d_host,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST]);
     }
-    case ATTRIBUTE_ID_PRINTER: {
-        return manipulator(&d_printer,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER]);
+    case ATTRIBUTE_ID_PORT: {
+        return manipulator(&d_port,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
     }
     default: return NOT_FOUND;
     }
 }
 
 template <typename t_MANIPULATOR>
-int StatsConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
-                                     const char*    name,
-                                     int            nameLength)
+int StatPluginConfigPrometheus::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                                    const char*    name,
+                                                    int            nameLength)
 {
     enum { NOT_FOUND = -1 };
 
@@ -13983,39 +14944,38 @@ int StatsConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
     return manipulateAttribute(manipulator, attributeInfo->d_id);
 }
 
-inline int& StatsConfig::snapshotInterval()
+inline ExportMode::Value& StatPluginConfigPrometheus::mode()
 {
-    return d_snapshotInterval;
+    return d_mode;
 }
 
-inline bsl::vector<StatPluginConfig>& StatsConfig::plugins()
+inline bsl::string& StatPluginConfigPrometheus::host()
 {
-    return d_plugins;
+    return d_host;
 }
 
-inline StatsPrinterConfig& StatsConfig::printer()
+inline int& StatPluginConfigPrometheus::port()
 {
-    return d_printer;
+    return d_port;
 }
 
 // ACCESSORS
 template <typename t_ACCESSOR>
-int StatsConfig::accessAttributes(t_ACCESSOR& accessor) const
+int StatPluginConfigPrometheus::accessAttributes(t_ACCESSOR& accessor) const
 {
     int ret;
 
-    ret = accessor(d_snapshotInterval,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL]);
+    ret = accessor(d_mode, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MODE]);
     if (ret) {
         return ret;
     }
 
-    ret = accessor(d_plugins, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    ret = accessor(d_host, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST]);
     if (ret) {
         return ret;
     }
 
-    ret = accessor(d_printer, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER]);
+    ret = accessor(d_port, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
     if (ret) {
         return ret;
     }
@@ -14024,32 +14984,29 @@ int StatsConfig::accessAttributes(t_ACCESSOR& accessor) const
 }
 
 template <typename t_ACCESSOR>
-int StatsConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
+int StatPluginConfigPrometheus::accessAttribute(t_ACCESSOR& accessor,
+                                                int         id) const
 {
     enum { NOT_FOUND = -1 };
 
     switch (id) {
-    case ATTRIBUTE_ID_SNAPSHOT_INTERVAL: {
-        return accessor(
-            d_snapshotInterval,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL]);
+    case ATTRIBUTE_ID_MODE: {
+        return accessor(d_mode, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MODE]);
     }
-    case ATTRIBUTE_ID_PLUGINS: {
-        return accessor(d_plugins,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    case ATTRIBUTE_ID_HOST: {
+        return accessor(d_host, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST]);
     }
-    case ATTRIBUTE_ID_PRINTER: {
-        return accessor(d_printer,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER]);
+    case ATTRIBUTE_ID_PORT: {
+        return accessor(d_port, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
     }
     default: return NOT_FOUND;
     }
 }
 
 template <typename t_ACCESSOR>
-int StatsConfig::accessAttribute(t_ACCESSOR& accessor,
-                                 const char* name,
-                                 int         nameLength) const
+int StatPluginConfigPrometheus::accessAttribute(t_ACCESSOR& accessor,
+                                                const char* name,
+                                                int         nameLength) const
 {
     enum { NOT_FOUND = -1 };
 
@@ -14062,24 +15019,455 @@ int StatsConfig::accessAttribute(t_ACCESSOR& accessor,
     return accessAttribute(accessor, attributeInfo->d_id);
 }
 
-inline int StatsConfig::snapshotInterval() const
+inline ExportMode::Value StatPluginConfigPrometheus::mode() const
 {
-    return d_snapshotInterval;
+    return d_mode;
 }
 
-inline const bsl::vector<StatPluginConfig>& StatsConfig::plugins() const
+inline const bsl::string& StatPluginConfigPrometheus::host() const
 {
-    return d_plugins;
+    return d_host;
 }
 
-inline const StatsPrinterConfig& StatsConfig::printer() const
+inline int StatPluginConfigPrometheus::port() const
 {
-    return d_printer;
+    return d_port;
+}
+
+// ------------------------
+// class TcpInterfaceConfig
+// ------------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void TcpInterfaceConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->name());
+    hashAppend(hashAlgorithm, this->port());
+    hashAppend(hashAlgorithm, this->ioThreads());
+    hashAppend(hashAlgorithm, this->maxConnections());
+    hashAppend(hashAlgorithm, this->lowWatermark());
+    hashAppend(hashAlgorithm, this->highWatermark());
+    hashAppend(hashAlgorithm, this->nodeLowWatermark());
+    hashAppend(hashAlgorithm, this->nodeHighWatermark());
+    hashAppend(hashAlgorithm, this->heartbeatIntervalMs());
+    hashAppend(hashAlgorithm, this->listeners());
+}
+
+inline bool TcpInterfaceConfig::isEqualTo(const TcpInterfaceConfig& rhs) const
+{
+    return this->name() == rhs.name() && this->port() == rhs.port() &&
+           this->ioThreads() == rhs.ioThreads() &&
+           this->maxConnections() == rhs.maxConnections() &&
+           this->lowWatermark() == rhs.lowWatermark() &&
+           this->highWatermark() == rhs.highWatermark() &&
+           this->nodeLowWatermark() == rhs.nodeLowWatermark() &&
+           this->nodeHighWatermark() == rhs.nodeHighWatermark() &&
+           this->heartbeatIntervalMs() == rhs.heartbeatIntervalMs() &&
+           this->listeners() == rhs.listeners();
+}
+
+// CLASS METHODS
+// MANIPULATORS
+template <typename t_MANIPULATOR>
+int TcpInterfaceConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
+{
+    int ret;
+
+    ret = manipulator(&d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_port, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_ioThreads,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_maxConnections,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_lowWatermark,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_highWatermark,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_nodeLowWatermark,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_nodeHighWatermark,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_heartbeatIntervalMs,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_listeners,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LISTENERS]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_MANIPULATOR>
+int TcpInterfaceConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_NAME: {
+        return manipulator(&d_name,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
+    }
+    case ATTRIBUTE_ID_PORT: {
+        return manipulator(&d_port,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
+    }
+    case ATTRIBUTE_ID_IO_THREADS: {
+        return manipulator(&d_ioThreads,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS]);
+    }
+    case ATTRIBUTE_ID_MAX_CONNECTIONS: {
+        return manipulator(
+            &d_maxConnections,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS]);
+    }
+    case ATTRIBUTE_ID_LOW_WATERMARK: {
+        return manipulator(
+            &d_lowWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_HIGH_WATERMARK: {
+        return manipulator(
+            &d_highWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_NODE_LOW_WATERMARK: {
+        return manipulator(
+            &d_nodeLowWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_NODE_HIGH_WATERMARK: {
+        return manipulator(
+            &d_nodeHighWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS: {
+        return manipulator(
+            &d_heartbeatIntervalMs,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
+    }
+    case ATTRIBUTE_ID_LISTENERS: {
+        return manipulator(&d_listeners,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LISTENERS]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_MANIPULATOR>
+int TcpInterfaceConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                            const char*    name,
+                                            int            nameLength)
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return manipulateAttribute(manipulator, attributeInfo->d_id);
+}
+
+inline bsl::string& TcpInterfaceConfig::name()
+{
+    return d_name;
+}
+
+inline int& TcpInterfaceConfig::port()
+{
+    return d_port;
+}
+
+inline int& TcpInterfaceConfig::ioThreads()
+{
+    return d_ioThreads;
+}
+
+inline int& TcpInterfaceConfig::maxConnections()
+{
+    return d_maxConnections;
+}
+
+inline bsls::Types::Int64& TcpInterfaceConfig::lowWatermark()
+{
+    return d_lowWatermark;
+}
+
+inline bsls::Types::Int64& TcpInterfaceConfig::highWatermark()
+{
+    return d_highWatermark;
+}
+
+inline bsls::Types::Int64& TcpInterfaceConfig::nodeLowWatermark()
+{
+    return d_nodeLowWatermark;
+}
+
+inline bsls::Types::Int64& TcpInterfaceConfig::nodeHighWatermark()
+{
+    return d_nodeHighWatermark;
+}
+
+inline int& TcpInterfaceConfig::heartbeatIntervalMs()
+{
+    return d_heartbeatIntervalMs;
+}
+
+inline bsl::vector<TcpInterfaceListener>& TcpInterfaceConfig::listeners()
+{
+    return d_listeners;
+}
+
+// ACCESSORS
+template <typename t_ACCESSOR>
+int TcpInterfaceConfig::accessAttributes(t_ACCESSOR& accessor) const
+{
+    int ret;
+
+    ret = accessor(d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_port, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_ioThreads,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_maxConnections,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_lowWatermark,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_highWatermark,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_nodeLowWatermark,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_nodeHighWatermark,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(
+        d_heartbeatIntervalMs,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_listeners,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LISTENERS]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_ACCESSOR>
+int TcpInterfaceConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_NAME: {
+        return accessor(d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
+    }
+    case ATTRIBUTE_ID_PORT: {
+        return accessor(d_port, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT]);
+    }
+    case ATTRIBUTE_ID_IO_THREADS: {
+        return accessor(d_ioThreads,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS]);
+    }
+    case ATTRIBUTE_ID_MAX_CONNECTIONS: {
+        return accessor(d_maxConnections,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS]);
+    }
+    case ATTRIBUTE_ID_LOW_WATERMARK: {
+        return accessor(d_lowWatermark,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_HIGH_WATERMARK: {
+        return accessor(d_highWatermark,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_NODE_LOW_WATERMARK: {
+        return accessor(
+            d_nodeLowWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_NODE_HIGH_WATERMARK: {
+        return accessor(
+            d_nodeHighWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS: {
+        return accessor(
+            d_heartbeatIntervalMs,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
+    }
+    case ATTRIBUTE_ID_LISTENERS: {
+        return accessor(d_listeners,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LISTENERS]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_ACCESSOR>
+int TcpInterfaceConfig::accessAttribute(t_ACCESSOR& accessor,
+                                        const char* name,
+                                        int         nameLength) const
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return accessAttribute(accessor, attributeInfo->d_id);
+}
+
+inline const bsl::string& TcpInterfaceConfig::name() const
+{
+    return d_name;
+}
+
+inline int TcpInterfaceConfig::port() const
+{
+    return d_port;
+}
+
+inline int TcpInterfaceConfig::ioThreads() const
+{
+    return d_ioThreads;
+}
+
+inline int TcpInterfaceConfig::maxConnections() const
+{
+    return d_maxConnections;
+}
+
+inline bsls::Types::Int64 TcpInterfaceConfig::lowWatermark() const
+{
+    return d_lowWatermark;
+}
+
+inline bsls::Types::Int64 TcpInterfaceConfig::highWatermark() const
+{
+    return d_highWatermark;
+}
+
+inline bsls::Types::Int64 TcpInterfaceConfig::nodeLowWatermark() const
+{
+    return d_nodeLowWatermark;
+}
+
+inline bsls::Types::Int64 TcpInterfaceConfig::nodeHighWatermark() const
+{
+    return d_nodeHighWatermark;
+}
+
+inline int TcpInterfaceConfig::heartbeatIntervalMs() const
+{
+    return d_heartbeatIntervalMs;
+}
+
+inline const bsl::vector<TcpInterfaceListener>&
+TcpInterfaceConfig::listeners() const
+{
+    return d_listeners;
 }
 
 // -----------------
 // class ClusterNode
 // -----------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void ClusterNode::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->id());
+    hashAppend(hashAlgorithm, this->name());
+    hashAppend(hashAlgorithm, this->dataCenter());
+    hashAppend(hashAlgorithm, this->transport());
+}
+
+inline bool ClusterNode::isEqualTo(const ClusterNode& rhs) const
+{
+    return this->id() == rhs.id() && this->name() == rhs.name() &&
+           this->dataCenter() == rhs.dataCenter() &&
+           this->transport() == rhs.transport();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -14269,6 +15657,16 @@ inline const ClusterNodeConnection& ClusterNode::transport() const
 // class DispatcherConfig
 // ----------------------
 
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void DispatcherConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->sessions());
+    hashAppend(hashAlgorithm, this->queues());
+    hashAppend(hashAlgorithm, this->clusters());
+}
+
 // CLASS METHODS
 // MANIPULATORS
 template <typename t_MANIPULATOR>
@@ -14426,6 +15824,144 @@ inline const DispatcherProcessorConfig& DispatcherConfig::clusters() const
     return d_clusters;
 }
 
+// -----------------------
+// class NetworkInterfaces
+// -----------------------
+
+// CLASS METHODS
+// MANIPULATORS
+template <typename t_MANIPULATOR>
+int NetworkInterfaces::manipulateAttributes(t_MANIPULATOR& manipulator)
+{
+    int ret;
+
+    ret = manipulator(&d_heartbeats,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_tcpInterface,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_MANIPULATOR>
+int NetworkInterfaces::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_HEARTBEATS: {
+        return manipulator(&d_heartbeats,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS]);
+    }
+    case ATTRIBUTE_ID_TCP_INTERFACE: {
+        return manipulator(
+            &d_tcpInterface,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_MANIPULATOR>
+int NetworkInterfaces::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                           const char*    name,
+                                           int            nameLength)
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return manipulateAttribute(manipulator, attributeInfo->d_id);
+}
+
+inline Heartbeat& NetworkInterfaces::heartbeats()
+{
+    return d_heartbeats;
+}
+
+inline bdlb::NullableValue<TcpInterfaceConfig>&
+NetworkInterfaces::tcpInterface()
+{
+    return d_tcpInterface;
+}
+
+// ACCESSORS
+template <typename t_ACCESSOR>
+int NetworkInterfaces::accessAttributes(t_ACCESSOR& accessor) const
+{
+    int ret;
+
+    ret = accessor(d_heartbeats,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_tcpInterface,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_ACCESSOR>
+int NetworkInterfaces::accessAttribute(t_ACCESSOR& accessor, int id) const
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_HEARTBEATS: {
+        return accessor(d_heartbeats,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS]);
+    }
+    case ATTRIBUTE_ID_TCP_INTERFACE: {
+        return accessor(d_tcpInterface,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_ACCESSOR>
+int NetworkInterfaces::accessAttribute(t_ACCESSOR& accessor,
+                                       const char* name,
+                                       int         nameLength) const
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return accessAttribute(accessor, attributeInfo->d_id);
+}
+
+inline const Heartbeat& NetworkInterfaces::heartbeats() const
+{
+    return d_heartbeats;
+}
+
+inline const bdlb::NullableValue<TcpInterfaceConfig>&
+NetworkInterfaces::tcpInterface() const
+{
+    return d_tcpInterface;
+}
+
 // -------------------------------
 // class ReversedClusterConnection
 // -------------------------------
@@ -14562,9 +16098,402 @@ ReversedClusterConnection::connections() const
     return d_connections;
 }
 
+// ----------------------
+// class StatPluginConfig
+// ----------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void StatPluginConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->name());
+    hashAppend(hashAlgorithm, this->queueSize());
+    hashAppend(hashAlgorithm, this->queueHighWatermark());
+    hashAppend(hashAlgorithm, this->queueLowWatermark());
+    hashAppend(hashAlgorithm, this->publishInterval());
+    hashAppend(hashAlgorithm, this->namespacePrefix());
+    hashAppend(hashAlgorithm, this->hosts());
+    hashAppend(hashAlgorithm, this->instanceId());
+    hashAppend(hashAlgorithm, this->prometheusSpecific());
+}
+
+inline bool StatPluginConfig::isEqualTo(const StatPluginConfig& rhs) const
+{
+    return this->name() == rhs.name() &&
+           this->queueSize() == rhs.queueSize() &&
+           this->queueHighWatermark() == rhs.queueHighWatermark() &&
+           this->queueLowWatermark() == rhs.queueLowWatermark() &&
+           this->publishInterval() == rhs.publishInterval() &&
+           this->namespacePrefix() == rhs.namespacePrefix() &&
+           this->hosts() == rhs.hosts() &&
+           this->instanceId() == rhs.instanceId() &&
+           this->prometheusSpecific() == rhs.prometheusSpecific();
+}
+
+// CLASS METHODS
+// MANIPULATORS
+template <typename t_MANIPULATOR>
+int StatPluginConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
+{
+    int ret;
+
+    ret = manipulator(&d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_queueSize,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_queueHighWatermark,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_queueLowWatermark,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_publishInterval,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_namespacePrefix,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_hosts, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_instanceId,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_prometheusSpecific,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PROMETHEUS_SPECIFIC]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_MANIPULATOR>
+int StatPluginConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_NAME: {
+        return manipulator(&d_name,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
+    }
+    case ATTRIBUTE_ID_QUEUE_SIZE: {
+        return manipulator(&d_queueSize,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE]);
+    }
+    case ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK: {
+        return manipulator(
+            &d_queueHighWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_QUEUE_LOW_WATERMARK: {
+        return manipulator(
+            &d_queueLowWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_PUBLISH_INTERVAL: {
+        return manipulator(
+            &d_publishInterval,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL]);
+    }
+    case ATTRIBUTE_ID_NAMESPACE_PREFIX: {
+        return manipulator(
+            &d_namespacePrefix,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX]);
+    }
+    case ATTRIBUTE_ID_HOSTS: {
+        return manipulator(&d_hosts,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS]);
+    }
+    case ATTRIBUTE_ID_INSTANCE_ID: {
+        return manipulator(&d_instanceId,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID]);
+    }
+    case ATTRIBUTE_ID_PROMETHEUS_SPECIFIC: {
+        return manipulator(
+            &d_prometheusSpecific,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PROMETHEUS_SPECIFIC]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_MANIPULATOR>
+int StatPluginConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                          const char*    name,
+                                          int            nameLength)
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return manipulateAttribute(manipulator, attributeInfo->d_id);
+}
+
+inline bsl::string& StatPluginConfig::name()
+{
+    return d_name;
+}
+
+inline int& StatPluginConfig::queueSize()
+{
+    return d_queueSize;
+}
+
+inline int& StatPluginConfig::queueHighWatermark()
+{
+    return d_queueHighWatermark;
+}
+
+inline int& StatPluginConfig::queueLowWatermark()
+{
+    return d_queueLowWatermark;
+}
+
+inline int& StatPluginConfig::publishInterval()
+{
+    return d_publishInterval;
+}
+
+inline bsl::string& StatPluginConfig::namespacePrefix()
+{
+    return d_namespacePrefix;
+}
+
+inline bsl::vector<bsl::string>& StatPluginConfig::hosts()
+{
+    return d_hosts;
+}
+
+inline bsl::string& StatPluginConfig::instanceId()
+{
+    return d_instanceId;
+}
+
+inline bdlb::NullableValue<StatPluginConfigPrometheus>&
+StatPluginConfig::prometheusSpecific()
+{
+    return d_prometheusSpecific;
+}
+
+// ACCESSORS
+template <typename t_ACCESSOR>
+int StatPluginConfig::accessAttributes(t_ACCESSOR& accessor) const
+{
+    int ret;
+
+    ret = accessor(d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_queueSize,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_queueHighWatermark,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_queueLowWatermark,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_publishInterval,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_namespacePrefix,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_hosts, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_instanceId,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_prometheusSpecific,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PROMETHEUS_SPECIFIC]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_ACCESSOR>
+int StatPluginConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_NAME: {
+        return accessor(d_name, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME]);
+    }
+    case ATTRIBUTE_ID_QUEUE_SIZE: {
+        return accessor(d_queueSize,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE]);
+    }
+    case ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK: {
+        return accessor(
+            d_queueHighWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_QUEUE_LOW_WATERMARK: {
+        return accessor(
+            d_queueLowWatermark,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK]);
+    }
+    case ATTRIBUTE_ID_PUBLISH_INTERVAL: {
+        return accessor(
+            d_publishInterval,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL]);
+    }
+    case ATTRIBUTE_ID_NAMESPACE_PREFIX: {
+        return accessor(
+            d_namespacePrefix,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX]);
+    }
+    case ATTRIBUTE_ID_HOSTS: {
+        return accessor(d_hosts, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS]);
+    }
+    case ATTRIBUTE_ID_INSTANCE_ID: {
+        return accessor(d_instanceId,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID]);
+    }
+    case ATTRIBUTE_ID_PROMETHEUS_SPECIFIC: {
+        return accessor(
+            d_prometheusSpecific,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PROMETHEUS_SPECIFIC]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_ACCESSOR>
+int StatPluginConfig::accessAttribute(t_ACCESSOR& accessor,
+                                      const char* name,
+                                      int         nameLength) const
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return accessAttribute(accessor, attributeInfo->d_id);
+}
+
+inline const bsl::string& StatPluginConfig::name() const
+{
+    return d_name;
+}
+
+inline int StatPluginConfig::queueSize() const
+{
+    return d_queueSize;
+}
+
+inline int StatPluginConfig::queueHighWatermark() const
+{
+    return d_queueHighWatermark;
+}
+
+inline int StatPluginConfig::queueLowWatermark() const
+{
+    return d_queueLowWatermark;
+}
+
+inline int StatPluginConfig::publishInterval() const
+{
+    return d_publishInterval;
+}
+
+inline const bsl::string& StatPluginConfig::namespacePrefix() const
+{
+    return d_namespacePrefix;
+}
+
+inline const bsl::vector<bsl::string>& StatPluginConfig::hosts() const
+{
+    return d_hosts;
+}
+
+inline const bsl::string& StatPluginConfig::instanceId() const
+{
+    return d_instanceId;
+}
+
+inline const bdlb::NullableValue<StatPluginConfigPrometheus>&
+StatPluginConfig::prometheusSpecific() const
+{
+    return d_prometheusSpecific;
+}
+
 // ----------------
 // class TaskConfig
 // ----------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void TaskConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->allocatorType());
+    hashAppend(hashAlgorithm, this->allocationLimit());
+    hashAppend(hashAlgorithm, this->logController());
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -14731,586 +16660,37 @@ inline const LogController& TaskConfig::logController() const
     return d_logController;
 }
 
-// ---------------
-// class AppConfig
-// ---------------
-
-// CLASS METHODS
-// MANIPULATORS
-template <typename t_MANIPULATOR>
-int AppConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
-{
-    int ret;
-
-    ret = manipulator(
-        &d_brokerInstanceName,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_brokerVersion,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_configVersion,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_etcDir,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_hostName,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_hostTags,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_hostDataCenter,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_isRunningOnDev,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_logsObserverMaxSize,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_latencyMonitorDomain,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_dispatcherConfig,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_stats, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_networkInterfaces,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_bmqconfConfig,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(&d_plugins,
-                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = manipulator(
-        &d_messagePropertiesV2,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2]);
-    if (ret) {
-        return ret;
-    }
-
-    return 0;
-}
-
-template <typename t_MANIPULATOR>
-int AppConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
-{
-    enum { NOT_FOUND = -1 };
-
-    switch (id) {
-    case ATTRIBUTE_ID_BROKER_INSTANCE_NAME: {
-        return manipulator(
-            &d_brokerInstanceName,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME]);
-    }
-    case ATTRIBUTE_ID_BROKER_VERSION: {
-        return manipulator(
-            &d_brokerVersion,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION]);
-    }
-    case ATTRIBUTE_ID_CONFIG_VERSION: {
-        return manipulator(
-            &d_configVersion,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION]);
-    }
-    case ATTRIBUTE_ID_ETC_DIR: {
-        return manipulator(&d_etcDir,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR]);
-    }
-    case ATTRIBUTE_ID_HOST_NAME: {
-        return manipulator(&d_hostName,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME]);
-    }
-    case ATTRIBUTE_ID_HOST_TAGS: {
-        return manipulator(&d_hostTags,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS]);
-    }
-    case ATTRIBUTE_ID_HOST_DATA_CENTER: {
-        return manipulator(
-            &d_hostDataCenter,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER]);
-    }
-    case ATTRIBUTE_ID_IS_RUNNING_ON_DEV: {
-        return manipulator(
-            &d_isRunningOnDev,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV]);
-    }
-    case ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE: {
-        return manipulator(
-            &d_logsObserverMaxSize,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE]);
-    }
-    case ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN: {
-        return manipulator(
-            &d_latencyMonitorDomain,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN]);
-    }
-    case ATTRIBUTE_ID_DISPATCHER_CONFIG: {
-        return manipulator(
-            &d_dispatcherConfig,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG]);
-    }
-    case ATTRIBUTE_ID_STATS: {
-        return manipulator(&d_stats,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS]);
-    }
-    case ATTRIBUTE_ID_NETWORK_INTERFACES: {
-        return manipulator(
-            &d_networkInterfaces,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES]);
-    }
-    case ATTRIBUTE_ID_BMQCONF_CONFIG: {
-        return manipulator(
-            &d_bmqconfConfig,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG]);
-    }
-    case ATTRIBUTE_ID_PLUGINS: {
-        return manipulator(&d_plugins,
-                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
-    }
-    case ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2: {
-        return manipulator(
-            &d_messagePropertiesV2,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2]);
-    }
-    default: return NOT_FOUND;
-    }
-}
-
-template <typename t_MANIPULATOR>
-int AppConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
-                                   const char*    name,
-                                   int            nameLength)
-{
-    enum { NOT_FOUND = -1 };
-
-    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
-                                                                   nameLength);
-    if (0 == attributeInfo) {
-        return NOT_FOUND;
-    }
-
-    return manipulateAttribute(manipulator, attributeInfo->d_id);
-}
-
-inline bsl::string& AppConfig::brokerInstanceName()
-{
-    return d_brokerInstanceName;
-}
-
-inline int& AppConfig::brokerVersion()
-{
-    return d_brokerVersion;
-}
-
-inline int& AppConfig::configVersion()
-{
-    return d_configVersion;
-}
-
-inline bsl::string& AppConfig::etcDir()
-{
-    return d_etcDir;
-}
-
-inline bsl::string& AppConfig::hostName()
-{
-    return d_hostName;
-}
-
-inline bsl::string& AppConfig::hostTags()
-{
-    return d_hostTags;
-}
-
-inline bsl::string& AppConfig::hostDataCenter()
-{
-    return d_hostDataCenter;
-}
-
-inline bool& AppConfig::isRunningOnDev()
-{
-    return d_isRunningOnDev;
-}
-
-inline int& AppConfig::logsObserverMaxSize()
-{
-    return d_logsObserverMaxSize;
-}
-
-inline bsl::string& AppConfig::latencyMonitorDomain()
-{
-    return d_latencyMonitorDomain;
-}
-
-inline DispatcherConfig& AppConfig::dispatcherConfig()
-{
-    return d_dispatcherConfig;
-}
-
-inline StatsConfig& AppConfig::stats()
-{
-    return d_stats;
-}
-
-inline NetworkInterfaces& AppConfig::networkInterfaces()
-{
-    return d_networkInterfaces;
-}
-
-inline BmqconfConfig& AppConfig::bmqconfConfig()
-{
-    return d_bmqconfConfig;
-}
-
-inline Plugins& AppConfig::plugins()
-{
-    return d_plugins;
-}
-
-inline MessagePropertiesV2& AppConfig::messagePropertiesV2()
-{
-    return d_messagePropertiesV2;
-}
-
-// ACCESSORS
-template <typename t_ACCESSOR>
-int AppConfig::accessAttributes(t_ACCESSOR& accessor) const
-{
-    int ret;
-
-    ret = accessor(d_brokerInstanceName,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_brokerVersion,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_configVersion,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_etcDir, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_hostName,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_hostTags,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_hostDataCenter,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_isRunningOnDev,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(
-        d_logsObserverMaxSize,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(
-        d_latencyMonitorDomain,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_dispatcherConfig,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_stats, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_networkInterfaces,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_bmqconfConfig,
-                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(d_plugins, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
-    if (ret) {
-        return ret;
-    }
-
-    ret = accessor(
-        d_messagePropertiesV2,
-        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2]);
-    if (ret) {
-        return ret;
-    }
-
-    return 0;
-}
-
-template <typename t_ACCESSOR>
-int AppConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
-{
-    enum { NOT_FOUND = -1 };
-
-    switch (id) {
-    case ATTRIBUTE_ID_BROKER_INSTANCE_NAME: {
-        return accessor(
-            d_brokerInstanceName,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME]);
-    }
-    case ATTRIBUTE_ID_BROKER_VERSION: {
-        return accessor(d_brokerVersion,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION]);
-    }
-    case ATTRIBUTE_ID_CONFIG_VERSION: {
-        return accessor(d_configVersion,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION]);
-    }
-    case ATTRIBUTE_ID_ETC_DIR: {
-        return accessor(d_etcDir,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR]);
-    }
-    case ATTRIBUTE_ID_HOST_NAME: {
-        return accessor(d_hostName,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME]);
-    }
-    case ATTRIBUTE_ID_HOST_TAGS: {
-        return accessor(d_hostTags,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS]);
-    }
-    case ATTRIBUTE_ID_HOST_DATA_CENTER: {
-        return accessor(
-            d_hostDataCenter,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER]);
-    }
-    case ATTRIBUTE_ID_IS_RUNNING_ON_DEV: {
-        return accessor(
-            d_isRunningOnDev,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV]);
-    }
-    case ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE: {
-        return accessor(
-            d_logsObserverMaxSize,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE]);
-    }
-    case ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN: {
-        return accessor(
-            d_latencyMonitorDomain,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN]);
-    }
-    case ATTRIBUTE_ID_DISPATCHER_CONFIG: {
-        return accessor(
-            d_dispatcherConfig,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG]);
-    }
-    case ATTRIBUTE_ID_STATS: {
-        return accessor(d_stats, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS]);
-    }
-    case ATTRIBUTE_ID_NETWORK_INTERFACES: {
-        return accessor(
-            d_networkInterfaces,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES]);
-    }
-    case ATTRIBUTE_ID_BMQCONF_CONFIG: {
-        return accessor(d_bmqconfConfig,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG]);
-    }
-    case ATTRIBUTE_ID_PLUGINS: {
-        return accessor(d_plugins,
-                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
-    }
-    case ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2: {
-        return accessor(
-            d_messagePropertiesV2,
-            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2]);
-    }
-    default: return NOT_FOUND;
-    }
-}
-
-template <typename t_ACCESSOR>
-int AppConfig::accessAttribute(t_ACCESSOR& accessor,
-                               const char* name,
-                               int         nameLength) const
-{
-    enum { NOT_FOUND = -1 };
-
-    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
-                                                                   nameLength);
-    if (0 == attributeInfo) {
-        return NOT_FOUND;
-    }
-
-    return accessAttribute(accessor, attributeInfo->d_id);
-}
-
-inline const bsl::string& AppConfig::brokerInstanceName() const
-{
-    return d_brokerInstanceName;
-}
-
-inline int AppConfig::brokerVersion() const
-{
-    return d_brokerVersion;
-}
-
-inline int AppConfig::configVersion() const
-{
-    return d_configVersion;
-}
-
-inline const bsl::string& AppConfig::etcDir() const
-{
-    return d_etcDir;
-}
-
-inline const bsl::string& AppConfig::hostName() const
-{
-    return d_hostName;
-}
-
-inline const bsl::string& AppConfig::hostTags() const
-{
-    return d_hostTags;
-}
-
-inline const bsl::string& AppConfig::hostDataCenter() const
-{
-    return d_hostDataCenter;
-}
-
-inline bool AppConfig::isRunningOnDev() const
-{
-    return d_isRunningOnDev;
-}
-
-inline int AppConfig::logsObserverMaxSize() const
-{
-    return d_logsObserverMaxSize;
-}
-
-inline const bsl::string& AppConfig::latencyMonitorDomain() const
-{
-    return d_latencyMonitorDomain;
-}
-
-inline const DispatcherConfig& AppConfig::dispatcherConfig() const
-{
-    return d_dispatcherConfig;
-}
-
-inline const StatsConfig& AppConfig::stats() const
-{
-    return d_stats;
-}
-
-inline const NetworkInterfaces& AppConfig::networkInterfaces() const
-{
-    return d_networkInterfaces;
-}
-
-inline const BmqconfConfig& AppConfig::bmqconfConfig() const
-{
-    return d_bmqconfConfig;
-}
-
-inline const Plugins& AppConfig::plugins() const
-{
-    return d_plugins;
-}
-
-inline const MessagePropertiesV2& AppConfig::messagePropertiesV2() const
-{
-    return d_messagePropertiesV2;
-}
-
 // -----------------------
 // class ClusterDefinition
 // -----------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void ClusterDefinition::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->name());
+    hashAppend(hashAlgorithm, this->nodes());
+    hashAppend(hashAlgorithm, this->partitionConfig());
+    hashAppend(hashAlgorithm, this->masterAssignment());
+    hashAppend(hashAlgorithm, this->elector());
+    hashAppend(hashAlgorithm, this->queueOperations());
+    hashAppend(hashAlgorithm, this->clusterAttributes());
+    hashAppend(hashAlgorithm, this->clusterMonitorConfig());
+    hashAppend(hashAlgorithm, this->messageThrottleConfig());
+}
+
+inline bool ClusterDefinition::isEqualTo(const ClusterDefinition& rhs) const
+{
+    return this->name() == rhs.name() && this->nodes() == rhs.nodes() &&
+           this->partitionConfig() == rhs.partitionConfig() &&
+           this->masterAssignment() == rhs.masterAssignment() &&
+           this->elector() == rhs.elector() &&
+           this->queueOperations() == rhs.queueOperations() &&
+           this->clusterAttributes() == rhs.clusterAttributes() &&
+           this->clusterMonitorConfig() == rhs.clusterMonitorConfig() &&
+           this->messageThrottleConfig() == rhs.messageThrottleConfig();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -15670,6 +17050,28 @@ ClusterDefinition::messageThrottleConfig() const
 // class ClusterProxyDefinition
 // ----------------------------
 
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void ClusterProxyDefinition::hashAppendImpl(
+    t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->name());
+    hashAppend(hashAlgorithm, this->nodes());
+    hashAppend(hashAlgorithm, this->queueOperations());
+    hashAppend(hashAlgorithm, this->clusterMonitorConfig());
+    hashAppend(hashAlgorithm, this->messageThrottleConfig());
+}
+
+inline bool
+ClusterProxyDefinition::isEqualTo(const ClusterProxyDefinition& rhs) const
+{
+    return this->name() == rhs.name() && this->nodes() == rhs.nodes() &&
+           this->queueOperations() == rhs.queueOperations() &&
+           this->clusterMonitorConfig() == rhs.clusterMonitorConfig() &&
+           this->messageThrottleConfig() == rhs.messageThrottleConfig();
+}
+
 // CLASS METHODS
 // MANIPULATORS
 template <typename t_MANIPULATOR>
@@ -15899,9 +17301,932 @@ ClusterProxyDefinition::messageThrottleConfig() const
     return d_messageThrottleConfig;
 }
 
+// -----------------
+// class StatsConfig
+// -----------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void StatsConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->snapshotInterval());
+    hashAppend(hashAlgorithm, this->plugins());
+    hashAppend(hashAlgorithm, this->printer());
+}
+
+// CLASS METHODS
+// MANIPULATORS
+template <typename t_MANIPULATOR>
+int StatsConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
+{
+    int ret;
+
+    ret = manipulator(&d_snapshotInterval,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_plugins,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_printer,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_MANIPULATOR>
+int StatsConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_SNAPSHOT_INTERVAL: {
+        return manipulator(
+            &d_snapshotInterval,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL]);
+    }
+    case ATTRIBUTE_ID_PLUGINS: {
+        return manipulator(&d_plugins,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    }
+    case ATTRIBUTE_ID_PRINTER: {
+        return manipulator(&d_printer,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_MANIPULATOR>
+int StatsConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                     const char*    name,
+                                     int            nameLength)
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return manipulateAttribute(manipulator, attributeInfo->d_id);
+}
+
+inline int& StatsConfig::snapshotInterval()
+{
+    return d_snapshotInterval;
+}
+
+inline bsl::vector<StatPluginConfig>& StatsConfig::plugins()
+{
+    return d_plugins;
+}
+
+inline StatsPrinterConfig& StatsConfig::printer()
+{
+    return d_printer;
+}
+
+// ACCESSORS
+template <typename t_ACCESSOR>
+int StatsConfig::accessAttributes(t_ACCESSOR& accessor) const
+{
+    int ret;
+
+    ret = accessor(d_snapshotInterval,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_plugins, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_printer, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_ACCESSOR>
+int StatsConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_SNAPSHOT_INTERVAL: {
+        return accessor(
+            d_snapshotInterval,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL]);
+    }
+    case ATTRIBUTE_ID_PLUGINS: {
+        return accessor(d_plugins,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    }
+    case ATTRIBUTE_ID_PRINTER: {
+        return accessor(d_printer,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_ACCESSOR>
+int StatsConfig::accessAttribute(t_ACCESSOR& accessor,
+                                 const char* name,
+                                 int         nameLength) const
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return accessAttribute(accessor, attributeInfo->d_id);
+}
+
+inline int StatsConfig::snapshotInterval() const
+{
+    return d_snapshotInterval;
+}
+
+inline const bsl::vector<StatPluginConfig>& StatsConfig::plugins() const
+{
+    return d_plugins;
+}
+
+inline const StatsPrinterConfig& StatsConfig::printer() const
+{
+    return d_printer;
+}
+
+// ---------------
+// class AppConfig
+// ---------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void AppConfig::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->brokerInstanceName());
+    hashAppend(hashAlgorithm, this->brokerVersion());
+    hashAppend(hashAlgorithm, this->configVersion());
+    hashAppend(hashAlgorithm, this->etcDir());
+    hashAppend(hashAlgorithm, this->hostName());
+    hashAppend(hashAlgorithm, this->hostTags());
+    hashAppend(hashAlgorithm, this->hostDataCenter());
+    hashAppend(hashAlgorithm, this->isRunningOnDev());
+    hashAppend(hashAlgorithm, this->logsObserverMaxSize());
+    hashAppend(hashAlgorithm, this->latencyMonitorDomain());
+    hashAppend(hashAlgorithm, this->dispatcherConfig());
+    hashAppend(hashAlgorithm, this->stats());
+    hashAppend(hashAlgorithm, this->networkInterfaces());
+    hashAppend(hashAlgorithm, this->bmqconfConfig());
+    hashAppend(hashAlgorithm, this->plugins());
+    hashAppend(hashAlgorithm, this->messagePropertiesV2());
+    hashAppend(hashAlgorithm, this->configureStream());
+    hashAppend(hashAlgorithm, this->advertiseSubscriptions());
+    hashAppend(hashAlgorithm, this->routeCommandTimeoutMs());
+}
+
+inline bool AppConfig::isEqualTo(const AppConfig& rhs) const
+{
+    return this->brokerInstanceName() == rhs.brokerInstanceName() &&
+           this->brokerVersion() == rhs.brokerVersion() &&
+           this->configVersion() == rhs.configVersion() &&
+           this->etcDir() == rhs.etcDir() &&
+           this->hostName() == rhs.hostName() &&
+           this->hostTags() == rhs.hostTags() &&
+           this->hostDataCenter() == rhs.hostDataCenter() &&
+           this->isRunningOnDev() == rhs.isRunningOnDev() &&
+           this->logsObserverMaxSize() == rhs.logsObserverMaxSize() &&
+           this->latencyMonitorDomain() == rhs.latencyMonitorDomain() &&
+           this->dispatcherConfig() == rhs.dispatcherConfig() &&
+           this->stats() == rhs.stats() &&
+           this->networkInterfaces() == rhs.networkInterfaces() &&
+           this->bmqconfConfig() == rhs.bmqconfConfig() &&
+           this->plugins() == rhs.plugins() &&
+           this->messagePropertiesV2() == rhs.messagePropertiesV2() &&
+           this->configureStream() == rhs.configureStream() &&
+           this->advertiseSubscriptions() == rhs.advertiseSubscriptions() &&
+           this->routeCommandTimeoutMs() == rhs.routeCommandTimeoutMs();
+}
+
+// CLASS METHODS
+// MANIPULATORS
+template <typename t_MANIPULATOR>
+int AppConfig::manipulateAttributes(t_MANIPULATOR& manipulator)
+{
+    int ret;
+
+    ret = manipulator(
+        &d_brokerInstanceName,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_brokerVersion,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_configVersion,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_etcDir,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_hostName,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_hostTags,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_hostDataCenter,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_isRunningOnDev,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_logsObserverMaxSize,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_latencyMonitorDomain,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_dispatcherConfig,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_stats, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_networkInterfaces,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_bmqconfConfig,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_plugins,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_messagePropertiesV2,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(&d_configureStream,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIGURE_STREAM]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_advertiseSubscriptions,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ADVERTISE_SUBSCRIPTIONS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_routeCommandTimeoutMs,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ROUTE_COMMAND_TIMEOUT_MS]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_MANIPULATOR>
+int AppConfig::manipulateAttribute(t_MANIPULATOR& manipulator, int id)
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_BROKER_INSTANCE_NAME: {
+        return manipulator(
+            &d_brokerInstanceName,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME]);
+    }
+    case ATTRIBUTE_ID_BROKER_VERSION: {
+        return manipulator(
+            &d_brokerVersion,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION]);
+    }
+    case ATTRIBUTE_ID_CONFIG_VERSION: {
+        return manipulator(
+            &d_configVersion,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION]);
+    }
+    case ATTRIBUTE_ID_ETC_DIR: {
+        return manipulator(&d_etcDir,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR]);
+    }
+    case ATTRIBUTE_ID_HOST_NAME: {
+        return manipulator(&d_hostName,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME]);
+    }
+    case ATTRIBUTE_ID_HOST_TAGS: {
+        return manipulator(&d_hostTags,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS]);
+    }
+    case ATTRIBUTE_ID_HOST_DATA_CENTER: {
+        return manipulator(
+            &d_hostDataCenter,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER]);
+    }
+    case ATTRIBUTE_ID_IS_RUNNING_ON_DEV: {
+        return manipulator(
+            &d_isRunningOnDev,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV]);
+    }
+    case ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE: {
+        return manipulator(
+            &d_logsObserverMaxSize,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE]);
+    }
+    case ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN: {
+        return manipulator(
+            &d_latencyMonitorDomain,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN]);
+    }
+    case ATTRIBUTE_ID_DISPATCHER_CONFIG: {
+        return manipulator(
+            &d_dispatcherConfig,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG]);
+    }
+    case ATTRIBUTE_ID_STATS: {
+        return manipulator(&d_stats,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS]);
+    }
+    case ATTRIBUTE_ID_NETWORK_INTERFACES: {
+        return manipulator(
+            &d_networkInterfaces,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES]);
+    }
+    case ATTRIBUTE_ID_BMQCONF_CONFIG: {
+        return manipulator(
+            &d_bmqconfConfig,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG]);
+    }
+    case ATTRIBUTE_ID_PLUGINS: {
+        return manipulator(&d_plugins,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    }
+    case ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2: {
+        return manipulator(
+            &d_messagePropertiesV2,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2]);
+    }
+    case ATTRIBUTE_ID_CONFIGURE_STREAM: {
+        return manipulator(
+            &d_configureStream,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIGURE_STREAM]);
+    }
+    case ATTRIBUTE_ID_ADVERTISE_SUBSCRIPTIONS: {
+        return manipulator(
+            &d_advertiseSubscriptions,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ADVERTISE_SUBSCRIPTIONS]);
+    }
+    case ATTRIBUTE_ID_ROUTE_COMMAND_TIMEOUT_MS: {
+        return manipulator(
+            &d_routeCommandTimeoutMs,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ROUTE_COMMAND_TIMEOUT_MS]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_MANIPULATOR>
+int AppConfig::manipulateAttribute(t_MANIPULATOR& manipulator,
+                                   const char*    name,
+                                   int            nameLength)
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return manipulateAttribute(manipulator, attributeInfo->d_id);
+}
+
+inline bsl::string& AppConfig::brokerInstanceName()
+{
+    return d_brokerInstanceName;
+}
+
+inline int& AppConfig::brokerVersion()
+{
+    return d_brokerVersion;
+}
+
+inline int& AppConfig::configVersion()
+{
+    return d_configVersion;
+}
+
+inline bsl::string& AppConfig::etcDir()
+{
+    return d_etcDir;
+}
+
+inline bsl::string& AppConfig::hostName()
+{
+    return d_hostName;
+}
+
+inline bsl::string& AppConfig::hostTags()
+{
+    return d_hostTags;
+}
+
+inline bsl::string& AppConfig::hostDataCenter()
+{
+    return d_hostDataCenter;
+}
+
+inline bool& AppConfig::isRunningOnDev()
+{
+    return d_isRunningOnDev;
+}
+
+inline int& AppConfig::logsObserverMaxSize()
+{
+    return d_logsObserverMaxSize;
+}
+
+inline bsl::string& AppConfig::latencyMonitorDomain()
+{
+    return d_latencyMonitorDomain;
+}
+
+inline DispatcherConfig& AppConfig::dispatcherConfig()
+{
+    return d_dispatcherConfig;
+}
+
+inline StatsConfig& AppConfig::stats()
+{
+    return d_stats;
+}
+
+inline NetworkInterfaces& AppConfig::networkInterfaces()
+{
+    return d_networkInterfaces;
+}
+
+inline BmqconfConfig& AppConfig::bmqconfConfig()
+{
+    return d_bmqconfConfig;
+}
+
+inline Plugins& AppConfig::plugins()
+{
+    return d_plugins;
+}
+
+inline MessagePropertiesV2& AppConfig::messagePropertiesV2()
+{
+    return d_messagePropertiesV2;
+}
+
+inline bool& AppConfig::configureStream()
+{
+    return d_configureStream;
+}
+
+inline bool& AppConfig::advertiseSubscriptions()
+{
+    return d_advertiseSubscriptions;
+}
+
+inline int& AppConfig::routeCommandTimeoutMs()
+{
+    return d_routeCommandTimeoutMs;
+}
+
+// ACCESSORS
+template <typename t_ACCESSOR>
+int AppConfig::accessAttributes(t_ACCESSOR& accessor) const
+{
+    int ret;
+
+    ret = accessor(d_brokerInstanceName,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_brokerVersion,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_configVersion,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_etcDir, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_hostName,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_hostTags,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_hostDataCenter,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_isRunningOnDev,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(
+        d_logsObserverMaxSize,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(
+        d_latencyMonitorDomain,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_dispatcherConfig,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_stats, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_networkInterfaces,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_bmqconfConfig,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_plugins, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(
+        d_messagePropertiesV2,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(d_configureStream,
+                   ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIGURE_STREAM]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(
+        d_advertiseSubscriptions,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ADVERTISE_SUBSCRIPTIONS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(
+        d_routeCommandTimeoutMs,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ROUTE_COMMAND_TIMEOUT_MS]);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+template <typename t_ACCESSOR>
+int AppConfig::accessAttribute(t_ACCESSOR& accessor, int id) const
+{
+    enum { NOT_FOUND = -1 };
+
+    switch (id) {
+    case ATTRIBUTE_ID_BROKER_INSTANCE_NAME: {
+        return accessor(
+            d_brokerInstanceName,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME]);
+    }
+    case ATTRIBUTE_ID_BROKER_VERSION: {
+        return accessor(d_brokerVersion,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION]);
+    }
+    case ATTRIBUTE_ID_CONFIG_VERSION: {
+        return accessor(d_configVersion,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION]);
+    }
+    case ATTRIBUTE_ID_ETC_DIR: {
+        return accessor(d_etcDir,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR]);
+    }
+    case ATTRIBUTE_ID_HOST_NAME: {
+        return accessor(d_hostName,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME]);
+    }
+    case ATTRIBUTE_ID_HOST_TAGS: {
+        return accessor(d_hostTags,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS]);
+    }
+    case ATTRIBUTE_ID_HOST_DATA_CENTER: {
+        return accessor(
+            d_hostDataCenter,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER]);
+    }
+    case ATTRIBUTE_ID_IS_RUNNING_ON_DEV: {
+        return accessor(
+            d_isRunningOnDev,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV]);
+    }
+    case ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE: {
+        return accessor(
+            d_logsObserverMaxSize,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE]);
+    }
+    case ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN: {
+        return accessor(
+            d_latencyMonitorDomain,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN]);
+    }
+    case ATTRIBUTE_ID_DISPATCHER_CONFIG: {
+        return accessor(
+            d_dispatcherConfig,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG]);
+    }
+    case ATTRIBUTE_ID_STATS: {
+        return accessor(d_stats, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS]);
+    }
+    case ATTRIBUTE_ID_NETWORK_INTERFACES: {
+        return accessor(
+            d_networkInterfaces,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES]);
+    }
+    case ATTRIBUTE_ID_BMQCONF_CONFIG: {
+        return accessor(d_bmqconfConfig,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG]);
+    }
+    case ATTRIBUTE_ID_PLUGINS: {
+        return accessor(d_plugins,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS]);
+    }
+    case ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2: {
+        return accessor(
+            d_messagePropertiesV2,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2]);
+    }
+    case ATTRIBUTE_ID_CONFIGURE_STREAM: {
+        return accessor(
+            d_configureStream,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIGURE_STREAM]);
+    }
+    case ATTRIBUTE_ID_ADVERTISE_SUBSCRIPTIONS: {
+        return accessor(
+            d_advertiseSubscriptions,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ADVERTISE_SUBSCRIPTIONS]);
+    }
+    case ATTRIBUTE_ID_ROUTE_COMMAND_TIMEOUT_MS: {
+        return accessor(
+            d_routeCommandTimeoutMs,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ROUTE_COMMAND_TIMEOUT_MS]);
+    }
+    default: return NOT_FOUND;
+    }
+}
+
+template <typename t_ACCESSOR>
+int AppConfig::accessAttribute(t_ACCESSOR& accessor,
+                               const char* name,
+                               int         nameLength) const
+{
+    enum { NOT_FOUND = -1 };
+
+    const bdlat_AttributeInfo* attributeInfo = lookupAttributeInfo(name,
+                                                                   nameLength);
+    if (0 == attributeInfo) {
+        return NOT_FOUND;
+    }
+
+    return accessAttribute(accessor, attributeInfo->d_id);
+}
+
+inline const bsl::string& AppConfig::brokerInstanceName() const
+{
+    return d_brokerInstanceName;
+}
+
+inline int AppConfig::brokerVersion() const
+{
+    return d_brokerVersion;
+}
+
+inline int AppConfig::configVersion() const
+{
+    return d_configVersion;
+}
+
+inline const bsl::string& AppConfig::etcDir() const
+{
+    return d_etcDir;
+}
+
+inline const bsl::string& AppConfig::hostName() const
+{
+    return d_hostName;
+}
+
+inline const bsl::string& AppConfig::hostTags() const
+{
+    return d_hostTags;
+}
+
+inline const bsl::string& AppConfig::hostDataCenter() const
+{
+    return d_hostDataCenter;
+}
+
+inline bool AppConfig::isRunningOnDev() const
+{
+    return d_isRunningOnDev;
+}
+
+inline int AppConfig::logsObserverMaxSize() const
+{
+    return d_logsObserverMaxSize;
+}
+
+inline const bsl::string& AppConfig::latencyMonitorDomain() const
+{
+    return d_latencyMonitorDomain;
+}
+
+inline const DispatcherConfig& AppConfig::dispatcherConfig() const
+{
+    return d_dispatcherConfig;
+}
+
+inline const StatsConfig& AppConfig::stats() const
+{
+    return d_stats;
+}
+
+inline const NetworkInterfaces& AppConfig::networkInterfaces() const
+{
+    return d_networkInterfaces;
+}
+
+inline const BmqconfConfig& AppConfig::bmqconfConfig() const
+{
+    return d_bmqconfConfig;
+}
+
+inline const Plugins& AppConfig::plugins() const
+{
+    return d_plugins;
+}
+
+inline const MessagePropertiesV2& AppConfig::messagePropertiesV2() const
+{
+    return d_messagePropertiesV2;
+}
+
+inline bool AppConfig::configureStream() const
+{
+    return d_configureStream;
+}
+
+inline bool AppConfig::advertiseSubscriptions() const
+{
+    return d_advertiseSubscriptions;
+}
+
+inline int AppConfig::routeCommandTimeoutMs() const
+{
+    return d_routeCommandTimeoutMs;
+}
+
 // ------------------------
 // class ClustersDefinition
 // ------------------------
+
+// PRIVATE ACCESSORS
+template <typename t_HASH_ALGORITHM>
+void ClustersDefinition::hashAppendImpl(t_HASH_ALGORITHM& hashAlgorithm) const
+{
+    using bslh::hashAppend;
+    hashAppend(hashAlgorithm, this->myClusters());
+    hashAppend(hashAlgorithm, this->myReverseClusters());
+    hashAppend(hashAlgorithm, this->myVirtualClusters());
+    hashAppend(hashAlgorithm, this->proxyClusters());
+    hashAppend(hashAlgorithm, this->reversedClusterConnections());
+}
+
+inline bool ClustersDefinition::isEqualTo(const ClustersDefinition& rhs) const
+{
+    return this->myClusters() == rhs.myClusters() &&
+           this->myReverseClusters() == rhs.myReverseClusters() &&
+           this->myVirtualClusters() == rhs.myVirtualClusters() &&
+           this->proxyClusters() == rhs.proxyClusters() &&
+           this->reversedClusterConnections() ==
+               rhs.reversedClusterConnections();
+}
 
 // CLASS METHODS
 // MANIPULATORS
@@ -16281,1178 +18606,10 @@ inline const AppConfig& Configuration::appConfig() const
 
 // FREE FUNCTIONS
 
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                stream,
-                                        mqbcfg::AllocatorType::Value rhs)
-{
-    return mqbcfg::AllocatorType::print(stream, rhs);
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::BmqconfConfig& lhs,
-                               const mqbcfg::BmqconfConfig& rhs)
-{
-    return lhs.cacheTTLSeconds() == rhs.cacheTTLSeconds();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::BmqconfConfig& lhs,
-                               const mqbcfg::BmqconfConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                stream,
-                                        const mqbcfg::BmqconfConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&            hashAlg,
-                        const mqbcfg::BmqconfConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.cacheTTLSeconds());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ClusterAttributes& lhs,
-                               const mqbcfg::ClusterAttributes& rhs)
-{
-    return lhs.isCSLModeEnabled() == rhs.isCSLModeEnabled() &&
-           lhs.isFSMWorkflow() == rhs.isFSMWorkflow();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ClusterAttributes& lhs,
-                               const mqbcfg::ClusterAttributes& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream& stream,
-                                        const mqbcfg::ClusterAttributes& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                        const mqbcfg::ClusterAttributes& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.isCSLModeEnabled());
-    hashAppend(hashAlg, object.isFSMWorkflow());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ClusterMonitorConfig& lhs,
-                               const mqbcfg::ClusterMonitorConfig& rhs)
-{
-    return lhs.maxTimeLeader() == rhs.maxTimeLeader() &&
-           lhs.maxTimeMaster() == rhs.maxTimeMaster() &&
-           lhs.maxTimeNode() == rhs.maxTimeNode() &&
-           lhs.maxTimeFailover() == rhs.maxTimeFailover() &&
-           lhs.thresholdLeader() == rhs.thresholdLeader() &&
-           lhs.thresholdMaster() == rhs.thresholdMaster() &&
-           lhs.thresholdNode() == rhs.thresholdNode() &&
-           lhs.thresholdFailover() == rhs.thresholdFailover();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ClusterMonitorConfig& lhs,
-                               const mqbcfg::ClusterMonitorConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                       stream,
-                   const mqbcfg::ClusterMonitorConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                   hashAlg,
-                        const mqbcfg::ClusterMonitorConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.maxTimeLeader());
-    hashAppend(hashAlg, object.maxTimeMaster());
-    hashAppend(hashAlg, object.maxTimeNode());
-    hashAppend(hashAlg, object.maxTimeFailover());
-    hashAppend(hashAlg, object.thresholdLeader());
-    hashAppend(hashAlg, object.thresholdMaster());
-    hashAppend(hashAlg, object.thresholdNode());
-    hashAppend(hashAlg, object.thresholdFailover());
-}
-
-inline bool
-mqbcfg::operator==(const mqbcfg::DispatcherProcessorParameters& lhs,
-                   const mqbcfg::DispatcherProcessorParameters& rhs)
-{
-    return lhs.queueSize() == rhs.queueSize() &&
-           lhs.queueSizeLowWatermark() == rhs.queueSizeLowWatermark() &&
-           lhs.queueSizeHighWatermark() == rhs.queueSizeHighWatermark();
-}
-
-inline bool
-mqbcfg::operator!=(const mqbcfg::DispatcherProcessorParameters& lhs,
-                   const mqbcfg::DispatcherProcessorParameters& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                                stream,
-                   const mqbcfg::DispatcherProcessorParameters& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                            hashAlg,
-                        const mqbcfg::DispatcherProcessorParameters& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.queueSize());
-    hashAppend(hashAlg, object.queueSizeLowWatermark());
-    hashAppend(hashAlg, object.queueSizeHighWatermark());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ElectorConfig& lhs,
-                               const mqbcfg::ElectorConfig& rhs)
-{
-    return lhs.initialWaitTimeoutMs() == rhs.initialWaitTimeoutMs() &&
-           lhs.maxRandomWaitTimeoutMs() == rhs.maxRandomWaitTimeoutMs() &&
-           lhs.scoutingResultTimeoutMs() == rhs.scoutingResultTimeoutMs() &&
-           lhs.electionResultTimeoutMs() == rhs.electionResultTimeoutMs() &&
-           lhs.heartbeatBroadcastPeriodMs() ==
-               rhs.heartbeatBroadcastPeriodMs() &&
-           lhs.heartbeatCheckPeriodMs() == rhs.heartbeatCheckPeriodMs() &&
-           lhs.heartbeatMissCount() == rhs.heartbeatMissCount() &&
-           lhs.quorum() == rhs.quorum() &&
-           lhs.leaderSyncDelayMs() == rhs.leaderSyncDelayMs();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ElectorConfig& lhs,
-                               const mqbcfg::ElectorConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                stream,
-                                        const mqbcfg::ElectorConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&            hashAlg,
-                        const mqbcfg::ElectorConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.initialWaitTimeoutMs());
-    hashAppend(hashAlg, object.maxRandomWaitTimeoutMs());
-    hashAppend(hashAlg, object.scoutingResultTimeoutMs());
-    hashAppend(hashAlg, object.electionResultTimeoutMs());
-    hashAppend(hashAlg, object.heartbeatBroadcastPeriodMs());
-    hashAppend(hashAlg, object.heartbeatCheckPeriodMs());
-    hashAppend(hashAlg, object.heartbeatMissCount());
-    hashAppend(hashAlg, object.quorum());
-    hashAppend(hashAlg, object.leaderSyncDelayMs());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::Heartbeat& lhs,
-                               const mqbcfg::Heartbeat& rhs)
-{
-    return lhs.client() == rhs.client() &&
-           lhs.downstreamBroker() == rhs.downstreamBroker() &&
-           lhs.upstreamBroker() == rhs.upstreamBroker() &&
-           lhs.clusterPeer() == rhs.clusterPeer();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::Heartbeat& lhs,
-                               const mqbcfg::Heartbeat& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&            stream,
-                                        const mqbcfg::Heartbeat& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&        hashAlg,
-                        const mqbcfg::Heartbeat& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.client());
-    hashAppend(hashAlg, object.downstreamBroker());
-    hashAppend(hashAlg, object.upstreamBroker());
-    hashAppend(hashAlg, object.clusterPeer());
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                            stream,
-                   mqbcfg::MasterAssignmentAlgorithm::Value rhs)
-{
-    return mqbcfg::MasterAssignmentAlgorithm::print(stream, rhs);
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::MessagePropertiesV2& lhs,
-                               const mqbcfg::MessagePropertiesV2& rhs)
-{
-    return lhs.advertiseV2Support() == rhs.advertiseV2Support() &&
-           lhs.minCppSdkVersion() == rhs.minCppSdkVersion() &&
-           lhs.minJavaSdkVersion() == rhs.minJavaSdkVersion();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::MessagePropertiesV2& lhs,
-                               const mqbcfg::MessagePropertiesV2& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream& stream,
-                                        const mqbcfg::MessagePropertiesV2& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                  hashAlg,
-                        const mqbcfg::MessagePropertiesV2& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.advertiseV2Support());
-    hashAppend(hashAlg, object.minCppSdkVersion());
-    hashAppend(hashAlg, object.minJavaSdkVersion());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::MessageThrottleConfig& lhs,
-                               const mqbcfg::MessageThrottleConfig& rhs)
-{
-    return lhs.lowThreshold() == rhs.lowThreshold() &&
-           lhs.highThreshold() == rhs.highThreshold() &&
-           lhs.lowInterval() == rhs.lowInterval() &&
-           lhs.highInterval() == rhs.highInterval();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::MessageThrottleConfig& lhs,
-                               const mqbcfg::MessageThrottleConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                        stream,
-                   const mqbcfg::MessageThrottleConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                    hashAlg,
-                        const mqbcfg::MessageThrottleConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.lowThreshold());
-    hashAppend(hashAlg, object.highThreshold());
-    hashAppend(hashAlg, object.lowInterval());
-    hashAppend(hashAlg, object.highInterval());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::Plugins& lhs,
-                               const mqbcfg::Plugins& rhs)
-{
-    return lhs.libraries() == rhs.libraries() &&
-           lhs.enabled() == rhs.enabled();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::Plugins& lhs,
-                               const mqbcfg::Plugins& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&          stream,
-                                        const mqbcfg::Plugins& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&      hashAlg,
-                        const mqbcfg::Plugins& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.libraries());
-    hashAppend(hashAlg, object.enabled());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::QueueOperationsConfig& lhs,
-                               const mqbcfg::QueueOperationsConfig& rhs)
-{
-    return lhs.openTimeoutMs() == rhs.openTimeoutMs() &&
-           lhs.configureTimeoutMs() == rhs.configureTimeoutMs() &&
-           lhs.closeTimeoutMs() == rhs.closeTimeoutMs() &&
-           lhs.reopenTimeoutMs() == rhs.reopenTimeoutMs() &&
-           lhs.reopenRetryIntervalMs() == rhs.reopenRetryIntervalMs() &&
-           lhs.reopenMaxAttempts() == rhs.reopenMaxAttempts() &&
-           lhs.assignmentTimeoutMs() == rhs.assignmentTimeoutMs() &&
-           lhs.keepaliveDurationMs() == rhs.keepaliveDurationMs() &&
-           lhs.consumptionMonitorPeriodMs() ==
-               rhs.consumptionMonitorPeriodMs() &&
-           lhs.stopTimeoutMs() == rhs.stopTimeoutMs() &&
-           lhs.shutdownTimeoutMs() == rhs.shutdownTimeoutMs() &&
-           lhs.ackWindowSize() == rhs.ackWindowSize();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::QueueOperationsConfig& lhs,
-                               const mqbcfg::QueueOperationsConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                        stream,
-                   const mqbcfg::QueueOperationsConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                    hashAlg,
-                        const mqbcfg::QueueOperationsConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.openTimeoutMs());
-    hashAppend(hashAlg, object.configureTimeoutMs());
-    hashAppend(hashAlg, object.closeTimeoutMs());
-    hashAppend(hashAlg, object.reopenTimeoutMs());
-    hashAppend(hashAlg, object.reopenRetryIntervalMs());
-    hashAppend(hashAlg, object.reopenMaxAttempts());
-    hashAppend(hashAlg, object.assignmentTimeoutMs());
-    hashAppend(hashAlg, object.keepaliveDurationMs());
-    hashAppend(hashAlg, object.consumptionMonitorPeriodMs());
-    hashAppend(hashAlg, object.stopTimeoutMs());
-    hashAppend(hashAlg, object.shutdownTimeoutMs());
-    hashAppend(hashAlg, object.ackWindowSize());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ResolvedDomain& lhs,
-                               const mqbcfg::ResolvedDomain& rhs)
-{
-    return lhs.resolvedName() == rhs.resolvedName() &&
-           lhs.clusterName() == rhs.clusterName();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ResolvedDomain& lhs,
-                               const mqbcfg::ResolvedDomain& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                 stream,
-                                        const mqbcfg::ResolvedDomain& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&             hashAlg,
-                        const mqbcfg::ResolvedDomain& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.resolvedName());
-    hashAppend(hashAlg, object.clusterName());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::StatPluginConfig& lhs,
-                               const mqbcfg::StatPluginConfig& rhs)
-{
-    return lhs.name() == rhs.name() && lhs.queueSize() == rhs.queueSize() &&
-           lhs.queueHighWatermark() == rhs.queueHighWatermark() &&
-           lhs.queueLowWatermark() == rhs.queueLowWatermark() &&
-           lhs.publishInterval() == rhs.publishInterval() &&
-           lhs.namespacePrefix() == rhs.namespacePrefix() &&
-           lhs.hosts() == rhs.hosts() && lhs.instanceId() == rhs.instanceId();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::StatPluginConfig& lhs,
-                               const mqbcfg::StatPluginConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                   stream,
-                                        const mqbcfg::StatPluginConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&               hashAlg,
-                        const mqbcfg::StatPluginConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.queueSize());
-    hashAppend(hashAlg, object.queueHighWatermark());
-    hashAppend(hashAlg, object.queueLowWatermark());
-    hashAppend(hashAlg, object.publishInterval());
-    hashAppend(hashAlg, object.namespacePrefix());
-    hashAppend(hashAlg, object.hosts());
-    hashAppend(hashAlg, object.instanceId());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::StatsPrinterConfig& lhs,
-                               const mqbcfg::StatsPrinterConfig& rhs)
-{
-    return lhs.printInterval() == rhs.printInterval() &&
-           lhs.file() == rhs.file() && lhs.maxAgeDays() == rhs.maxAgeDays() &&
-           lhs.rotateBytes() == rhs.rotateBytes() &&
-           lhs.rotateDays() == rhs.rotateDays();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::StatsPrinterConfig& lhs,
-                               const mqbcfg::StatsPrinterConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream& stream,
-                                        const mqbcfg::StatsPrinterConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                 hashAlg,
-                        const mqbcfg::StatsPrinterConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.printInterval());
-    hashAppend(hashAlg, object.file());
-    hashAppend(hashAlg, object.maxAgeDays());
-    hashAppend(hashAlg, object.rotateBytes());
-    hashAppend(hashAlg, object.rotateDays());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::StorageSyncConfig& lhs,
-                               const mqbcfg::StorageSyncConfig& rhs)
-{
-    return lhs.startupRecoveryMaxDurationMs() ==
-               rhs.startupRecoveryMaxDurationMs() &&
-           lhs.maxAttemptsStorageSync() == rhs.maxAttemptsStorageSync() &&
-           lhs.storageSyncReqTimeoutMs() == rhs.storageSyncReqTimeoutMs() &&
-           lhs.masterSyncMaxDurationMs() == rhs.masterSyncMaxDurationMs() &&
-           lhs.partitionSyncStateReqTimeoutMs() ==
-               rhs.partitionSyncStateReqTimeoutMs() &&
-           lhs.partitionSyncDataReqTimeoutMs() ==
-               rhs.partitionSyncDataReqTimeoutMs() &&
-           lhs.startupWaitDurationMs() == rhs.startupWaitDurationMs() &&
-           lhs.fileChunkSize() == rhs.fileChunkSize() &&
-           lhs.partitionSyncEventSize() == rhs.partitionSyncEventSize();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::StorageSyncConfig& lhs,
-                               const mqbcfg::StorageSyncConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream& stream,
-                                        const mqbcfg::StorageSyncConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                        const mqbcfg::StorageSyncConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.startupRecoveryMaxDurationMs());
-    hashAppend(hashAlg, object.maxAttemptsStorageSync());
-    hashAppend(hashAlg, object.storageSyncReqTimeoutMs());
-    hashAppend(hashAlg, object.masterSyncMaxDurationMs());
-    hashAppend(hashAlg, object.partitionSyncStateReqTimeoutMs());
-    hashAppend(hashAlg, object.partitionSyncDataReqTimeoutMs());
-    hashAppend(hashAlg, object.startupWaitDurationMs());
-    hashAppend(hashAlg, object.fileChunkSize());
-    hashAppend(hashAlg, object.partitionSyncEventSize());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::SyslogConfig& lhs,
-                               const mqbcfg::SyslogConfig& rhs)
-{
-    return lhs.enabled() == rhs.enabled() && lhs.appName() == rhs.appName() &&
-           lhs.logFormat() == rhs.logFormat() &&
-           lhs.verbosity() == rhs.verbosity();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::SyslogConfig& lhs,
-                               const mqbcfg::SyslogConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&               stream,
-                                        const mqbcfg::SyslogConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&           hashAlg,
-                        const mqbcfg::SyslogConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.enabled());
-    hashAppend(hashAlg, object.appName());
-    hashAppend(hashAlg, object.logFormat());
-    hashAppend(hashAlg, object.verbosity());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::TcpClusterNodeConnection& lhs,
-                               const mqbcfg::TcpClusterNodeConnection& rhs)
-{
-    return lhs.endpoint() == rhs.endpoint();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::TcpClusterNodeConnection& lhs,
-                               const mqbcfg::TcpClusterNodeConnection& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                           stream,
-                   const mqbcfg::TcpClusterNodeConnection& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                       hashAlg,
-                        const mqbcfg::TcpClusterNodeConnection& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.endpoint());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::TcpInterfaceConfig& lhs,
-                               const mqbcfg::TcpInterfaceConfig& rhs)
-{
-    return lhs.name() == rhs.name() && lhs.port() == rhs.port() &&
-           lhs.ioThreads() == rhs.ioThreads() &&
-           lhs.maxConnections() == rhs.maxConnections() &&
-           lhs.lowWatermark() == rhs.lowWatermark() &&
-           lhs.highWatermark() == rhs.highWatermark() &&
-           lhs.nodeLowWatermark() == rhs.nodeLowWatermark() &&
-           lhs.nodeHighWatermark() == rhs.nodeHighWatermark() &&
-           lhs.heartbeatIntervalMs() == rhs.heartbeatIntervalMs() &&
-           lhs.useNtf() == rhs.useNtf();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::TcpInterfaceConfig& lhs,
-                               const mqbcfg::TcpInterfaceConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream& stream,
-                                        const mqbcfg::TcpInterfaceConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                 hashAlg,
-                        const mqbcfg::TcpInterfaceConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.port());
-    hashAppend(hashAlg, object.ioThreads());
-    hashAppend(hashAlg, object.maxConnections());
-    hashAppend(hashAlg, object.lowWatermark());
-    hashAppend(hashAlg, object.highWatermark());
-    hashAppend(hashAlg, object.nodeLowWatermark());
-    hashAppend(hashAlg, object.nodeHighWatermark());
-    hashAppend(hashAlg, object.heartbeatIntervalMs());
-    hashAppend(hashAlg, object.useNtf());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::VirtualClusterInformation& lhs,
-                               const mqbcfg::VirtualClusterInformation& rhs)
-{
-    return lhs.name() == rhs.name() && lhs.selfNodeId() == rhs.selfNodeId();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::VirtualClusterInformation& lhs,
-                               const mqbcfg::VirtualClusterInformation& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                            stream,
-                   const mqbcfg::VirtualClusterInformation& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                        hashAlg,
-                        const mqbcfg::VirtualClusterInformation& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.selfNodeId());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ClusterNodeConnection& lhs,
-                               const mqbcfg::ClusterNodeConnection& rhs)
-{
-    typedef mqbcfg::ClusterNodeConnection Class;
-    if (lhs.selectionId() == rhs.selectionId()) {
-        switch (rhs.selectionId()) {
-        case Class::SELECTION_ID_TCP: return lhs.tcp() == rhs.tcp();
-        default:
-            BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == rhs.selectionId());
-            return true;
-        }
-    }
-    else {
-        return false;
-    }
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ClusterNodeConnection& lhs,
-                               const mqbcfg::ClusterNodeConnection& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                        stream,
-                   const mqbcfg::ClusterNodeConnection& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                    hashAlg,
-                        const mqbcfg::ClusterNodeConnection& object)
-{
-    typedef mqbcfg::ClusterNodeConnection Class;
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.selectionId());
-    switch (object.selectionId()) {
-    case Class::SELECTION_ID_TCP: hashAppend(hashAlg, object.tcp()); break;
-    default:
-        BSLS_ASSERT(Class::SELECTION_ID_UNDEFINED == object.selectionId());
-    }
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::DispatcherProcessorConfig& lhs,
-                               const mqbcfg::DispatcherProcessorConfig& rhs)
-{
-    return lhs.numProcessors() == rhs.numProcessors() &&
-           lhs.processorConfig() == rhs.processorConfig();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::DispatcherProcessorConfig& lhs,
-                               const mqbcfg::DispatcherProcessorConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                            stream,
-                   const mqbcfg::DispatcherProcessorConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                        hashAlg,
-                        const mqbcfg::DispatcherProcessorConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.numProcessors());
-    hashAppend(hashAlg, object.processorConfig());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::LogController& lhs,
-                               const mqbcfg::LogController& rhs)
-{
-    return lhs.fileName() == rhs.fileName() &&
-           lhs.fileMaxAgeDays() == rhs.fileMaxAgeDays() &&
-           lhs.rotationBytes() == rhs.rotationBytes() &&
-           lhs.logfileFormat() == rhs.logfileFormat() &&
-           lhs.consoleFormat() == rhs.consoleFormat() &&
-           lhs.loggingVerbosity() == rhs.loggingVerbosity() &&
-           lhs.bslsLogSeverityThreshold() == rhs.bslsLogSeverityThreshold() &&
-           lhs.consoleSeverityThreshold() == rhs.consoleSeverityThreshold() &&
-           lhs.categories() == rhs.categories() &&
-           lhs.syslog() == rhs.syslog();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::LogController& lhs,
-                               const mqbcfg::LogController& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                stream,
-                                        const mqbcfg::LogController& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&            hashAlg,
-                        const mqbcfg::LogController& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.fileName());
-    hashAppend(hashAlg, object.fileMaxAgeDays());
-    hashAppend(hashAlg, object.rotationBytes());
-    hashAppend(hashAlg, object.logfileFormat());
-    hashAppend(hashAlg, object.consoleFormat());
-    hashAppend(hashAlg, object.loggingVerbosity());
-    hashAppend(hashAlg, object.bslsLogSeverityThreshold());
-    hashAppend(hashAlg, object.consoleSeverityThreshold());
-    hashAppend(hashAlg, object.categories());
-    hashAppend(hashAlg, object.syslog());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::NetworkInterfaces& lhs,
-                               const mqbcfg::NetworkInterfaces& rhs)
-{
-    return lhs.heartbeats() == rhs.heartbeats() &&
-           lhs.tcpInterface() == rhs.tcpInterface();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::NetworkInterfaces& lhs,
-                               const mqbcfg::NetworkInterfaces& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream& stream,
-                                        const mqbcfg::NetworkInterfaces& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                        const mqbcfg::NetworkInterfaces& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.heartbeats());
-    hashAppend(hashAlg, object.tcpInterface());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::PartitionConfig& lhs,
-                               const mqbcfg::PartitionConfig& rhs)
-{
-    return lhs.numPartitions() == rhs.numPartitions() &&
-           lhs.location() == rhs.location() &&
-           lhs.archiveLocation() == rhs.archiveLocation() &&
-           lhs.maxDataFileSize() == rhs.maxDataFileSize() &&
-           lhs.maxJournalFileSize() == rhs.maxJournalFileSize() &&
-           lhs.maxQlistFileSize() == rhs.maxQlistFileSize() &&
-           lhs.preallocate() == rhs.preallocate() &&
-           lhs.maxArchivedFileSets() == rhs.maxArchivedFileSets() &&
-           lhs.prefaultPages() == rhs.prefaultPages() &&
-           lhs.flushAtShutdown() == rhs.flushAtShutdown() &&
-           lhs.syncConfig() == rhs.syncConfig();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::PartitionConfig& lhs,
-                               const mqbcfg::PartitionConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                  stream,
-                                        const mqbcfg::PartitionConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&              hashAlg,
-                        const mqbcfg::PartitionConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.numPartitions());
-    hashAppend(hashAlg, object.location());
-    hashAppend(hashAlg, object.archiveLocation());
-    hashAppend(hashAlg, object.maxDataFileSize());
-    hashAppend(hashAlg, object.maxJournalFileSize());
-    hashAppend(hashAlg, object.maxQlistFileSize());
-    hashAppend(hashAlg, object.preallocate());
-    hashAppend(hashAlg, object.maxArchivedFileSets());
-    hashAppend(hashAlg, object.prefaultPages());
-    hashAppend(hashAlg, object.flushAtShutdown());
-    hashAppend(hashAlg, object.syncConfig());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::StatsConfig& lhs,
-                               const mqbcfg::StatsConfig& rhs)
-{
-    return lhs.snapshotInterval() == rhs.snapshotInterval() &&
-           lhs.plugins() == rhs.plugins() && lhs.printer() == rhs.printer();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::StatsConfig& lhs,
-                               const mqbcfg::StatsConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&              stream,
-                                        const mqbcfg::StatsConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&          hashAlg,
-                        const mqbcfg::StatsConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.snapshotInterval());
-    hashAppend(hashAlg, object.plugins());
-    hashAppend(hashAlg, object.printer());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ClusterNode& lhs,
-                               const mqbcfg::ClusterNode& rhs)
-{
-    return lhs.id() == rhs.id() && lhs.name() == rhs.name() &&
-           lhs.dataCenter() == rhs.dataCenter() &&
-           lhs.transport() == rhs.transport();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ClusterNode& lhs,
-                               const mqbcfg::ClusterNode& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&              stream,
-                                        const mqbcfg::ClusterNode& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&          hashAlg,
-                        const mqbcfg::ClusterNode& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.id());
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.dataCenter());
-    hashAppend(hashAlg, object.transport());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::DispatcherConfig& lhs,
-                               const mqbcfg::DispatcherConfig& rhs)
-{
-    return lhs.sessions() == rhs.sessions() && lhs.queues() == rhs.queues() &&
-           lhs.clusters() == rhs.clusters();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::DispatcherConfig& lhs,
-                               const mqbcfg::DispatcherConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                   stream,
-                                        const mqbcfg::DispatcherConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&               hashAlg,
-                        const mqbcfg::DispatcherConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.sessions());
-    hashAppend(hashAlg, object.queues());
-    hashAppend(hashAlg, object.clusters());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ReversedClusterConnection& lhs,
-                               const mqbcfg::ReversedClusterConnection& rhs)
-{
-    return lhs.name() == rhs.name() && lhs.connections() == rhs.connections();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ReversedClusterConnection& lhs,
-                               const mqbcfg::ReversedClusterConnection& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                            stream,
-                   const mqbcfg::ReversedClusterConnection& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                        hashAlg,
-                        const mqbcfg::ReversedClusterConnection& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.connections());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::TaskConfig& lhs,
-                               const mqbcfg::TaskConfig& rhs)
-{
-    return lhs.allocatorType() == rhs.allocatorType() &&
-           lhs.allocationLimit() == rhs.allocationLimit() &&
-           lhs.logController() == rhs.logController();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::TaskConfig& lhs,
-                               const mqbcfg::TaskConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&             stream,
-                                        const mqbcfg::TaskConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&         hashAlg,
-                        const mqbcfg::TaskConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.allocatorType());
-    hashAppend(hashAlg, object.allocationLimit());
-    hashAppend(hashAlg, object.logController());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::AppConfig& lhs,
-                               const mqbcfg::AppConfig& rhs)
-{
-    return lhs.brokerInstanceName() == rhs.brokerInstanceName() &&
-           lhs.brokerVersion() == rhs.brokerVersion() &&
-           lhs.configVersion() == rhs.configVersion() &&
-           lhs.etcDir() == rhs.etcDir() && lhs.hostName() == rhs.hostName() &&
-           lhs.hostTags() == rhs.hostTags() &&
-           lhs.hostDataCenter() == rhs.hostDataCenter() &&
-           lhs.isRunningOnDev() == rhs.isRunningOnDev() &&
-           lhs.logsObserverMaxSize() == rhs.logsObserverMaxSize() &&
-           lhs.latencyMonitorDomain() == rhs.latencyMonitorDomain() &&
-           lhs.dispatcherConfig() == rhs.dispatcherConfig() &&
-           lhs.stats() == rhs.stats() &&
-           lhs.networkInterfaces() == rhs.networkInterfaces() &&
-           lhs.bmqconfConfig() == rhs.bmqconfConfig() &&
-           lhs.plugins() == rhs.plugins() &&
-           lhs.messagePropertiesV2() == rhs.messagePropertiesV2();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::AppConfig& lhs,
-                               const mqbcfg::AppConfig& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&            stream,
-                                        const mqbcfg::AppConfig& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&        hashAlg,
-                        const mqbcfg::AppConfig& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.brokerInstanceName());
-    hashAppend(hashAlg, object.brokerVersion());
-    hashAppend(hashAlg, object.configVersion());
-    hashAppend(hashAlg, object.etcDir());
-    hashAppend(hashAlg, object.hostName());
-    hashAppend(hashAlg, object.hostTags());
-    hashAppend(hashAlg, object.hostDataCenter());
-    hashAppend(hashAlg, object.isRunningOnDev());
-    hashAppend(hashAlg, object.logsObserverMaxSize());
-    hashAppend(hashAlg, object.latencyMonitorDomain());
-    hashAppend(hashAlg, object.dispatcherConfig());
-    hashAppend(hashAlg, object.stats());
-    hashAppend(hashAlg, object.networkInterfaces());
-    hashAppend(hashAlg, object.bmqconfConfig());
-    hashAppend(hashAlg, object.plugins());
-    hashAppend(hashAlg, object.messagePropertiesV2());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ClusterDefinition& lhs,
-                               const mqbcfg::ClusterDefinition& rhs)
-{
-    return lhs.name() == rhs.name() && lhs.nodes() == rhs.nodes() &&
-           lhs.partitionConfig() == rhs.partitionConfig() &&
-           lhs.masterAssignment() == rhs.masterAssignment() &&
-           lhs.elector() == rhs.elector() &&
-           lhs.queueOperations() == rhs.queueOperations() &&
-           lhs.clusterAttributes() == rhs.clusterAttributes() &&
-           lhs.clusterMonitorConfig() == rhs.clusterMonitorConfig() &&
-           lhs.messageThrottleConfig() == rhs.messageThrottleConfig();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ClusterDefinition& lhs,
-                               const mqbcfg::ClusterDefinition& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream& stream,
-                                        const mqbcfg::ClusterDefinition& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                hashAlg,
-                        const mqbcfg::ClusterDefinition& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.nodes());
-    hashAppend(hashAlg, object.partitionConfig());
-    hashAppend(hashAlg, object.masterAssignment());
-    hashAppend(hashAlg, object.elector());
-    hashAppend(hashAlg, object.queueOperations());
-    hashAppend(hashAlg, object.clusterAttributes());
-    hashAppend(hashAlg, object.clusterMonitorConfig());
-    hashAppend(hashAlg, object.messageThrottleConfig());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ClusterProxyDefinition& lhs,
-                               const mqbcfg::ClusterProxyDefinition& rhs)
-{
-    return lhs.name() == rhs.name() && lhs.nodes() == rhs.nodes() &&
-           lhs.queueOperations() == rhs.queueOperations() &&
-           lhs.clusterMonitorConfig() == rhs.clusterMonitorConfig() &&
-           lhs.messageThrottleConfig() == rhs.messageThrottleConfig();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ClusterProxyDefinition& lhs,
-                               const mqbcfg::ClusterProxyDefinition& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream&
-mqbcfg::operator<<(bsl::ostream&                         stream,
-                   const mqbcfg::ClusterProxyDefinition& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                     hashAlg,
-                        const mqbcfg::ClusterProxyDefinition& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.name());
-    hashAppend(hashAlg, object.nodes());
-    hashAppend(hashAlg, object.queueOperations());
-    hashAppend(hashAlg, object.clusterMonitorConfig());
-    hashAppend(hashAlg, object.messageThrottleConfig());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::ClustersDefinition& lhs,
-                               const mqbcfg::ClustersDefinition& rhs)
-{
-    return lhs.myClusters() == rhs.myClusters() &&
-           lhs.myReverseClusters() == rhs.myReverseClusters() &&
-           lhs.myVirtualClusters() == rhs.myVirtualClusters() &&
-           lhs.proxyClusters() == rhs.proxyClusters() &&
-           lhs.reversedClusterConnections() ==
-               rhs.reversedClusterConnections();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::ClustersDefinition& lhs,
-                               const mqbcfg::ClustersDefinition& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream& stream,
-                                        const mqbcfg::ClustersDefinition& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&                 hashAlg,
-                        const mqbcfg::ClustersDefinition& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.myClusters());
-    hashAppend(hashAlg, object.myReverseClusters());
-    hashAppend(hashAlg, object.myVirtualClusters());
-    hashAppend(hashAlg, object.proxyClusters());
-    hashAppend(hashAlg, object.reversedClusterConnections());
-}
-
-inline bool mqbcfg::operator==(const mqbcfg::Configuration& lhs,
-                               const mqbcfg::Configuration& rhs)
-{
-    return lhs.taskConfig() == rhs.taskConfig() &&
-           lhs.appConfig() == rhs.appConfig();
-}
-
-inline bool mqbcfg::operator!=(const mqbcfg::Configuration& lhs,
-                               const mqbcfg::Configuration& rhs)
-{
-    return !(lhs == rhs);
-}
-
-inline bsl::ostream& mqbcfg::operator<<(bsl::ostream&                stream,
-                                        const mqbcfg::Configuration& rhs)
-{
-    return rhs.print(stream, 0, -1);
-}
-
-template <typename t_HASH_ALGORITHM>
-void mqbcfg::hashAppend(t_HASH_ALGORITHM&            hashAlg,
-                        const mqbcfg::Configuration& object)
-{
-    using bslh::hashAppend;
-    hashAppend(hashAlg, object.taskConfig());
-    hashAppend(hashAlg, object.appConfig());
-}
-
 }  // close enterprise namespace
 #endif
 
-// GENERATED BY BLP_BAS_CODEGEN_2023.06.11
+// GENERATED BY @BLP_BAS_CODEGEN_VERSION@
 // USING bas_codegen.pl -m msg --noAggregateConversion --noExternalization
-// --noIdent --package mqbcfg --msgComponent messages
-// src/groups/mqb/mqbcfg/mqbcfg.xsd
+// --noIdent --package mqbcfg --msgComponent messages mqbcfg.xsd
 // ----------------------------------------------------------------------------
-// NOTICE:
-//      Copyright 2023 Bloomberg Finance L.P. All rights reserved.
-//      Property of Bloomberg Finance L.P. (BFLP)
-//      This software is made available solely pursuant to the
-//      terms of a BFLP license agreement which governs its use.
-// ------------------------------- END-OF-FILE --------------------------------

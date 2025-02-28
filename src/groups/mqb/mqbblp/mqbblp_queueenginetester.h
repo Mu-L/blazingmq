@@ -17,88 +17,109 @@
 #ifndef INCLUDED_MQBBLP_QUEUEENGINETESTER
 #define INCLUDED_MQBBLP_QUEUEENGINETESTER
 
-//@PURPOSE: Provide a mechanism to simplify writing Queue Engine test cases.
-//
-//@CLASSES:
-//  mqbblp::QueueEngineTester:      a tester object for Queue Engine
-//  mqbblp::QueueEngineTesterGuard: proctor object for QueueEngineTester
-//  mqbblp::QueueEngineTestUtil:    helper for testing Queue Engine
-//
-//@DESCRIPTION: This component provides a mechanism,
-//  'mqbblp::QueueEngineTester', for testing an implementation of the
-//  'mqbi::QueueEngine' protocol.  It is a wrapper around a 'mqbi::QueueEngine'
-//  object and any supporting objects.  It additionally provides a proctor
-//  mechanism for acquisition and release of a 'mqbblp::QueueEngineTester'
-//  object, handling initialization, creation of the associated Queue Engine,
-//  release, and necessary cleanup (e.g., invoking 'dropHandles()' upon
-//  destruction) for the QueueEngineTester under management.  Finally, it
-//  provides utilities, 'mqbblp::QueueEngineTestUtil', to simplify Queue Engine
-//  test cases.
-//
-/// Thread Safety
-///-------------
-// NOT Thread-Safe.
-//
-/// Usage
-//------
-// This section illustrates intended use of this component.
-//
-/// Example 1: Testing PriorityQueueEngine with 3 consumers
-///- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// The following code illustrates how to leverage the functionality of this
-// component to perform a basic test of 'mqbblp::PriorityQueueEngine'
-// whereby three distinct consumers having the same priority are brought up
-// and three messages are distributed across the consumers.
-//
-// First, we create a 'QueueEngineTester' object and the Priority Queue Engine.
-//..
-//  mqbblp::QueueEngineTester tester(s_allocator_p);
-//  tester.createQueueEngine<mqbblp::PriorityQueueEngine>();
-//..
-// Then, we get handles for three consumers, each with one reader.
-//..
-//  mqbi::MockQueueHandle *handle1 = tester.getHandle("C1 readCount=1");
-//  mqbi::MockQueueHandle *handle2 = tester.getHandle("C2 readCount=1");
-//  mqbi::MockQueueHandle *handle3 = tester.getHandle("C3 readCount=1");
-//..
-// Next, we configure each handle with priority of 1 and a count of 1.
-//..
-//  tester.configureHandle("C1 consumerPriority=1 consumerPriorityCount=1");
-//  tester.configureHandle("C2 consumerPriority=1 consumerPriorityCount=1");
-//  tester.configureHandle("C3 consumerPriority=1 consumerPriorityCount=1");
-//..
-// Then, we post three messages and inform the tester to distribute them.
-//..
-//  tester.post("a,b,c");
-//  tester.afterNewMessage(0);
-//..
-// Next, we verify the consumers received the corresponding messages.
-//..
-//  ASSERT_EQ(handle1->_messages(), "a");
-//  ASSERT_EQ(handle2->_messages(), "b");
-//  ASSERT_EQ(handle3->_messages(), "c");
-//..
-// Then, for each consumer we confirm the corresponding messages.
-//..
-//  tester.confirm("C1", "a");
-//  tester.confirm("C2", "b");
-//  tester.confirm("C3", "c");
-//
-//  ASSERT_EQ(handle1->_messages(), "");
-//  ASSERT_EQ(handle2->_messages(), "");
-//  ASSERT_EQ(handle3->_messages(), "");
-//..
-// Finally, we release all the handles.
-//..
-//  tester.dropHandles();
-//..
+// Clang-format warns about an overlong line in this comment, which gives a
+// Markdown anchor to a header.  Unfortunately, by Markdown syntax rules, this
+// has to on the same line as the header, meaning we cannot introduce a
+// line-break here.
+
+// clang-format off
+
+/// @file mqbblp_queueenginetester.h
+///
+/// @brief Provide a mechanism to simplify writing Queue Engine test cases.
+///
+/// This component provides a mechanism, @bbref{mqbblp::QueueEngineTester}, for
+/// testing an implementation of the @bbref{mqbi::QueueEngine} protocol.  It is
+/// a wrapper around a @bbref{mqbi::QueueEngine} object and any supporting
+/// objects.  It additionally provides a proctor mechanism for acquisition and
+/// release of a @bbref{mqbblp::QueueEngineTester} object, handling
+/// initialization, creation of the associated Queue Engine, release, and
+/// necessary cleanup (e.g., invoking `dropHandles()` upon destruction) for the
+/// `QueueEngineTester` being managed.  Finally, it provides utilities,
+/// @bbref{mqbblp::QueueEngineTestUtil}, to simplify Queue Engine test cases.
+///
+/// Thread Safety                            {#mqbblp_queueenginetester_thread}
+/// =============
+///
+/// NOT Thread-Safe.
+///
+/// Usage                                     {#mqbblp_queueenginetester_usage}
+/// =====
+///
+/// This section illustrates intended use of this component.
+///
+/// Example 1: Testing PriorityQueueEngine with 3 consumers {#mqbblp_queueenginetester_ex1}
+/// -------------------------------------------------------
+///
+/// The following code illustrates how to leverage the functionality of this
+/// component to perform a basic test of @bbref{mqbblp::PriorityQueueEngine}
+/// whereby three distinct consumers having the same priority are brought up
+/// and three messages are distributed across the consumers.
+///
+/// First, we create a `QueueEngineTester` object and the Priority Queue
+/// Engine.
+///
+/// ```
+/// mqbblp::QueueEngineTester tester(bmqtst::TestHelperUtil::allocator());
+/// tester.createQueueEngine<mqbblp::PriorityQueueEngine>();
+/// ```
+///
+/// Then, we get handles for three consumers, each with one reader.
+///
+/// ```
+/// mqbi::MockQueueHandle *handle1 = tester.getHandle("C1 readCount=1");
+/// mqbi::MockQueueHandle *handle2 = tester.getHandle("C2 readCount=1");
+/// mqbi::MockQueueHandle *handle3 = tester.getHandle("C3 readCount=1");
+/// ```
+///
+/// Next, we configure each handle with priority of 1 and a count of 1.
+///
+/// ```
+/// tester.configureHandle("C1 consumerPriority=1 consumerPriorityCount=1");
+/// tester.configureHandle("C2 consumerPriority=1 consumerPriorityCount=1");
+/// tester.configureHandle("C3 consumerPriority=1 consumerPriorityCount=1");
+/// ```
+///
+/// Then, we post three messages and inform the tester to distribute them.
+///
+/// ```
+/// tester.post("a,b,c");
+/// tester.afterNewMessage(0);
+/// ```
+///
+/// Next, we verify the consumers received the corresponding messages.
+///
+/// ```
+/// BMQTST_ASSERT_EQ(handle1->_messages(), "a");
+/// BMQTST_ASSERT_EQ(handle2->_messages(), "b");
+/// BMQTST_ASSERT_EQ(handle3->_messages(), "c");
+/// ```
+///
+/// Then, for each consumer we confirm the corresponding messages.
+///
+/// ```
+/// tester.confirm("C1", "a");
+/// tester.confirm("C2", "b");
+/// tester.confirm("C3", "c");
+///
+/// BMQTST_ASSERT_EQ(handle1->_messages(), "");
+/// BMQTST_ASSERT_EQ(handle2->_messages(), "");
+/// BMQTST_ASSERT_EQ(handle3->_messages(), "");
+/// ```
+///
+/// Finally, we release all the handles.
+///
+/// ```
+/// tester.dropHandles();
+/// ```
+
+// clang-format on
 
 // MQB
 #include <mqbblp_queuehandlecatalog.h>
 #include <mqbblp_queuestate.h>
 #include <mqbblp_relayqueueengine.h>
 #include <mqbi_queueengine.h>
-#include <mqbmock_appkeygenerator.h>
 #include <mqbmock_cluster.h>
 #include <mqbmock_dispatcher.h>
 #include <mqbmock_domain.h>
@@ -107,10 +128,8 @@
 #include <mqbs_virtualstoragecatalog.h>
 #include <mqbu_storagekey.h>
 
-// MWC
-#include <mwcc_orderedhashmap.h>
-
 // BMQ
+#include <bmqc_orderedhashmap.h>
 #include <bmqt_messageguid.h>
 
 // BDE
@@ -165,93 +184,73 @@ class QueueEngineTester {
     /// Must be a container in which iteration order is same as insertion
     /// order because in `afterNewMessage`, we need to invoke the engine for
     /// newly posted messages in the order that they were posted.
-    typedef mwcc::OrderedHashMap<bsl::string, bmqt::MessageGUID> MessagesMap;
+    typedef bmqc::OrderedHashMap<bsl::string, bmqt::MessageGUID> MessagesMap;
 
     typedef bsl::shared_ptr<mqbi::QueueHandle> QueueHandleSp;
 
   protected:
     // DATA
+
+    /// Constant representing a null Message GUID.  This value should be used
+    /// for the GUID of a message whose GUID is not important or unknown.
     const bmqt::MessageGUID d_invalidGuid;
-    // Constant representing a null Message
-    // GUID. This value should be used for
-    // the guid of a message whose GUID is
-    // not important or unknown.
 
+    /// Buffer factory to use for messages.
     bdlbb::PooledBlobBufferFactory d_bufferFactory;
-    // Buffer factory to use for messages
 
+    /// Mock dispatcher.
     bslma::ManagedPtr<mqbmock::Dispatcher> d_mockDispatcher_mp;
-    // Mock dispatcher
 
+    /// Mock dispatcher client.
     bslma::ManagedPtr<mqbmock::DispatcherClient> d_mockDispatcherClient_mp;
-    // Mock dispatcher client
 
+    /// Mock cluster.
     bslma::ManagedPtr<mqbmock::Cluster> d_mockCluster_mp;
-    // Mock cluster
 
+    /// Mock domain.
     bslma::ManagedPtr<mqbmock::Domain> d_mockDomain_mp;
-    // Mock domain
 
+    /// Mock queue.
     bsl::shared_ptr<mqbmock::Queue> d_mockQueue_sp;
-    // Mock queue
 
+    /// Queue state.
     bslma::ManagedPtr<mqbblp::QueueState> d_queueState_mp;
-    // Queue state
 
+    /// Queue Engine being tested.
     bslma::ManagedPtr<mqbi::QueueEngine> d_queueEngine_mp;
-    // Queue Engine being tested
 
-    bslma::ManagedPtr<mqbs::VirtualStorageCatalog> d_subStreamMessages_mp;
-
-    bmqp::RdaInfo d_rdaInfo;
-    // rdaInfo valuef for all posted
-    // messages
-
+    /// Map of all created handles.  Note that a handle in this map is owned by
+    /// the Queue Handle Catalog and therefore must be "released" accordingly.
     HandleMap d_handles;
-    // Map of all created handles.  Note
-    // that a handle in this map is owned
-    // by the Queue Handle Catalog and
-    // therefore must be 'released'
-    // accordingly.
 
+    /// Map of `appId` to `subId` of all streams of a queue.
     SubIdsMap d_subIds;
-    // Map of 'appId' to 'subId' of all
-    // streams of a queue.
 
+    /// Map of client context for all created handles.
     ClientContextMap d_clientContexts;
-    // Map of client context for all
-    // created handles
 
+    /// Collection of message GUIDs that were posted to the queue.
     MessagesMap d_postedMessages;
-    // Collection of message GUIDs that
-    // were posted to the queue.
 
+    /// Collection of Message GUIDs that have been newly posted to the queue
+    /// and for which `afterNewMessage` of the queue engine under test has not
+    /// yet been invoked.
     MessagesMap d_newMessages;
-    // Collection of Message GUIDs that
-    // have been newly posted to the queue
-    // and for which 'afterNewMessage' of
-    // the queue engine under test has not
-    // yet been invoked.
 
+    /// Counter for distinct clients.
     unsigned int d_clientCounter;
-    // Counter for distinct clients
 
+    /// Counter for distinct subQueueIds.
     unsigned int d_subQueueIdCounter;
-    // Counter for distinct subQueueIds
 
+    // List of handles that were fully dropped (i.e. fully released) but needed
+    // to stay alive to correctly test post-drop state.
     bsl::vector<QueueHandleSp> d_deletedHandles;
-    // List of handles that were fully
-    // dropped (i.e. fully released) but
-    // needed to stay alive to correctly
-    // test post-drop state
-    mqbmock::AppKeyGenerator d_appKeyGenerator;
 
     size_t d_messageCount;
 
-    bdlmt::EventScheduler d_scheduler;
-
+    // Allocator to use.
     bslma::Allocator* d_allocator_p;
-    // Allocator to use
 
   private:
     // NOT IMPLEMENTED
@@ -268,7 +267,7 @@ class QueueEngineTester {
 
     /// Reset and recreate all objects using the currently set options and
     /// the specific `domainConfig`.
-    void init(const mqbconfm::Domain& domainConfig);
+    void init(const mqbconfm::Domain& domainConfig, bool startScheduler);
 
     /// Pendant operation of the `oneTimeInit` one.
     void oneTimeShutdown();
@@ -325,11 +324,11 @@ class QueueEngineTester {
     /// Finally note that the behavior of all other methods in this class is
     /// undefined unless this method was called exactly once.
     template <typename T>
-    mqbi::QueueEngine* createQueueEngine();
+    T* createQueueEngine();
 
     /// Obtain and return a handle for the client with handle parameters in
     /// the specified `clientText` per the following format:
-    ///   `<clientKey>[@<appId>] [readCount=<N>] [writeCount=<M>]`
+    ///   `<clientKey>[\@<appId>] [readCount=<N>] [writeCount=<M>]`
     ///
     /// The behavior is undefined unless `clientText` is formatted as above
     /// and includes at least one attribute (e.g. `readCount=1`) other than
@@ -340,7 +339,7 @@ class QueueEngineTester {
 
     /// Configure the handle for the client with stream parameters in the
     /// specified `clientText` per the following format:
-    ///   '<clientKey>[@<appId>] [consumerPriority=<P>]
+    ///   '<clientKey>[\@<appId>] [consumerPriority=<P>]
     ///                          [consumerPriorityCount=<C>]
     ///                          [maxUnconfirmedMessages=<M>]
     ///                          [maxUnconfirmedBytes=<B>]'
@@ -349,7 +348,7 @@ class QueueEngineTester {
     /// on success, non-zero otherwise).  The behavior is undefined unless
     /// `clientText` is formatted as above (e.g. 'C1 consumerPriority=1
     /// consumerPriorityCount=2') , and a previous call to `getHandle()`
-    /// returned a handle for the `<clientKey>[@appId]`, or if
+    /// returned a handle for the `<clientKey>[\@appId]`, or if
     /// `createQueueEngine()` was not called.
     int configureHandle(const bsl::string& clientText);
 
@@ -363,12 +362,15 @@ class QueueEngineTester {
     /// with the queue engine under test.  The format of `messages` must be
     /// as follows:
     ///   `<msg1>,<msg2>,...,<msgN>`
-    ///
+    /// If the optionally specified 'downstream' is not zero, consider it as
+    /// representing 'RelayQueueEngine' involved in the data delivery and
+    /// invoke its 'push' method for each message.
     /// The order of posting each message is from left to right per the
     /// format above.  The behavior is undefined unless `messages` is
     /// formatted as above and each message is unique (across the lifetime
     /// of this object), or if `createQueueEngine()` was not called.
-    void post(const bslstl::StringRef& messages);
+    void post(const bslstl::StringRef& messages,
+              RelayQueueEngine*        downstream = 0);
 
     /// Invoke the Queue Engine's `afterNewMessage()` method for the
     /// specified `numMessages` newly posted messages if `numMessages > 0`,
@@ -382,7 +384,7 @@ class QueueEngineTester {
     /// the client identified with the specified `clientText` for the
     /// specified `messages`.  The format of `clientText` must be as
     /// follows:
-    ///   `<clientKey>[@<appId>]`
+    ///   `<clientKey>[\@<appId>]`
     ///
     /// The format of `messages` must be as follows:
     ///   `<msg1>,<msg2>,...,<msgN>`
@@ -390,7 +392,7 @@ class QueueEngineTester {
     /// The order of confirming each message is from left to right per the
     /// format above.  The behavior is undefined unless `messages` is
     /// formatted as above, and a previous call to `getHandle()` returned a
-    /// handle for the `<clientKey>[@appId]`, or if `createQueueEngine()`
+    /// handle for the `<clientKey>[\@appId]`, or if `createQueueEngine()`
     /// was not called.  Note that it is "legal" for a client that is a
     /// reader to confirm a message that was not posted or that is already
     /// confirmed.
@@ -401,7 +403,7 @@ class QueueEngineTester {
     /// the client identified with the specified `clientText` for the
     /// specified `messages`.  The format of `clientText` must be as
     /// follows:
-    ///   `<clientKey>[@<appId>]`
+    ///   `<clientKey>[\@<appId>]`
     ///
     /// The format of `messages` must be as follows:
     ///   `<msg1>,<msg2>,...,<msgN>`
@@ -409,7 +411,7 @@ class QueueEngineTester {
     /// The order of rejecting each message is from left to right per the
     /// format above.  The behavior is undefined unless `messages` is
     /// formatted as above, and a previous call to `getHandle()` returned a
-    /// handle for the `<clientKey>[@appId]`, or if `createQueueEngine()`
+    /// handle for the `<clientKey>[\@appId]`, or if `createQueueEngine()`
     /// was not called.
     void reject(const bsl::string&       clientText,
                 const bslstl::StringRef& messages);
@@ -435,7 +437,7 @@ class QueueEngineTester {
 
     /// Release the parameters in the handle of the client in the specified
     /// `clientText` per the following format:
-    ///   `<clientKey>[@appId] [readCount=<N>] [writeCount=<M>]`
+    ///   `<clientKey>[\@appId] [readCount=<N>] [writeCount=<M>]`
     ///
     /// Return the result status code of the releaseHandle operation (zero
     /// on success, non-zero otherwise). The behavior is undefined unless
@@ -447,7 +449,7 @@ class QueueEngineTester {
 
     /// Release the parameters in the handle of the client in the specified
     /// `clientText` per the following format:
-    ///   '<clientKey>[@appId] [readCount=<N>] [writeCount=<M>]
+    ///   '<clientKey>[\@appId] [readCount=<N>] [writeCount=<M>]
     ///                        [isFinal=(true|false)]'
     ///
     /// Return the result status code of the releaseHandle operation (zero
@@ -472,8 +474,6 @@ class QueueEngineTester {
     /// Note that pointers to these handles may be left dangling.
     void dropHandles();
 
-    mqbmock::AppKeyGenerator& appKeyGenerator();
-
     /// Load into the specified `value` previously cached parameters sent
     /// upstream for the specified `appId`.
     bool getUpstreamParameters(bmqp_ctrlmsg::StreamParameters* value,
@@ -496,6 +496,7 @@ class QueueEngineTesterGuard {
   private:
     // DATA
     QueueEngineTester* d_tester_p;
+    QUEUE_ENGINE_TYPE* d_engine_p;  // an alias
 
   private:
     // NOT IMPLEMENTED
@@ -519,7 +520,7 @@ class QueueEngineTesterGuard {
   public:
     // MANIPULATORS
 
-    /// Return the address of the modifiable QueueEngineTester object under
+    /// Return the address of the modifiable QueueEngine object under
     /// management by this proctor, and release the tester from further
     /// management by this proctor.  If no tester is currently being
     /// managed, return 0 with no other effect.  Note that this operation
@@ -529,10 +530,10 @@ class QueueEngineTesterGuard {
 
     // ACCESSORS
 
-    /// Return the address of the modifiable QueueEngineTester object under
-    /// management by this proctor, or 0 if no QueueEngineTester is
-    /// currently being managed.
-    QueueEngineTester* ptr() const;
+    /// Return the address of the modifiable QueueEngine object under
+    /// management by this proctor, or 0 if no QueueEngine is currently being
+    /// managed.
+    QUEUE_ENGINE_TYPE* engine() const;
 };
 
 // ==========================
@@ -588,23 +589,20 @@ struct TestClock {
 
 class TimeControlledQueueEngineTester : public mqbblp::QueueEngineTester {
   private:
-    bdlmt::EventSchedulerTestTimeSource d_timeSource;
-    TestClock                           d_testClock;
+    TestClock d_testClock;
 
   public:
     // CREATORS
     TimeControlledQueueEngineTester(const mqbconfm::Domain& domainConfig,
                                     bslma::Allocator*       allocator)
-    : mqbblp::QueueEngineTester(domainConfig, false, allocator)
-    , d_timeSource(&d_scheduler)
-    , d_testClock(d_timeSource)
+    : mqbblp::QueueEngineTester(domainConfig, true, allocator)
+    , d_testClock(d_mockCluster_mp->_timeSource())
     {
-        mwcsys::Time::shutdown();
-        mwcsys::Time::initialize(
+        bmqsys::Time::shutdown();
+        bmqsys::Time::initialize(
             bdlf::BindUtil::bind(&TestClock::realtimeClock, &d_testClock),
             bdlf::BindUtil::bind(&TestClock::monotonicClock, &d_testClock),
             bdlf::BindUtil::bind(&TestClock::highResTimer, &d_testClock));
-        d_scheduler.start();
     }
 
     // MANIPULATORS
@@ -630,8 +628,8 @@ QueueEngineTester::createQueueEngineHelper(mqbi::QueueEngine* engine)
     BSLS_ASSERT_OPT(engine);
     BSLS_ASSERT_OPT(d_mockQueue_sp);
 
-    mwcu::MemOutStream errorDescription(d_allocator_p);
-    int                rc = engine->configure(errorDescription);
+    bmqu::MemOutStream errorDescription(d_allocator_p);
+    int                rc = engine->configure(errorDescription, false);
     BSLS_ASSERT_OPT(rc == 0);
 
     // Set the engine on the Queue
@@ -642,54 +640,25 @@ QueueEngineTester::createQueueEngineHelper(mqbi::QueueEngine* engine)
 
 // MANIPULATORS
 template <typename T>
-inline mqbi::QueueEngine* QueueEngineTester::createQueueEngine()
+inline T* QueueEngineTester::createQueueEngine()
 {
     // PRECONDITIONS
     BSLS_ASSERT_OPT(!d_queueEngine_mp && "'createQueueEngine()' was called");
-
+    T* result = new (*d_allocator_p)
+        T(d_queueState_mp.get(),
+          d_queueState_mp->queue()->domain()->config(),
+          d_allocator_p);
     // Create and configure Queue Engine
-    d_queueEngine_mp.load(new (*d_allocator_p)
-                              T(d_queueState_mp.get(),
-                                d_queueState_mp->queue()->domain()->config(),
-                                d_allocator_p),
-                          d_allocator_p);
+    d_queueEngine_mp.load(result, d_allocator_p);
 
-    return createQueueEngineHelper(d_queueEngine_mp.get());
-}
+    createQueueEngineHelper(d_queueEngine_mp.get());
 
-template <>
-inline mqbi::QueueEngine*
-QueueEngineTester::createQueueEngine<RelayQueueEngine>()
-{
-    // PRECONDITIONS
-    BSLS_ASSERT_OPT(!d_queueEngine_mp && "'createQueueEngine()' was called");
-
-    // Create and configure Queue Engine
-    d_queueEngine_mp.load(new (*d_allocator_p)
-                              RelayQueueEngine(d_queueState_mp.get(),
-                                               d_subStreamMessages_mp.get(),
-                                               mqbconfm::Domain(),
-                                               d_allocator_p),
-                          d_allocator_p);
-
-    return createQueueEngineHelper(d_queueEngine_mp.get());
-}
-
-inline mqbmock::AppKeyGenerator& QueueEngineTester::appKeyGenerator()
-{
-    return d_appKeyGenerator;
+    return result;
 }
 
 inline void QueueEngineTester::synchronizeScheduler()
 {
-    bslmt::Semaphore semaphore;
-
-    d_scheduler.scheduleEvent(
-        mwcsys::Time::nowMonotonicClock(),
-        bdlf::MemFnUtil::memFn(
-            static_cast<void (bslmt::Semaphore::*)()>(&bslmt::Semaphore::post),
-            &semaphore));
-    semaphore.wait();
+    d_mockCluster_mp->waitForScheduler();
 }
 // ----------------------
 // QueueEngineTesterGuard
@@ -700,9 +669,10 @@ template <class QUEUE_ENGINE_TYPE>
 inline QueueEngineTesterGuard<QUEUE_ENGINE_TYPE>::QueueEngineTesterGuard(
     QueueEngineTester* queueEngineTester)
 : d_tester_p(queueEngineTester)
+, d_engine_p(0)
 {
     if (d_tester_p) {
-        d_tester_p->createQueueEngine<QUEUE_ENGINE_TYPE>();
+        d_engine_p = d_tester_p->createQueueEngine<QUEUE_ENGINE_TYPE>();
     }
 }
 
@@ -712,6 +682,7 @@ inline QueueEngineTesterGuard<QUEUE_ENGINE_TYPE>::~QueueEngineTesterGuard()
     if (d_tester_p) {
         d_tester_p->dropHandles();
     }
+    d_engine_p = 0;
 }
 
 // MANIPULATORS
@@ -720,15 +691,16 @@ inline QueueEngineTester* QueueEngineTesterGuard<QUEUE_ENGINE_TYPE>::release()
 {
     QueueEngineTester* tester = d_tester_p;
     d_tester_p                = 0;
+    d_engine_p                = 0;
     return tester;
 }
 
 // ACCESSORS
 template <class QUEUE_ENGINE_TYPE>
-inline QueueEngineTester*
-QueueEngineTesterGuard<QUEUE_ENGINE_TYPE>::ptr() const
+inline QUEUE_ENGINE_TYPE*
+QueueEngineTesterGuard<QUEUE_ENGINE_TYPE>::engine() const
 {
-    return d_tester_p;
+    return d_engine_p;
 }
 
 // -------------------------------
@@ -738,7 +710,8 @@ QueueEngineTesterGuard<QUEUE_ENGINE_TYPE>::ptr() const
 inline void
 TimeControlledQueueEngineTester::advanceTime(const bsls::TimeInterval& step)
 {
-    d_timeSource.advanceTime(step);
+    d_mockCluster_mp->advanceTime(step);
+
     synchronizeScheduler();
 }
 

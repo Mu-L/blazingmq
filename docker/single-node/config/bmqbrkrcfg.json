@@ -15,7 +15,6 @@
                 "BMQ*:INFO:green",
                 "MQB*:INFO:green",
                 "SIM*:INFO:gray",
-                "DMC*:INFO:yellow",
                 "BAEA.PERFORMANCEMONITOR:INFO:white"
             ],
             "syslog": {
@@ -74,7 +73,7 @@
         },
         "networkInterfaces": {
             "heartbeats": {
-                "client": 0,
+                "client": 10,
                 "downstreamBroker": 10,
                 "upstreamBroker": 10,
                 "clusterPeer": 10
@@ -88,8 +87,7 @@
                 "highWatermark": 1073741824,
                 "nodeLowWatermark": 5242880,
                 "nodeHighWatermark": 10485760,
-                "heartbeatIntervalMs": 3000,
-                "useNtf": false
+                "heartbeatIntervalMs": 3000
             }
         },
         "bmqconfConfig": {

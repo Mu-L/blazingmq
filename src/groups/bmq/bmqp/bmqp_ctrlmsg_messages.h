@@ -7429,17 +7429,20 @@ namespace bmqp_ctrlmsg {
 class StopRequest {
     // INSTANCE DATA
     bsl::string d_clusterName;
+    int         d_version;
 
   public:
     // TYPES
-    enum { ATTRIBUTE_ID_CLUSTER_NAME = 0 };
+    enum { ATTRIBUTE_ID_CLUSTER_NAME = 0, ATTRIBUTE_ID_VERSION = 1 };
 
-    enum { NUM_ATTRIBUTES = 1 };
+    enum { NUM_ATTRIBUTES = 2 };
 
-    enum { ATTRIBUTE_INDEX_CLUSTER_NAME = 0 };
+    enum { ATTRIBUTE_INDEX_CLUSTER_NAME = 0, ATTRIBUTE_INDEX_VERSION = 1 };
 
     // CONSTANTS
     static const char CLASS_NAME[];
+
+    static const int DEFAULT_INITIALIZER_VERSION;
 
     static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
 
@@ -7540,6 +7543,10 @@ class StopRequest {
     /// object.
     bsl::string& clusterName();
 
+    /// Return a reference to the non-modifiable "Version" attribute of this
+    /// object.
+    int& version();
+
     // ACCESSORS
 
     /// Format this object to the specified output `stream` at the
@@ -7587,6 +7594,10 @@ class StopRequest {
     /// Return a reference to the non-modifiable "ClusterName" attribute of
     /// this object.
     const bsl::string& clusterName() const;
+
+    /// Return a reference to the non-modifiable "Version" attribute of this
+    /// object.
+    int version() const;
 };
 
 // FREE OPERATORS
@@ -14392,32 +14403,42 @@ class BrokerResponse {
     ClientIdentity d_brokerIdentity;
     int            d_protocolVersion;
     int            d_brokerVersion;
+    int            d_heartbeatIntervalMs;
+    int            d_maxMissedHeartbeats;
     bool           d_isDeprecatedSdk;
 
   public:
     // TYPES
     enum {
-        ATTRIBUTE_ID_RESULT            = 0,
-        ATTRIBUTE_ID_PROTOCOL_VERSION  = 1,
-        ATTRIBUTE_ID_BROKER_VERSION    = 2,
-        ATTRIBUTE_ID_IS_DEPRECATED_SDK = 3,
-        ATTRIBUTE_ID_BROKER_IDENTITY   = 4
+        ATTRIBUTE_ID_RESULT                = 0,
+        ATTRIBUTE_ID_PROTOCOL_VERSION      = 1,
+        ATTRIBUTE_ID_BROKER_VERSION        = 2,
+        ATTRIBUTE_ID_IS_DEPRECATED_SDK     = 3,
+        ATTRIBUTE_ID_BROKER_IDENTITY       = 4,
+        ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS = 5,
+        ATTRIBUTE_ID_MAX_MISSED_HEARTBEATS = 6
     };
 
-    enum { NUM_ATTRIBUTES = 5 };
+    enum { NUM_ATTRIBUTES = 7 };
 
     enum {
-        ATTRIBUTE_INDEX_RESULT            = 0,
-        ATTRIBUTE_INDEX_PROTOCOL_VERSION  = 1,
-        ATTRIBUTE_INDEX_BROKER_VERSION    = 2,
-        ATTRIBUTE_INDEX_IS_DEPRECATED_SDK = 3,
-        ATTRIBUTE_INDEX_BROKER_IDENTITY   = 4
+        ATTRIBUTE_INDEX_RESULT                = 0,
+        ATTRIBUTE_INDEX_PROTOCOL_VERSION      = 1,
+        ATTRIBUTE_INDEX_BROKER_VERSION        = 2,
+        ATTRIBUTE_INDEX_IS_DEPRECATED_SDK     = 3,
+        ATTRIBUTE_INDEX_BROKER_IDENTITY       = 4,
+        ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS = 5,
+        ATTRIBUTE_INDEX_MAX_MISSED_HEARTBEATS = 6
     };
 
     // CONSTANTS
     static const char CLASS_NAME[];
 
     static const bool DEFAULT_INITIALIZER_IS_DEPRECATED_SDK;
+
+    static const int DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS;
+
+    static const int DEFAULT_INITIALIZER_MAX_MISSED_HEARTBEATS;
 
     static const bdlat_AttributeInfo ATTRIBUTE_INFO_ARRAY[];
 
@@ -14535,19 +14556,15 @@ class BrokerResponse {
     /// this object.
     ClientIdentity& brokerIdentity();
 
-    // ACCESSORS
+    /// Return a reference to the modifiable "HeartbeatIntervalMs" attribute
+    /// of this object.
+    int& heartbeatIntervalMs();
 
-    /// Format this object to the specified output `stream` at the
-    /// optionally specified indentation `level` and return a reference to
-    /// the modifiable `stream`.  If `level` is specified, optionally
-    /// specify `spacesPerLevel`, the number of spaces per indentation level
-    /// for this and all of its nested objects.  Each line is indented by
-    /// the absolute value of `level * spacesPerLevel`.  If `level` is
-    /// negative, suppress indentation of the first line.  If
-    /// `spacesPerLevel` is negative, suppress line breaks and format the
-    /// entire output on one line.  If `stream` is initially invalid, this
-    /// operation has no effect.  Note that a trailing newline is provided
-    /// in multiline mode only.
+    /// Return a reference to the modifiable "MaxMissedHeartbeats" attribute
+    /// of this object.
+    int& maxMissedHeartbeats();
+
+    // ACCESSORS
     bsl::ostream&
     print(bsl::ostream& stream, int level = 0, int spacesPerLevel = 4) const;
 
@@ -14598,6 +14615,14 @@ class BrokerResponse {
     /// Return a reference to the non-modifiable "BrokerIdentity" attribute
     /// of this object.
     const ClientIdentity& brokerIdentity() const;
+
+    /// Return the value of the "HeartbeatIntervalMs" attribute of this
+    /// object.
+    int heartbeatIntervalMs() const;
+
+    /// Return the value of the "MaxMissedHeartbeats" attribute of this
+    /// object.
+    int maxMissedHeartbeats() const;
 };
 
 // FREE OPERATORS
@@ -27150,6 +27175,12 @@ int StopRequest::manipulateAttributes(MANIPULATOR& manipulator)
         return ret;
     }
 
+    ret = manipulator(&d_version,
+                      ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION]);
+    if (ret) {
+        return ret;
+    }
+
     return ret;
 }
 
@@ -27162,6 +27193,10 @@ int StopRequest::manipulateAttribute(MANIPULATOR& manipulator, int id)
     case ATTRIBUTE_ID_CLUSTER_NAME: {
         return manipulator(&d_clusterName,
                            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CLUSTER_NAME]);
+    }
+    case ATTRIBUTE_ID_VERSION: {
+        return manipulator(&d_version,
+                           ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION]);
     }
     default: return NOT_FOUND;
     }
@@ -27188,6 +27223,11 @@ inline bsl::string& StopRequest::clusterName()
     return d_clusterName;
 }
 
+inline int& StopRequest::version()
+{
+    return d_version;
+}
+
 // ACCESSORS
 template <class ACCESSOR>
 int StopRequest::accessAttributes(ACCESSOR& accessor) const
@@ -27200,6 +27240,10 @@ int StopRequest::accessAttributes(ACCESSOR& accessor) const
         return ret;
     }
 
+    ret = accessor(d_version, ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION]);
+    if (ret) {
+        return ret;
+    }
     return ret;
 }
 
@@ -27212,6 +27256,10 @@ int StopRequest::accessAttribute(ACCESSOR& accessor, int id) const
     case ATTRIBUTE_ID_CLUSTER_NAME: {
         return accessor(d_clusterName,
                         ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CLUSTER_NAME]);
+    }
+    case ATTRIBUTE_ID_VERSION: {
+        return accessor(d_version,
+                        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION]);
     }
     default: return NOT_FOUND;
     }
@@ -27236,6 +27284,11 @@ int StopRequest::accessAttribute(ACCESSOR&   accessor,
 inline const bsl::string& StopRequest::clusterName() const
 {
     return d_clusterName;
+}
+
+inline int StopRequest::version() const
+{
+    return d_version;
 }
 
 template <typename HASH_ALGORITHM>
@@ -32573,6 +32626,20 @@ int BrokerResponse::manipulateAttributes(MANIPULATOR& manipulator)
         return ret;
     }
 
+    ret = manipulator(
+        &d_heartbeatIntervalMs,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = manipulator(
+        &d_maxMissedHeartbeats,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_MISSED_HEARTBEATS]);
+    if (ret) {
+        return ret;
+    }
+
     return ret;
 }
 
@@ -32605,6 +32672,16 @@ int BrokerResponse::manipulateAttribute(MANIPULATOR& manipulator, int id)
         return manipulator(
             &d_brokerIdentity,
             ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_IDENTITY]);
+    }
+    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS: {
+        return manipulator(
+            &d_heartbeatIntervalMs,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
+    }
+    case ATTRIBUTE_ID_MAX_MISSED_HEARTBEATS: {
+        return manipulator(
+            &d_maxMissedHeartbeats,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_MISSED_HEARTBEATS]);
     }
     default: return NOT_FOUND;
     }
@@ -32651,6 +32728,16 @@ inline ClientIdentity& BrokerResponse::brokerIdentity()
     return d_brokerIdentity;
 }
 
+inline int& BrokerResponse::heartbeatIntervalMs()
+{
+    return d_heartbeatIntervalMs;
+}
+
+inline int& BrokerResponse::maxMissedHeartbeats()
+{
+    return d_maxMissedHeartbeats;
+}
+
 // ACCESSORS
 template <class ACCESSOR>
 int BrokerResponse::accessAttributes(ACCESSOR& accessor) const
@@ -32686,6 +32773,20 @@ int BrokerResponse::accessAttributes(ACCESSOR& accessor) const
         return ret;
     }
 
+    ret = accessor(
+        d_heartbeatIntervalMs,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
+    if (ret) {
+        return ret;
+    }
+
+    ret = accessor(
+        d_maxMissedHeartbeats,
+        ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_MISSED_HEARTBEATS]);
+    if (ret) {
+        return ret;
+    }
+
     return ret;
 }
 
@@ -32716,6 +32817,16 @@ int BrokerResponse::accessAttribute(ACCESSOR& accessor, int id) const
     case ATTRIBUTE_ID_BROKER_IDENTITY: {
         return accessor(d_brokerIdentity,
                         ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_IDENTITY]);
+    }
+    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS: {
+        return accessor(
+            d_heartbeatIntervalMs,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS]);
+    }
+    case ATTRIBUTE_ID_MAX_MISSED_HEARTBEATS: {
+        return accessor(
+            d_maxMissedHeartbeats,
+            ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_MISSED_HEARTBEATS]);
     }
     default: return NOT_FOUND;
     }
@@ -32762,6 +32873,16 @@ inline const ClientIdentity& BrokerResponse::brokerIdentity() const
     return d_brokerIdentity;
 }
 
+inline int BrokerResponse::heartbeatIntervalMs() const
+{
+    return d_heartbeatIntervalMs;
+}
+
+inline int BrokerResponse::maxMissedHeartbeats() const
+{
+    return d_maxMissedHeartbeats;
+}
+
 template <typename HASH_ALGORITHM>
 void hashAppend(HASH_ALGORITHM&                     hashAlg,
                 const bmqp_ctrlmsg::BrokerResponse& object)
@@ -32774,6 +32895,8 @@ void hashAppend(HASH_ALGORITHM&                     hashAlg,
     hashAppend(hashAlg, object.brokerVersion());
     hashAppend(hashAlg, object.isDeprecatedSdk());
     hashAppend(hashAlg, object.brokerIdentity());
+    hashAppend(hashAlg, object.heartbeatIntervalMs());
+    hashAppend(hashAlg, object.maxMissedHeartbeats());
 }
 
 // ----------------
@@ -40290,7 +40413,9 @@ inline bool bmqp_ctrlmsg::operator==(const bmqp_ctrlmsg::BrokerResponse& lhs,
            lhs.protocolVersion() == rhs.protocolVersion() &&
            lhs.brokerVersion() == rhs.brokerVersion() &&
            lhs.isDeprecatedSdk() == rhs.isDeprecatedSdk() &&
-           lhs.brokerIdentity() == rhs.brokerIdentity();
+           lhs.brokerIdentity() == rhs.brokerIdentity() &&
+           lhs.heartbeatIntervalMs() == rhs.heartbeatIntervalMs() &&
+           lhs.maxMissedHeartbeats() == rhs.maxMissedHeartbeats();
 }
 
 inline bool bmqp_ctrlmsg::operator!=(const bmqp_ctrlmsg::BrokerResponse& lhs,

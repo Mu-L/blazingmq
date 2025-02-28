@@ -17,64 +17,63 @@
 #ifndef INCLUDED_BMQT_MESSAGEGUID
 #define INCLUDED_BMQT_MESSAGEGUID
 
-//@PURPOSE: Provide a value-semantic global unique identifier for BlazingMQ
-// messages.
-//
-//@CLASSES:
-//  bmqt::MessageGUID         : Value-semantic global unique ID for BlazingMQ
-//                              message
-//  bmqt::MessageGUIDLess     : Binary function for comparing GUIDs.
-//  bmqt::MessageGUIDHashAlgo : Provide a hashing algorithm for Message GUID.
-//
-//@DESCRIPTION: 'bmqt::MessageGUID' provides a value-semantic global unique
-// identifier for BlazingMQ messages.  Each bmqa::Message delivered to
-// BlazingMQ client from BlazingMQ broker contains a unique MessageGUID.  The
-// binary function 'bmqt::MessageGUIDLess' can be used for comparing GUIDs, and
-// an optimized custom hash function is provided with
-// 'bmqt::MessageGUIDHashAlgo'.
-//
-//
-/// Externalization
-///---------------
-// For convenience, this class provides 'toHex' method that can be used to
-// externalize a 'bmqt::MessageGUID' instance.  Applications can persist the
-// resultant buffer (on filesystem, in database) to keep track of last
-// processed message ID across task instantiations.  'fromHex' method can be
-// used to convert a valid externalized buffer back to a message ID.
-//
-/// Efficient comparison and hash function
-///--------------------------------------
-// This component also provides efficient comparison and hash functions for
-// convenience, and thus, applications can use this component as a key in
-// associative containers.
-//
-//
-/// Example 1: Externalizing
-///  - - - - - - - - - - - -
-//..
-//  // Below, 'msg' is a valid instance of 'bmqa::Message' obtained from an
-//  // instance of 'bmqa::Session':
-//
-//  bmqt::MessageGUID g1 = msg.messageId();
-//
-//  char buffer[bmqt::MessageGUID::e_SIZE_HEX];
-//  g1.toHex(buffer);
-//
-//  BSLS_ASSERT(true == bmqt::MessageGUID::isValidHexRepresentation(buffer));
-//
-//  bmqt::MessageGUID g2;
-//  g2.fromHex(buffer);
-//
-//  BSLS_ASSERT(g1 == g2);
-//..
-//
-
-// BMQ
+/// @file bmqt_messageguid.h
+///
+/// @brief Provide a value-semantic global unique identifier for BlazingMQ
+/// messages.
+///
+/// @bbref{bmqt::MessageGUID} provides a value-semantic global unique
+/// identifier for BlazingMQ messages.  Each @bbref{bmqa::Message} delivered to
+/// BlazingMQ client from BlazingMQ broker contains a unique
+/// @bbref{bmqt::MessageGUID}.  The binary functor
+/// @bbref{bmqt::MessageGUIDLess} can be used for comparing GUIDs, and an
+/// optimized custom hash function is provided with
+/// @bbref{bmqt::MessageGUIDHashAlgo}.
+///
+///
+/// Externalization                         {#bmqt_messageguid_externalization}
+/// ===============
+///
+/// For convenience, this class provides `toHex` method that can be used to
+/// externalize a @bbref{bmqt::MessageGUID} instance.  Applications can persist
+/// the resultant buffer (on filesystem, in database) to keep track of last
+/// processed message ID across task instantiations.  `fromHex` method can be
+/// used to convert a valid externalized buffer back to a message ID.
+///
+/// Efficient comparison and hash function        {#bmqt_messageguid_efficient}
+/// ======================================
+///
+/// This component also provides efficient comparison and hash functions for
+/// convenience, and thus, applications can use this component as a key in
+/// associative containers.
+///
+/// Usage                                             {#bmqt_messageguid_usage}
+/// =====
+///
+/// This section illustrates intended use of this component.
+///
+/// Example 1: Externalizing                            {#bmqt_messageguid_ex1}
+/// ------------------------
+///
+/// ```
+/// // Below, 'msg' is a valid instance of 'bmqa::Message' obtained from an
+/// // instance of 'bmqa::Session':
+///
+/// bmqt::MessageGUID g1 = msg.messageId();
+///
+/// char buffer[bmqt::MessageGUID::e_SIZE_HEX];
+/// g1.toHex(buffer);
+///
+/// BSLS_ASSERT(true == bmqt::MessageGUID::isValidHexRepresentation(buffer));
+///
+/// bmqt::MessageGUID g2;
+/// g2.fromHex(buffer);
+///
+/// BSLS_ASSERT(g1 == g2);
+/// ```
 
 // BDE
 #include <bsl_cstring.h>  // for bsl::memset, bsl::memcmp
-
-#include <bsl_cstddef.h>
 
 #include <bsl_iosfwd.h>
 #include <bslh_hash.h>
@@ -103,13 +102,15 @@ class MessageGUID {
 
   public:
     // TYPES
+
+    /// Enum representing the size of a buffer needed to represent a GUID
     enum Enum {
-        // Enum representing the size of a buffer needed to represent a GUID
-        e_SIZE_BINARY = 16  // Binary format of the GUID
+        /// Binary format of the GUID
+        e_SIZE_BINARY = 16
 
         ,
+        /// Hexadecimal string representation of the GUID
         e_SIZE_HEX = 2 * e_SIZE_BINARY
-        // Hexadecimal string representation of the GUID
     };
 
     // TRAITS
@@ -119,8 +120,9 @@ class MessageGUID {
 
   private:
     // PRIVATE CONSTANTS
+
+    /// Constant representing an unset GUID
     static const char k_UNSET_GUID[e_SIZE_BINARY];
-    //  Constant representing an unset GUID
 
   private:
     // IMPLEMENTATION NOTE: Some structs in bmqp::Protocol.h blindly
@@ -334,53 +336,44 @@ inline void
 MessageGUIDHashAlgo::operator()(const void*                   data,
                                 BSLS_ANNOTATION_UNUSED size_t numBytes)
 {
-    // Implementation note: we implement the 'djb2' hash algorithm (more
-    // details at http://www.cse.yorku.ca/~oz/hash.html).
+    // Implementation note: the implementation is based on Jon Maiga's research
+    // on different bit mixers and their qualities (look for `mxm`):
+    // https://jonkagstrom.com/bit-mixer-construction/index.html
 
-    // At the time of writing, this algorithm came out to be about 400% faster
-    // than 'bslh::SpookyHashAlgorithm', which is the default hashing algorithm
-    // in 'bslh' hashing framework.  Note that while
-    // 'bslh::SpookyHashAlgorithm' is slower, it may have a better uniform
-    // distribution than this algorithm (although some literature claims djb2
-    // to have a very good distribution as well).  Both algorithms were found
-    // to be collision free in testing (see mqbu_messageguidtutil.t).
+    // Typically, bit mixers are used as the last step of computing more
+    // general hashes.  But it's more than enough to use it on its own for
+    // our specific use case here.
 
-    // We have slightly modified the djb2 algorithm by unrolling djb2 'while'
-    // loop, by using our knowledge that 'numBytes' is always 16 for
-    // 'bmqt::MessageGUID'.  For reference, the unmodified djb2 algorithm has
-    // been specified at the end of this method.  Our unrolled version comes
-    // out to be about 25% faster than the looped version.  The unrolled
-    // version has data dependency, so its not the ILP but probably the absence
-    // of branching which makes it faster than the looped version.
+    // Performance evaluation, hash quality and avalanche effect are here:
+    // https://github.com/bloomberg/blazingmq/pull/348
 
-    d_result = 5381ULL;
+    struct LocalFuncs {
+        /// Return the "mxm" bit mix on the specified `x`.
+        inline static bsls::Types::Uint64 mix(bsls::Types::Uint64 x)
+        {
+            x *= 0xbf58476d1ce4e5b9ULL;
+            x ^= x >> 56;
+            x *= 0x94d049bb133111ebULL;
+            return x;
+        }
 
-    const char* start = reinterpret_cast<const char*>(data);
-    d_result          = (d_result << 5) + d_result + start[0];
-    d_result          = (d_result << 5) + d_result + start[1];
-    d_result          = (d_result << 5) + d_result + start[2];
-    d_result          = (d_result << 5) + d_result + start[3];
-    d_result          = (d_result << 5) + d_result + start[4];
-    d_result          = (d_result << 5) + d_result + start[5];
-    d_result          = (d_result << 5) + d_result + start[6];
-    d_result          = (d_result << 5) + d_result + start[7];
-    d_result          = (d_result << 5) + d_result + start[8];
-    d_result          = (d_result << 5) + d_result + start[9];
-    d_result          = (d_result << 5) + d_result + start[10];
-    d_result          = (d_result << 5) + d_result + start[11];
-    d_result          = (d_result << 5) + d_result + start[12];
-    d_result          = (d_result << 5) + d_result + start[13];
-    d_result          = (d_result << 5) + d_result + start[14];
-    d_result          = (d_result << 5) + d_result + start[15];
+        /// Return the hash combination of the specified `lhs` and `rhs`.
+        inline static bsls::Types::Uint64 combine(bsls::Types::Uint64 lhs,
+                                                  bsls::Types::Uint64 rhs)
+        {
+            lhs ^= rhs + 0x517cc1b727220a95 + (lhs << 6) + (lhs >> 2);
+            return lhs;
+        }
+    };
 
-    // For reference, 'loop' version of djb2 algorithm:
-    //..
-    //  size_t index = 0;
-    //  while (index++ < numBytes) {
-    //      d_result = (d_result << 5) + d_result +  // same as 'd_result * 33'
-    //                 (reinterpret_cast<const char*>(data))[index];
-    //  }
-    //..
+    // `data` buffer might not be aligned to 8 bytes, so recasting the pointer
+    // might lead to UB
+    bsls::Types::Uint64 parts[2];
+    bsl::memcpy(parts, data, bmqt::MessageGUID::e_SIZE_BINARY);
+
+    parts[0] = LocalFuncs::mix(parts[0]);
+    parts[1] = LocalFuncs::mix(parts[1]);
+    d_result = LocalFuncs::combine(parts[0], parts[1]);
 }
 
 inline MessageGUIDHashAlgo::result_type MessageGUIDHashAlgo::computeHash()

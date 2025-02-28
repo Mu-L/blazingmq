@@ -24,7 +24,7 @@
 //
 //@DESCRIPTION: The channel and session factory framework requires creation of
 // a 'mqbnet::Session' object that is associated to the created
-// 'mwcio::Channel'.  This session's lifecycle is tied to the one of the
+// 'bmqio::Channel'.  This session's lifecycle is tied to the one of the
 // channel and usually is in charge of processing the reads.  When creating a
 // cluster, we actually want to have a higher level object
 // ('mqbnet::ClusterNode') that will be associated to a channel, but which
@@ -56,7 +56,7 @@ namespace BloombergLP {
 namespace bmqp_ctrlmsg {
 class NegotiationMessage;
 }
-namespace mwcio {
+namespace bmqio {
 class Channel;
 }
 
@@ -77,7 +77,7 @@ class DummySession : public Session {
 
   private:
     // DATA
-    bsl::shared_ptr<mwcio::Channel> d_channel_sp;
+    bsl::shared_ptr<bmqio::Channel> d_channel_sp;
     // Channel associated to this session.
 
     bmqp_ctrlmsg::NegotiationMessage d_negotiationMessage;
@@ -109,7 +109,7 @@ class DummySession : public Session {
     /// `negotiationMessage`, `clusterNode` and having the specified
     /// `description`.  Use the specified `allocator` for any memory
     /// allocation.
-    DummySession(const bsl::shared_ptr<mwcio::Channel>&  channel,
+    DummySession(const bsl::shared_ptr<bmqio::Channel>&  channel,
                  const bmqp_ctrlmsg::NegotiationMessage& negotiationMessage,
                  ClusterNode*                            clusterNode,
                  const bsl::string&                      description,
@@ -135,10 +135,14 @@ class DummySession : public Session {
 
     /// Initiate the shutdown of the session and invoke the specified
     /// `callback` upon completion of (asynchronous) shutdown sequence or
-    /// if the specified `timeout` is expired.
+    /// if the specified `timeout` is expired.  If the optional (temporary)
+    /// specified 'supportShutdownV2' is 'true' execute shutdown logic V2
+    /// where upstream (not downstream) nodes deconfigure  queues and the
+    /// shutting down node (not downstream) waits for CONFIRMS.
     void
     initiateShutdown(const ShutdownCb&         callback,
-                     const bsls::TimeInterval& timeout) BSLS_KEYWORD_OVERRIDE;
+                     const bsls::TimeInterval& timeout,
+                     bool supportShutdownV2 = false) BSLS_KEYWORD_OVERRIDE;
 
     /// Make the session abandon any work it has.
     void invalidate() BSLS_KEYWORD_OVERRIDE;
@@ -154,7 +158,7 @@ class DummySession : public Session {
     //   (virtual: mqbnet::Session)
 
     /// Return the channel associated to this session.
-    bsl::shared_ptr<mwcio::Channel> channel() const BSLS_KEYWORD_OVERRIDE;
+    bsl::shared_ptr<bmqio::Channel> channel() const BSLS_KEYWORD_OVERRIDE;
 
     /// Return the clusterNode associated to this session, or 0 if there are
     /// none.
@@ -180,7 +184,7 @@ class DummySession : public Session {
 // class DummySession
 // ------------------
 
-inline bsl::shared_ptr<mwcio::Channel> DummySession::channel() const
+inline bsl::shared_ptr<bmqio::Channel> DummySession::channel() const
 {
     return d_channel_sp;
 }

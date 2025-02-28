@@ -28,7 +28,7 @@
 #include <bsls_systemclocktype.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -51,23 +51,23 @@ static void test1_breathingTest()
 //   Breathing test of the component
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("breathing test");
+    bmqtst::TestHelper::printTestName("breathing test");
 
     // Create a default application, make sure it can start/stop
-    mqbcfg::AppConfig cfg(s_allocator_p);
+    mqbcfg::AppConfig cfg(bmqtst::TestHelperUtil::allocator());
     cfg.networkInterfaces().tcpInterface().makeValue();
 
     mqbcfg::BrokerConfig::set(cfg);
     bdlmt::EventScheduler scheduler(bsls::SystemClockType::e_MONOTONIC,
-                                    s_allocator_p);
+                                    bmqtst::TestHelperUtil::allocator());
     scheduler.start();
     mqba::Application obj(&scheduler,
                           0,  // no allocatorsStatContext
-                          s_allocator_p);
+                          bmqtst::TestHelperUtil::allocator());
 
-    // mwcs::MemOutStream error(s_allocator_p);
+    // bmqs::MemOutStream error(bmqtst::TestHelperUtil::allocator());
     // int rc = obj.start(error);
-    // ASSERT_EQ(rc, 0);
+    // BMQTST_ASSERT_EQ(rc, 0);
     // obj.stop();
     scheduler.stop();
 }
@@ -78,9 +78,9 @@ static void test1_breathingTest()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    bmqp::ProtocolUtil::initialize(s_allocator_p);
+    bmqp::ProtocolUtil::initialize(bmqtst::TestHelperUtil::allocator());
     // Force initialize protocolUtil before any 'mqba::Application' object
     // gets created, so that we can pass in the test allocator, instead of
     // having 'mqba::Application' initializing it with the global
@@ -91,7 +91,7 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
@@ -99,5 +99,5 @@ int main(int argc, char* argv[])
 
     // Disable default/global allocator check:
     //  - Logger uses the default allocator
-    TEST_EPILOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_EPILOG(bmqtst::TestHelper::e_DEFAULT);
 }

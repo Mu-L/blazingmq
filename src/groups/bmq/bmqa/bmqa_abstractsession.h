@@ -17,15 +17,11 @@
 #ifndef INCLUDED_BMQA_ABSTRACTSESSION
 #define INCLUDED_BMQA_ABSTRACTSESSION
 
-//@PURPOSE: Provide a pure protocol for a BlazingMQ session.
-//
-//@CLASSES:
-//  bmqa::AbstractSession: Interface for a BlazingMQ session.
-//
-//@DESCRIPTION:
-// 'bmqa::AbstractSession' is a pure protocol for a BlazingMQ session.
-
-// BMQ
+/// @file bmqa_abstractsession.h
+///
+/// @brief Provide a pure protocol for a BlazingMQ session.
+///
+/// @bbref{bmqa::AbstractSession} is a pure protocol for a BlazingMQ session.
 
 #include <bmqa_closequeuestatus.h>
 #include <bmqa_configurequeuestatus.h>
@@ -167,14 +163,14 @@ class AbstractSession {
     /// specified `uri` and return 0 if such a queue was found, or leave
     /// `queueId` untouched and return a non-zero value if no queue
     /// corresponding to `uri` is currently open.
-    virtual int getQueueId(QueueId* queueId, const bmqt::Uri& uri) const;
+    virtual int getQueueId(QueueId* queueId, const bmqt::Uri& uri);
 
     /// Load in the specified `queueId` the queue corresponding to the
     /// specified `correlationId` and return 0 if such a queue was found, or
     /// leave `queueId` untouched and return a non-zero value if no queue
     /// corresponding to `correlationId` is currently open.
     virtual int getQueueId(QueueId*                   queueId,
-                           const bmqt::CorrelationId& correlationId) const;
+                           const bmqt::CorrelationId& correlationId);
 
     /// DEPRECATED: Use the `openQueueSync(QueueId *queueId...)` instead.
     ///             This method will be marked as
@@ -266,7 +262,7 @@ class AbstractSession {
     ///         thread(s) (i.e., from the EventHandler callback, if
     ///         provided) *WILL* lead to a *DEADLOCK*.
     virtual ConfigureQueueStatus configureQueueSync(
-        const QueueId*            queueId,
+        QueueId*                  queueId,
         const bmqt::QueueOptions& options,
         const bsls::TimeInterval& timeout = bsls::TimeInterval());
 
@@ -280,7 +276,7 @@ class AbstractSession {
         const bsls::TimeInterval& timeout = bsls::TimeInterval());
 
     virtual void configureQueueAsync(
-        const QueueId*                queueId,
+        QueueId*                      queueId,
         const bmqt::QueueOptions&     options,
         const ConfigureQueueCallback& callback,
         const bsls::TimeInterval&     timeout = bsls::TimeInterval());
@@ -322,7 +318,7 @@ class AbstractSession {
     ///         thread(s) (i.e., from the EventHandler callback, if
     ///         provided) *WILL* lead to a *DEADLOCK*.
     virtual CloseQueueStatus
-    closeQueueSync(const QueueId*            queueId,
+    closeQueueSync(QueueId*                  queueId,
                    const bsls::TimeInterval& timeout = bsls::TimeInterval());
 
     /// DEPRECATED: Use the `closeQueueAsync(...)` with callback flavor
@@ -351,7 +347,7 @@ class AbstractSession {
     ///         EventHandler thread(s) (or if a SessionEventHandler was not
     ///         specified, from the thread invoking `nextEvent`).
     virtual void
-    closeQueueAsync(const QueueId*            queueId,
+    closeQueueAsync(QueueId*                  queueId,
                     const CloseQueueCallback& callback,
                     const bsls::TimeInterval& timeout = bsls::TimeInterval());
 

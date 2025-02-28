@@ -21,9 +21,8 @@
 #include <mqbcfg_messages.h>
 #include <mqbplug_pluginmanager.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwcu_memoutstream.h>
+#include <bmqsys_time.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlbb_pooledblobbufferfactory.h>
@@ -32,7 +31,7 @@
 #include <bsl_string.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -75,15 +74,18 @@ static void test1_breathingTest()
 //   Breathing test of the component
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("breathing test");
+    bmqtst::TestHelper::printTestName("breathing test");
 
     // Create a default StatController, make sure it can start/stop
-    mqbcfg::AppConfig cfg(s_allocator_p);  // empty default config
+    mqbcfg::AppConfig cfg(
+        bmqtst::TestHelperUtil::allocator());  // empty default config
     mqbcfg::BrokerConfig::set(cfg);
 
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
     bdlmt::EventScheduler  scheduler(bsls::SystemClockType::e_MONOTONIC,
-                                    s_allocator_p);
+                                    bmqtst::TestHelperUtil::allocator());
     mqbplug::PluginManager pluginManager;
 
     scheduler.start();
@@ -96,11 +98,11 @@ static void test1_breathingTest()
         &bufferFactory,
         0,  // no allocatorsStatContext
         &scheduler,
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
-    mwcu::MemOutStream errStream(s_allocator_p);
+    bmqu::MemOutStream errStream(bmqtst::TestHelperUtil::allocator());
     int                rc = obj.start(errStream);
-    ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(rc, 0);
     obj.stop();
     scheduler.stop();
 }
@@ -111,19 +113,19 @@ static void test1_breathingTest()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    mwcsys::Time::initialize();
+    bmqsys::Time::initialize();
 
     switch (_testCase) {
     case 0:
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_EPILOG(bmqtst::TestHelper::e_DEFAULT);
     // Do not check fro default/global allocator usage.
 }

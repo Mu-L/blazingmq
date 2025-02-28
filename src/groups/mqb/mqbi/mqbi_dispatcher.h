@@ -102,7 +102,7 @@
 // functionally equivalent to dispatching an event of type 'e_DISPATCHER' and
 // 'e_CALLBACK' respectively.  The comparison of such executor objects and the
 // blocking behavior of their 'dispatch' member functions is implementation-
-// defined.  For more information about executors see the 'mwcex' package
+// defined.  For more information about executors see the 'bmqex' package
 // documentation.
 
 // MQB
@@ -113,11 +113,9 @@
 #include <bmqt_compressionalgorithmtype.h>
 #include <bmqt_messageguid.h>
 
-// MWC
-#include <mwcex_executor.h>
+#include <bmqex_executor.h>
 
-// MWC
-#include <mwcu_atomicstate.h>
+#include <bmqu_atomicstate.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -467,7 +465,7 @@ class Dispatcher {
     /// Note that the returned executor can be used to submit work even
     /// after the specified `client` has been unregistered from this
     /// dispatcher.
-    virtual mwcex::Executor executor(const DispatcherClient* client) const = 0;
+    virtual bmqex::Executor executor(const DispatcherClient* client) const = 0;
 
     /// Return an executor object suitable for executing function objects by
     /// the specified `client` on the processor in charge of that client.
@@ -478,7 +476,7 @@ class Dispatcher {
     /// Note that submitting work on the returned executor is undefined
     /// behavior if the specified `client` was unregistered from this
     /// dispatcher.
-    virtual mwcex::Executor
+    virtual bmqex::Executor
     clientExecutor(const mqbi::DispatcherClient* client) const = 0;
 };
 
@@ -684,6 +682,10 @@ class DispatcherPushEvent {
     /// event is compressed.
     virtual bmqt::CompressionAlgorithmType::Enum
     compressionAlgorithmType() const = 0;
+
+    /// Return 'true' if the associated PUSH message is Out-of-Order - not the
+    /// first delivery attempt or put-aside (no matching subscription).
+    virtual bool isOutOfOrderPush() const = 0;
 };
 
 // ========================
@@ -735,7 +737,7 @@ class DispatcherPutEvent {
     /// dropped to avoid out of order PUTs.
     virtual bsls::Types::Uint64 genCount() const = 0;
 
-    virtual const bsl::shared_ptr<mwcu::AtomicState>& state() const = 0;
+    virtual const bsl::shared_ptr<bmqu::AtomicState>& state() const = 0;
 };
 
 // ========================
@@ -997,9 +999,11 @@ class DispatcherEvent : public DispatcherDispatcherEvent,
 
     bmqt::CompressionAlgorithmType::Enum d_compressionAlgorithmType;
 
+    bool d_isOutOfOrder;
+
     bsls::Types::Uint64 d_genCount;
 
-    bsl::shared_ptr<mwcu::AtomicState> d_state;
+    bsl::shared_ptr<bmqu::AtomicState> d_state;
 
   public:
     // TRAITS
@@ -1048,11 +1052,12 @@ class DispatcherEvent : public DispatcherDispatcherEvent,
     messagePropertiesInfo() const BSLS_KEYWORD_OVERRIDE;
     bmqt::CompressionAlgorithmType::Enum
                         compressionAlgorithmType() const BSLS_KEYWORD_OVERRIDE;
+    bool                isOutOfOrderPush() const BSLS_KEYWORD_OVERRIDE;
     bsls::Types::Uint64 genCount() const BSLS_KEYWORD_OVERRIDE;
     // Return the value of the corresponding member.  Refer to the various
     // DispatcherEvent view interfaces for more specific information.
 
-    const bsl::shared_ptr<mwcu::AtomicState>&
+    const bsl::shared_ptr<bmqu::AtomicState>&
     state() const BSLS_KEYWORD_OVERRIDE;
 
   public:
@@ -1087,12 +1092,16 @@ class DispatcherEvent : public DispatcherDispatcherEvent,
     DispatcherEvent&
     setCompressionAlgorithmType(bmqt::CompressionAlgorithmType::Enum value);
 
+    /// Set the corresponding member to the specified `value` and return a
+    /// reference offering modifiable access to this object.
+    DispatcherEvent& setOutOfOrderPush(bool value);
+
     /// PUT messages carry `genCount`; if there is a mismatch between PUT
     /// `genCount` and current upstream 'genCount, then the PUT message gets
     /// dropped to avoid out of order PUTs.
     DispatcherEvent& setGenCount(unsigned int genCount);
 
-    DispatcherEvent& setState(const bsl::shared_ptr<mwcu::AtomicState>& state);
+    DispatcherEvent& setState(const bsl::shared_ptr<bmqu::AtomicState>& state);
 
     /// Reset all members of this `DispatcherEvent` to a default value.
     void reset();
@@ -1299,6 +1308,7 @@ inline DispatcherEvent::DispatcherEvent(bslma::Allocator* allocator)
 , d_msgGroupId(allocator)
 , d_messagePropertiesInfo()
 , d_compressionAlgorithmType(bmqt::CompressionAlgorithmType::e_NONE)
+, d_isOutOfOrder(false)
 , d_genCount(0)
 {
     // NOTHING
@@ -1403,12 +1413,17 @@ DispatcherEvent::compressionAlgorithmType() const
     return d_compressionAlgorithmType;
 }
 
+inline bool DispatcherEvent::isOutOfOrderPush() const
+{
+    return d_isOutOfOrder;
+}
+
 inline bsls::Types::Uint64 DispatcherEvent::genCount() const
 {
     return d_genCount;
 }
 
-inline const bsl::shared_ptr<mwcu::AtomicState>& DispatcherEvent::state() const
+inline const bsl::shared_ptr<bmqu::AtomicState>& DispatcherEvent::state() const
 {
     return d_state;
 }
@@ -1563,6 +1578,12 @@ inline DispatcherEvent& DispatcherEvent::setCompressionAlgorithmType(
     return *this;
 }
 
+inline DispatcherEvent& DispatcherEvent::setOutOfOrderPush(bool value)
+{
+    d_isOutOfOrder = value;
+    return *this;
+}
+
 inline DispatcherEvent& DispatcherEvent::setGenCount(unsigned int genCount)
 {
     d_genCount = genCount;
@@ -1570,7 +1591,7 @@ inline DispatcherEvent& DispatcherEvent::setGenCount(unsigned int genCount)
 }
 
 inline DispatcherEvent&
-DispatcherEvent::setState(const bsl::shared_ptr<mwcu::AtomicState>& state)
+DispatcherEvent::setState(const bsl::shared_ptr<bmqu::AtomicState>& state)
 {
     d_state = state;
     return *this;
@@ -1598,6 +1619,7 @@ inline void DispatcherEvent::reset()
     d_msgGroupId.clear();
     d_messagePropertiesInfo    = bmqp::MessagePropertiesInfo();
     d_compressionAlgorithmType = bmqt::CompressionAlgorithmType::e_NONE;
+    d_isOutOfOrder             = false;
     d_genCount                 = 0;
     d_state.reset();
 }

@@ -35,14 +35,14 @@
 #include <bmqt_messageguid.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcio_channel.h>
-#include <mwcio_status.h>
-#include <mwcst_statcontext.h>
-#include <mwcsys_threadutil.h>
-#include <mwcsys_time.h>
-#include <mwcu_blob.h>
-#include <mwcu_memoutstream.h>
+#include <bmqio_channel.h>
+#include <bmqio_status.h>
+#include <bmqst_statcontext.h>
+#include <bmqsys_threadutil.h>
+#include <bmqsys_time.h>
+#include <bmqu_blob.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bdld_datum.h>
@@ -180,28 +180,29 @@ void fillDTSpanQueueBaggage(bmqpi::DTSpan::Baggage* baggage,
     baggage->put("bmq.queue.uri", queue.uri().asString());
 }
 
+BSLA_MAYBE_UNUSED
 bool isConfigure(const bmqp_ctrlmsg::ControlMessage& request,
                  const bmqp_ctrlmsg::ControlMessage& response)
 {
-    return bmqscm::Version::versionAsInt() == bmqp::Protocol::k_DEV_VERSION
-               ? request.choice().isConfigureStreamValue() &&
-                     response.choice().isConfigureStreamResponseValue()
-               : request.choice().isConfigureQueueStreamValue() &&
-                     response.choice().isConfigureQueueStreamResponseValue();
+    return request.choice().isConfigureStreamValue()
+               ? response.choice().isConfigureStreamResponseValue()
+           : request.choice().isConfigureQueueStreamValue()
+               ? response.choice().isConfigureQueueStreamResponseValue()
+               : false;
 }
 
+BSLA_MAYBE_UNUSED
 bool isConfigure(const bmqp_ctrlmsg::ControlMessage& request)
 {
-    return bmqscm::Version::versionAsInt() == bmqp::Protocol::k_DEV_VERSION
-               ? request.choice().isConfigureStreamValue()
-               : request.choice().isConfigureQueueStreamValue();
+    return request.choice().isConfigureStreamValue() ||
+           request.choice().isConfigureQueueStreamValue();
 }
 
-bool isConfigureResponse(const bmqp_ctrlmsg::ControlMessage& request)
+BSLA_MAYBE_UNUSED
+bool isConfigureResponse(const bmqp_ctrlmsg::ControlMessage& response)
 {
-    return bmqscm::Version::versionAsInt() == bmqp::Protocol::k_DEV_VERSION
-               ? request.choice().isConfigureStreamResponseValue()
-               : request.choice().isConfigureQueueStreamResponseValue();
+    return response.choice().isConfigureStreamResponseValue() ||
+           response.choice().isConfigureQueueStreamResponseValue();
 }
 
 void makeDeconfigure(bmqp_ctrlmsg::ControlMessage* request)
@@ -389,7 +390,7 @@ BrokerSession::SessionFsm::setState(State::Enum value, FsmEvent::Enum event)
 
 void BrokerSession::SessionFsm::setStarted(
     FsmEvent::Enum                         event,
-    const bsl::shared_ptr<mwcio::Channel>& channel)
+    const bsl::shared_ptr<bmqio::Channel>& channel)
 {
     // executed by the FSM thread
 
@@ -404,6 +405,11 @@ void BrokerSession::SessionFsm::setStarted(
 
     // Post on the semaphore (to wake-up a sync 'start', if any)
     d_session.d_startSemaphore.post();
+
+    // Temporary safety switch to control configure request.
+    d_session.d_channel_sp->properties().load(
+        &d_session.d_doConfigureStream,
+        NegotiatedChannelFactory::k_CHANNEL_PROPERTY_CONFIGURE_STREAM);
 }
 
 bmqt::GenericResult::Enum
@@ -541,6 +547,7 @@ BrokerSession::SessionFsm::SessionFsm(BrokerSession& session)
 : d_session(session)
 , d_state(State::e_STOPPED)
 , d_onceConnected(false)
+, d_beginTimestamp(0)
 {
     StateTransition table[] = {
 #define S State
@@ -616,7 +623,8 @@ bmqt::GenericResult::Enum BrokerSession::SessionFsm::handleStartRequest()
         res = bmqt::GenericResult::e_NOT_SUPPORTED;
     } break;
     case State::e_STOPPED: {
-        res = setStarting(event);
+        d_beginTimestamp = bmqsys::Time::highResolutionTimer();
+        res              = setStarting(event);
     } break;
     default: {
         BSLS_ASSERT_SAFE(false && "Unexpected Session state");
@@ -637,6 +645,7 @@ void BrokerSession::SessionFsm::handleStartTimeout()
     case State::e_STARTING: {
         BALL_LOG_ERROR << "Start (ASYNC) has timed out";
         setStopped(event, true);
+        logOperationTime("Start");
     } break;
     case State::e_STARTED: {
         // We got connected just on time :) .. do nothing
@@ -672,6 +681,8 @@ void BrokerSession::SessionFsm::handleStartSynchronousFailure()
         setStopped(event, false);
         // Should not enqueue user events since this failure is returned by
         // 'start'.
+
+        logOperationTime("Start");
     } break;
     case State::e_STARTED:
     case State::e_RECONNECTING:
@@ -697,6 +708,8 @@ void BrokerSession::SessionFsm::handleStopRequest()
 
     switch (state()) {
     case State::e_STARTED: {
+        d_beginTimestamp = bmqsys::Time::highResolutionTimer();
+
         bmqt::GenericResult::Enum res = setClosingSession(event);
         if (res != bmqt::GenericResult::e_SUCCESS) {
             BALL_LOG_ERROR << "::: FAILED TO DISCONNECT BROKER GRACEFULLY :::";
@@ -707,6 +720,8 @@ void BrokerSession::SessionFsm::handleStopRequest()
         // `d_channel_sp` is _not_ set in the STARTING state (only in STARTED).
         // Therefore, simply transition to STOPPED.
         setStopped(event);
+
+        logOperationTime("Start");
     } break;
     case State::e_RECONNECTING: {
         setStopped(event);
@@ -727,7 +742,7 @@ void BrokerSession::SessionFsm::handleStopRequest()
 }
 
 void BrokerSession::SessionFsm::handleChannelUp(
-    const bsl::shared_ptr<mwcio::Channel>& channel)
+    const bsl::shared_ptr<bmqio::Channel>& channel)
 {
     // executed by the FSM thread
 
@@ -739,6 +754,7 @@ void BrokerSession::SessionFsm::handleChannelUp(
     case State::e_STARTING: {
         setStarted(event, channel);
         d_session.enqueueSessionEvent(bmqt::SessionEventType::e_CONNECTED);
+        logOperationTime("Start");
     } break;
     case State::e_RECONNECTING: {
         setStarted(event, channel);
@@ -791,9 +807,11 @@ void BrokerSession::SessionFsm::handleChannelDown()
     case State::e_CLOSING_SESSION: {
         BALL_LOG_WARN << "CHANNEL_DOWN while closing session";
         setStopped(event);
+        logOperationTime("Stop");
     } break;
     case State::e_CLOSING_CHANNEL: {
         setStopped(event);
+        logOperationTime("Stop");
     } break;
     case State::e_RECONNECTING:
     case State::e_STOPPED: {
@@ -913,6 +931,21 @@ void BrokerSession::SessionFsm::handleAllQueuesResumed()
     }
 }
 
+void BrokerSession::SessionFsm::logOperationTime(const char* operation)
+{
+    if (d_beginTimestamp) {
+        const bsls::Types::Int64 elapsed =
+            bmqsys::Time::highResolutionTimer() - d_beginTimestamp;
+        BALL_LOG_INFO << operation << " took: "
+                      << bmqu::PrintUtil::prettyTimeInterval(elapsed) << " ("
+                      << elapsed << " nanoseconds)";
+        d_beginTimestamp = 0;
+    }
+    else {
+        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+        BALL_LOG_WARN << "d_beginTimestamp was not initialized with timestamp";
+    }
+}
 // --------------
 // class QueueFsm
 // --------------
@@ -1109,6 +1142,9 @@ void BrokerSession::QueueFsm::actionRemoveQueue(
         d_session.d_queueRetransmissionTimeoutMap.erase(queueSp->id());
     }
 
+    // Remove queue entry from the map if it is still there
+    d_timestampMap.erase(queue->uri().asString());
+
     // Clear queue statistics.  Do not reset CorrelationId since it may be used
     // from the user thread.
     queueSp->clearStatContext();
@@ -1147,7 +1183,7 @@ void BrokerSession::QueueFsm::actionCloseQueue(
     context->setGroupId(k_NON_BUFFERED_REQUEST_GROUP_ID);
 
     const bsls::TimeInterval absTimeout =
-        mwcsys::Time::nowMonotonicClock() +
+        bmqsys::Time::nowMonotonicClock() +
         d_session.d_sessionOptions.closeQueueTimeout();
 
     actionCloseQueue(context, queue, absTimeout);
@@ -1344,13 +1380,30 @@ void BrokerSession::QueueFsm::actionInitiateQueueResume(
         context);
 }
 
+void BrokerSession::QueueFsm::logOperationTime(const bsl::string& queueUri,
+                                               const char*        operation)
+{
+    TimestampMap::iterator it = d_timestampMap.find(queueUri);
+    if (it != d_timestampMap.end()) {
+        const bsls::Types::Int64 elapsed =
+            bmqsys::Time::highResolutionTimer() - it->second;
+        BALL_LOG_INFO << operation << " [uri=" << queueUri << "] took: "
+                      << bmqu::PrintUtil::prettyTimeInterval(elapsed) << " ("
+                      << elapsed << " nanoseconds)";
+        // Handling of error cases causes of several operations.
+        // Log only first one (original) and skip others.
+        d_timestampMap.erase(it);
+    }
+}
+
 BrokerSession::QueueFsm::QueueFsm(BrokerSession& session)
 : d_session(session)
+, d_timestampMap(session.d_allocator_p)
 {
     typedef QueueState    S;
     typedef QueueFsmEvent E;
     QueueStateTransition  table[] = {
-         // current state           event              new state
+        // current state           event              new state
         {S::e_CLOSED, E::e_OPEN_CMD, S::e_OPENING_OPN},
         //
         {S::e_OPENING_OPN, E::e_RESP_OK, S::e_OPENING_CFG},
@@ -1460,6 +1513,9 @@ bmqt::OpenQueueResult::Enum BrokerSession::QueueFsm::handleOpenRequest(
         // Generate and set QueueId
         setQueueId(queue, context);
 
+        d_timestampMap[queue->uri().asString()] =
+            bmqsys::Time::highResolutionTimer();
+
         // Switch to OPENING_OPN
         setQueueState(queue, QueueState::e_OPENING_OPN, event);
 
@@ -1527,6 +1583,8 @@ void BrokerSession::QueueFsm::handleRequestNotSent(
         // Keep the OPENED state
         setQueueState(queue, QueueState::e_OPENED, event);
 
+        logOperationTime(queue->uri().asString(), "Configure queue");
+
         // Notify about configure queue result
         context->signal();
     } break;
@@ -1543,6 +1601,8 @@ void BrokerSession::QueueFsm::handleRequestNotSent(
         injectErrorResponse(context,
                             status,
                             "Failed to send open queue request to the broker");
+
+        logOperationTime(queue->uri().asString(), "Open queue");
 
         // Notify about open queue result
         context->signal();
@@ -1561,6 +1621,8 @@ void BrokerSession::QueueFsm::handleRequestNotSent(
             context,
             status,
             "Failed to send reopen-queue request to the broker");
+
+        logOperationTime(queue->uri().asString(), "Reopen queue");
 
         // Notify about reopen queue result
         context->signal();
@@ -1590,6 +1652,8 @@ void BrokerSession::QueueFsm::handleRequestNotSent(
         //          non-deterministic: the queue may be CLOSING or CLOSED by
         //          the time user gets callback/semaphore post.
 
+        logOperationTime(queue->uri().asString(), "Open queue");
+
         // Notify about open queue result
         context->signal();
     } break;
@@ -1608,6 +1672,8 @@ void BrokerSession::QueueFsm::handleRequestNotSent(
             context,
             status,
             "Failed to send reopen-configure-queue request to the broker");
+
+        logOperationTime(queue->uri().asString(), "Reopen queue");
 
         // Notify about reopen queue result
         context->signal();
@@ -1633,6 +1699,8 @@ void BrokerSession::QueueFsm::handleRequestNotSent(
             status,
             "The request was canceled [reason: connection was lost]");
 
+        logOperationTime(queue->uri().asString(), "Close queue");
+
         // Notify about close result
         context->signal();
     } break;
@@ -1648,6 +1716,8 @@ void BrokerSession::QueueFsm::handleRequestNotSent(
             context,
             status,
             "Failed to send close queue request to the broker");
+
+        logOperationTime(queue->uri().asString(), "Close queue");
 
         // Notify about close result
         context->signal();
@@ -1685,6 +1755,9 @@ void BrokerSession::QueueFsm::handleReopenRequest(
 
     switch (state) {
     case QueueState::e_PENDING: {
+        d_timestampMap[queue->uri().asString()] =
+            bmqsys::Time::highResolutionTimer();
+
         // Set REOPENING_OPN state
         setQueueState(queue, QueueState::e_REOPENING_OPN, event);
 
@@ -1742,6 +1815,9 @@ BrokerSession::QueueFsm::handleConfigureRequest(
 
     switch (state) {
     case QueueState::e_OPENED: {
+        d_timestampMap[queue->uri().asString()] =
+            bmqsys::Time::highResolutionTimer();
+
         // Keep the state OPENED
         setQueueState(queue, QueueState::e_OPENED, event);
 
@@ -1750,6 +1826,9 @@ BrokerSession::QueueFsm::handleConfigureRequest(
         rc = actionConfigureQueue(queue, options, timeout, context);
     } break;
     case QueueState::e_PENDING: {
+        d_timestampMap[queue->uri().asString()] =
+            bmqsys::Time::highResolutionTimer();
+
         // Keep the state PENDING
         setQueueState(queue, QueueState::e_PENDING, event);
 
@@ -1818,6 +1897,9 @@ bmqt::CloseQueueResult::Enum BrokerSession::QueueFsm::handleCloseRequest(
 
     switch (state) {
     case QueueState::e_OPENED: {
+        d_timestampMap[queue->uri().asString()] =
+            bmqsys::Time::highResolutionTimer();
+
         // Set CLOSING_CFG state
         setQueueState(queue, QueueState::e_CLOSING_CFG, event);
 
@@ -1836,7 +1918,7 @@ bmqt::CloseQueueResult::Enum BrokerSession::QueueFsm::handleCloseRequest(
                 queue->uri().canonical());
             handleResponseOk(queue,
                              context,
-                             mwcsys::Time::nowMonotonicClock() + timeout);
+                             bmqsys::Time::nowMonotonicClock() + timeout);
             break;  // BREAK
         }
 
@@ -1857,6 +1939,8 @@ bmqt::CloseQueueResult::Enum BrokerSession::QueueFsm::handleCloseRequest(
 
         // Set CLOSED state
         setQueueState(queue, QueueState::e_CLOSED, event);
+
+        logOperationTime(queue->uri().asString(), "Close queue");
 
         // Remove queue from the queue container
         actionRemoveQueue(queue);
@@ -1920,6 +2004,8 @@ void BrokerSession::QueueFsm::handleResponseError(
         // Keep the state
         setQueueState(queue, state, event);
 
+        logOperationTime(queue->uri().asString(), "Configure queue");
+
         // Notify configure result
         context->signal();
     } break;
@@ -1935,6 +2021,8 @@ void BrokerSession::QueueFsm::handleResponseError(
         // substream count
         d_session.d_queueManager.decrementSubStreamCount(
             queue->uri().canonical());
+
+        logOperationTime(queue->uri().asString(), "Open queue");
 
         // Remove queue from the queue list
         actionRemoveQueue(queue);
@@ -1954,6 +2042,8 @@ void BrokerSession::QueueFsm::handleResponseError(
         // substream count
         d_session.d_queueManager.decrementSubStreamCount(
             queue->uri().canonical());
+
+        logOperationTime(queue->uri().asString(), "Reopen queue");
 
         // Remove queue and notify about open queue result
         actionRemoveQueue(queue);
@@ -1978,6 +2068,8 @@ void BrokerSession::QueueFsm::handleResponseError(
         d_session.d_queueManager.decrementSubStreamCount(
             queue->uri().canonical());
 
+        logOperationTime(queue->uri().asString(), "Open queue");
+
         // Send close queue request
         actionCloseQueue(queue);
 
@@ -2001,6 +2093,8 @@ void BrokerSession::QueueFsm::handleResponseError(
         // Send close queue request
         actionCloseQueue(queue);
 
+        logOperationTime(queue->uri().asString(), "Reopen queue");
+
         // Notify about reopen queue result
         context->signal();
 
@@ -2015,6 +2109,8 @@ void BrokerSession::QueueFsm::handleResponseError(
         // Close response with an error.  In this case we consider the queue
         // is closed.
         setQueueState(queue, QueueState::e_CLOSED, event);
+
+        logOperationTime(queue->uri().asString(), "Close queue");
 
         // Remove queue
         actionRemoveQueue(queue);
@@ -2084,6 +2180,8 @@ void BrokerSession::QueueFsm::handleSessionDown(
         d_session.d_queueManager.decrementSubStreamCount(
             queue->uri().canonical());
 
+        logOperationTime(queue->uri().asString(), "Open queue");
+
         // Remove queue from the queue list
         actionRemoveQueue(queue);
 
@@ -2099,6 +2197,8 @@ void BrokerSession::QueueFsm::handleSessionDown(
         // substream count
         d_session.d_queueManager.decrementSubStreamCount(
             queue->uri().canonical());
+
+        logOperationTime(queue->uri().asString(), "Reopen queue");
 
         // Remove queue and notify about open queue result
         actionRemoveQueue(queue);
@@ -2118,6 +2218,8 @@ void BrokerSession::QueueFsm::handleSessionDown(
         // about unsuccessful closeQueue response and close the queue.
         setQueueState(queue, QueueState::e_CLOSED, event);
 
+        logOperationTime(queue->uri().asString(), "Close queue");
+
         // Remove queue from the queue container
         actionRemoveQueue(queue);
 
@@ -2136,6 +2238,8 @@ void BrokerSession::QueueFsm::handleSessionDown(
         // The queue is closed, decrement substream count
         d_session.d_queueManager.decrementSubStreamCount(
             queue->uri().canonical());
+
+        logOperationTime(queue->uri().asString(), "Configure queue");
 
         // Remove queue from the queue list
         actionRemoveQueue(queue);
@@ -2181,6 +2285,8 @@ void BrokerSession::QueueFsm::handleRequestCanceled(
         // Keep the state
         setQueueState(queue, state, event);
 
+        logOperationTime(queue->uri().asString(), "Configure queue");
+
         // Notify configure result
         context->signal();
     } break;
@@ -2215,6 +2321,8 @@ void BrokerSession::QueueFsm::handleRequestCanceled(
         // response and close the queue.
         setQueueState(queue, QueueState::e_CLOSED, event);
 
+        logOperationTime(queue->uri().asString(), "Close queue");
+
         // Remove queue from the queue container
         actionRemoveQueue(queue);
 
@@ -2235,6 +2343,8 @@ void BrokerSession::QueueFsm::handleRequestCanceled(
         // Close response with an error.  In this case we consider the queue
         // is closed.
         setQueueState(queue, QueueState::e_CLOSED, event);
+
+        logOperationTime(queue->uri().asString(), "Close queue");
 
         // Remove queue
         actionRemoveQueue(queue);
@@ -2283,6 +2393,8 @@ void BrokerSession::QueueFsm::handleResponseTimeout(
         // Keep OPENED state
         setQueueState(queue, QueueState::e_OPENED, event);
 
+        logOperationTime(queue->uri().asString(), "Configure queue");
+
         // Notify configure result
         context->signal();
     } break;
@@ -2293,6 +2405,8 @@ void BrokerSession::QueueFsm::handleResponseTimeout(
         // Set EXPIRED state
         setQueueState(queue, QueueState::e_OPENING_OPN_EXPIRED, event);
 
+        logOperationTime(queue->uri().asString(), "Open queue");
+
         // Notify open queue result
         context->signal();
     } break;
@@ -2302,6 +2416,8 @@ void BrokerSession::QueueFsm::handleResponseTimeout(
 
         // Set EXPIRED state
         setQueueState(queue, QueueState::e_OPENING_OPN_EXPIRED, event);
+
+        logOperationTime(queue->uri().asString(), "Reopen queue");
 
         // Notify reopen queue result
         context->signal();
@@ -2317,6 +2433,8 @@ void BrokerSession::QueueFsm::handleResponseTimeout(
         // Set EXPIRED state
         setQueueState(queue, QueueState::e_OPENING_CFG_EXPIRED, event);
 
+        logOperationTime(queue->uri().asString(), "Open queue");
+
         // Notify open queue result
         context->signal();
     } break;
@@ -2327,6 +2445,8 @@ void BrokerSession::QueueFsm::handleResponseTimeout(
 
         // Set EXPIRED state
         setQueueState(queue, QueueState::e_OPENING_CFG_EXPIRED, event);
+
+        logOperationTime(queue->uri().asString(), "Reopen queue");
 
         // Notify reopen queue result
         context->signal();
@@ -2342,6 +2462,8 @@ void BrokerSession::QueueFsm::handleResponseTimeout(
         // Set EXPIRED state
         setQueueState(queue, QueueState::e_CLOSING_CFG_EXPIRED, event);
 
+        logOperationTime(queue->uri().asString(), "Close queue");
+
         // Notify about close result
         context->signal();
     } break;
@@ -2352,6 +2474,8 @@ void BrokerSession::QueueFsm::handleResponseTimeout(
         // Set EXPIRED state
         setQueueState(queue, QueueState::e_CLOSING_CLS_EXPIRED, event);
 
+        logOperationTime(queue->uri().asString(), "Close queue");
+
         // Notify about close result
         context->signal();
     } break;
@@ -2360,6 +2484,8 @@ void BrokerSession::QueueFsm::handleResponseTimeout(
 
         // Buffered request timed out.  Keep the state and notify the caller.
         setQueueState(queue, state, event);
+
+        logOperationTime(queue->uri().asString(), "Configure queue");
 
         // Notify configure queue result
         context->signal();
@@ -2402,6 +2528,8 @@ void BrokerSession::QueueFsm::handleResponseExpired(
         // Keep PENDING state
         setQueueState(queue, QueueState::e_PENDING, event);
 
+        logOperationTime(queue->uri().asString(), "Configure queue");
+
         // Notify configure result
         context->signal();
     } break;
@@ -2419,6 +2547,8 @@ void BrokerSession::QueueFsm::handleResponseExpired(
         // substream count
         d_session.d_queueManager.decrementSubStreamCount(
             queue->uri().canonical());
+
+        logOperationTime(queue->uri().asString(), "Open queue");
 
         // Remove queue from the queue list
         actionRemoveQueue(queue);
@@ -2468,6 +2598,8 @@ void BrokerSession::QueueFsm::handleResponseOk(
 
         // Keep the state OPENED
         setQueueState(queue, QueueState::e_OPENED, event);
+
+        logOperationTime(queue->uri().asString(), "Configure queue");
 
         // Notify configure result
         context->signal();
@@ -2574,6 +2706,8 @@ void BrokerSession::QueueFsm::handleResponseOk(
         // Create the stat context if needed
         actionInitQueue(queue, context, false);  // false - isReopenRequest
 
+        logOperationTime(queue->uri().asString(), "Open queue");
+
         // Notify open queue result
         context->signal();
     } break;
@@ -2588,6 +2722,8 @@ void BrokerSession::QueueFsm::handleResponseOk(
 
         // Create the stat context if needed
         actionInitQueue(queue, context, true);  // true - isReopenRequest
+
+        logOperationTime(queue->uri().asString(), "Reopen queue");
 
         // Notify reopen queue result
         context->signal();
@@ -2621,6 +2757,8 @@ void BrokerSession::QueueFsm::handleResponseOk(
 
         // Set CLOSED state
         setQueueState(queue, QueueState::e_CLOSED, event);
+
+        logOperationTime(queue->uri().asString(), "Close queue");
 
         // Remove active queue from the list
         actionRemoveQueue(queue);
@@ -2958,7 +3096,8 @@ BrokerSession::sendRequest(const RequestManagerType::RequestSp& context,
 
     BSLS_ASSERT_SAFE(d_fsmThreadChecker.inSameThread());
 
-    const bool isDisconnect = context->request().choice().isDisconnectValue();
+    BSLA_MAYBE_UNUSED const bool isDisconnect =
+        context->request().choice().isDisconnectValue();
 
     // For all requests except disconnect the d_acceptRequests should be true
     BSLS_ASSERT_SAFE(isDisconnect || d_acceptRequests);
@@ -3265,7 +3404,7 @@ void BrokerSession::processControlEvent(const bmqp::Event& event)
         BALL_LOG_ERROR << "Received invalid control message from broker "
                        << "[reason: 'failed to decode', rc: " << rc << "]"
                        << "\n"
-                       << mwcu::BlobStartHexDumper(event.blob());
+                       << bmqu::BlobStartHexDumper(event.blob());
         return;  // RETURN
     }
 
@@ -3289,18 +3428,6 @@ void BrokerSession::processControlEvent(const bmqp::Event& event)
                        << controlMessage;
         // Ignore the event.
     }
-}
-
-void BrokerSession::onHeartbeat()
-{
-    // executed by the *IO* thread
-    // Add to the FSM event queue
-    bsl::shared_ptr<Event> queueEvent = createEvent();
-    queueEvent->configureAsRequestEvent(
-        bdlf::BindUtil::bind(&BrokerSession::doHandleHeartbeat,
-                             this,
-                             bdlf::PlaceHolders::_1));  // eventImpl
-    enqueueFsmEvent(queueEvent);
 }
 
 void BrokerSession::enableMessageRetransmission(
@@ -3373,7 +3500,7 @@ void BrokerSession::processPutEvent(const bmqp::Event& event)
         }
     }
 
-    const bsls::TimeInterval sentTime = mwcsys::Time::nowMonotonicClock();
+    const bsls::TimeInterval sentTime = bmqsys::Time::nowMonotonicClock();
     bmqp::PutMessageIterator putIter(d_bufferFactory_p, d_allocator_p);
 
     // Get PUT iterator without decompression
@@ -3490,15 +3617,15 @@ void BrokerSession::processPushEvent(const bmqp::Event& event)
         rc = bmqp::EventUtil::flattenPushEvent(&eventInfos,
                                                event,
                                                d_bufferFactory_p,
+                                               d_blobSpPool_p,
                                                d_allocator_p);
         if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(rc != 0)) {
             BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-            BALL_LOG_ERROR << "Unable to flatten PUSH event"
-                           << " [rc: " << rc
+            BALL_LOG_ERROR << "Unable to flatten PUSH event" << " [rc: " << rc
                            << ", length: " << event.blob()->length()
                            << ", eventMessageCount: " << eventMessageCount
                            << "]" << bsl::endl
-                           << mwcu::BlobStartHexDumper(
+                           << bmqu::BlobStartHexDumper(
                                   event.blob(),
                                   e_NUM_BYTES_IN_BLOB_TO_DUMP);
             return;  // RETURN
@@ -3531,14 +3658,20 @@ void BrokerSession::processPushEvent(const bmqp::Event& event)
              citer != sIds.end();
              ++citer) {
             bmqt::CorrelationId         correlationId;
+            unsigned int                subscriptionHandleId;
             const QueueManager::QueueSp queue =
-                d_queueManager.observePushEvent(&correlationId, *citer);
+                d_queueManager.observePushEvent(&correlationId,
+                                                &subscriptionHandleId,
+                                                *citer);
 
             BSLS_ASSERT(queue);
             queueEvent->insertQueue(citer->d_subscriptionId, queue);
 
-            queueEvent->addCorrelationId(correlationId,
-                                         citer->d_subscriptionId);
+            // Use 'subscriptionHandle' instead of the internal
+            // 'citer->d_subscriptionId' so that
+            // 'bmqimp::Event::subscriptionId()' returns 'subscriptionHandle'
+
+            queueEvent->addCorrelationId(correlationId, subscriptionHandleId);
         }
 
         // Update event bytes
@@ -3616,7 +3749,7 @@ void BrokerSession::processAckEvent(const bmqp::Event& event)
 
         if (ackMsg.status() != 0) {
             // Non-zero ack status. Log it.
-            MWCU_THROTTLEDACTION_THROTTLE(
+            BMQU_THROTTLEDACTION_THROTTLE(
                 d_throttledFailedAckMessages,
                 BALL_LOG_ERROR
                     << "Failed ACK for queue '" << queue->uri()
@@ -3706,7 +3839,7 @@ bmqt::OpenQueueResult::Enum BrokerSession::sendOpenQueueRequest(
     BSLS_ASSERT_SAFE(d_fsmThreadChecker.inSameThread());
     BSLS_ASSERT_SAFE(context->request().choice().isOpenQueueValue());
 
-    const bsls::TimeInterval absTimeout = mwcsys::Time::nowMonotonicClock() +
+    const bsls::TimeInterval absTimeout = bmqsys::Time::nowMonotonicClock() +
                                           timeout;
 
     RequestManagerType::RequestType::ResponseCb response =
@@ -4011,7 +4144,7 @@ BrokerSession::sendDeconfigureRequest(const bsl::shared_ptr<Queue>& queue)
     closeQueueContext->setGroupId(k_NON_BUFFERED_REQUEST_GROUP_ID);
 
     const bsls::TimeInterval absTimeout =
-        mwcsys::Time::nowMonotonicClock() +
+        bmqsys::Time::nowMonotonicClock() +
         d_sessionOptions.configureQueueTimeout();
     const ConfiguredCallback configuredCb = bdlf::BindUtil::bind(
         &BrokerSession::onCloseQueueConfigured,
@@ -4052,7 +4185,7 @@ bmqt::ConfigureQueueResult::Enum BrokerSession::sendDeconfigureRequest(
                              queue->uri().canonical()) == 1;
 
     // Set the configure callback
-    const bsls::TimeInterval absTimeout = mwcsys::Time::nowMonotonicClock() +
+    const bsls::TimeInterval absTimeout = bmqsys::Time::nowMonotonicClock() +
                                           timeout;
     const ConfiguredCallback configuredCb = bdlf::BindUtil::bind(
         &BrokerSession::onCloseQueueConfigured,
@@ -4106,7 +4239,7 @@ void BrokerSession::doHandlePendingPutExpirationTimeout(
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(d_fsmThreadChecker.inSameThread());
 
-    bmqp::AckEventBuilder ackBuilder(d_bufferFactory_p, d_allocator_p);
+    bmqp::AckEventBuilder          ackBuilder(d_blobSpPool_p, d_allocator_p);
     bsl::vector<bmqt::MessageGUID> expiredKeys(d_allocator_p);
     bsl::shared_ptr<Event>         ackEvent = createEvent();
     bsl::shared_ptr<Queue>         queueSp;
@@ -4125,7 +4258,7 @@ void BrokerSession::doHandlePendingPutExpirationTimeout(
         d_messageCorrelationIdContainer.getExpiredIds(
             &expiredKeys,
             d_queueRetransmissionTimeoutMap,
-            mwcsys::Time::nowMonotonicClock());
+            bmqsys::Time::nowMonotonicClock());
     d_messageCorrelationIdContainer.iterateAndInvoke(expiredKeys, callback);
 
     // Push the final ack event if there are any messages in the builder
@@ -4140,7 +4273,7 @@ void BrokerSession::doHandlePendingPutExpirationTimeout(
 }
 
 void BrokerSession::doHandleChannelWatermark(
-    mwcio::ChannelWatermarkType::Enum type,
+    bmqio::ChannelWatermarkType::Enum type,
     BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<Event>& eventSp)
 {
     // executed by the FSM thread
@@ -4152,7 +4285,7 @@ void BrokerSession::doHandleChannelWatermark(
 
     // HWM condition is detected by the channel 'write' result, so we do not
     // handle HWM here
-    if (type == mwcio::ChannelWatermarkType::e_HIGH_WATERMARK) {
+    if (type == bmqio::ChannelWatermarkType::e_HIGH_WATERMARK) {
         BALL_LOG_INFO << "HWM: Channel is not writable";
         return;  // RETURN
     }
@@ -4165,7 +4298,7 @@ void BrokerSession::doHandleChannelWatermark(
         // either there is the HWM again and we will expect the next LWM event,
         // or the channel is down and the user threads will be released when
         // the channel down event is handled (see 'handleChannelDown').
-        mwcio::Status status(d_allocator_p);
+        bmqio::Status status(d_allocator_p);
         d_channel_sp->write(&status,
                             d_extensionBlobBuffer.front(),
                             d_sessionOptions.channelHighWatermark());
@@ -4184,28 +4317,6 @@ void BrokerSession::doHandleChannelWatermark(
 
         BALL_LOG_INFO << "LWM: Channel is ready for user messages";
         d_extensionBufferCondition.broadcast();
-    }
-}
-
-void BrokerSession::doHandleHeartbeat(
-    BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<Event>& eventSp)
-{
-    // executed by the FSM thread
-
-    BSLS_ASSERT_SAFE(d_fsmThreadChecker.inSameThread());
-
-    // The broker sent a heartbeat to check on us, simply reply with a
-    // heartbeat response.
-    //
-    // NOTE: the client doesn't check on the broker, therefore it will never
-    //       send 'HEARTBEAT_REQ' and hence we don't have to handle
-    //       'HEARTBEAT_RSP' type.
-    if (d_channel_sp) {
-        d_channel_sp->write(0,  // status
-                            bmqp::ProtocolUtil::heartbeatRspBlob(),
-                            d_sessionOptions.channelHighWatermark());
-        // We explicitly ignore any failure as failure implies issues with the
-        // channel, which is what the heartbeat is trying to expose.
     }
 }
 
@@ -4385,7 +4496,7 @@ void BrokerSession::transferAckEvent(bmqp::AckEventBuilder*  ackBuilder,
     // Our event is full at this point so send this ack event to the user and
     // reset the builder to append the ack that was rejected.
 
-    bmqp::Event event(&ackBuilder->blob(), d_allocator_p, true);
+    bmqp::Event event(ackBuilder->blob().get(), d_allocator_p, true);
     // clone = true
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
             d_messageDumper.isEventDumpEnabled<bmqp::EventType::e_ACK>())) {
@@ -4584,7 +4695,7 @@ void BrokerSession::cancelPendingMessages(
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(d_fsmThreadChecker.inSameThread());
 
-    bmqp::AckEventBuilder  ackBuilder(d_bufferFactory_p, d_allocator_p);
+    bmqp::AckEventBuilder  ackBuilder(d_blobSpPool_p, d_allocator_p);
     bsl::shared_ptr<Event> ackEvent = createEvent();
 
     MessageCorrelationIdContainer::KeyIdsCb callback = bdlf::BindUtil::bind(
@@ -4675,7 +4786,7 @@ bool BrokerSession::appendOrSend(
     if (result == bmqt::EventBuilderResult::e_PAYLOAD_TOO_BIG) {
         // Send the current event, reset the builder.
         bmqt::GenericResult::Enum res = writeOrBuffer(
-            builder.blob(),
+            *builder.blob(),
             d_sessionOptions.channelHighWatermark());
 
         if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
@@ -4771,7 +4882,7 @@ void BrokerSession::retransmitPendingMessages()
     // Cancel pending PUTs expiration timer
     d_scheduler_p->cancelEvent(&d_messageExpirationTimeoutHandle);
 
-    bmqp::PutEventBuilder putBuilder(d_bufferFactory_p, d_allocator_p);
+    bmqp::PutEventBuilder putBuilder(d_blobSpPool_p, d_allocator_p);
 
     MessageCorrelationIdContainer::KeyIdsCb callback = bdlf::BindUtil::bind(
         &BrokerSession::handlePendingMessage,
@@ -4798,7 +4909,7 @@ void BrokerSession::retransmitPendingMessages()
     // Send the final PUT event if there are any messages in the builder
     if (putBuilder.messageCount()) {
         bmqt::GenericResult::Enum res = writeOrBuffer(
-            putBuilder.blob(),
+            *putBuilder.blob(),
             d_sessionOptions.channelHighWatermark());
 
         if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
@@ -5031,7 +5142,7 @@ void BrokerSession::doCloseQueue(
 }
 
 void BrokerSession::doSetChannel(
-    const bsl::shared_ptr<mwcio::Channel> channel,
+    const bsl::shared_ptr<bmqio::Channel> channel,
     BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<Event>& eventSp)
 {
     // executed by the FSM thread
@@ -5188,7 +5299,7 @@ BrokerSession::createConfigureQueueContext(const bsl::shared_ptr<Queue>& queue,
     }
     context->setGroupId(grId);
 
-    if (bmqscm::Version::versionAsInt() == bmqp::Protocol::k_DEV_VERSION) {
+    if (d_doConfigureStream) {
         // Make ConfigureStream request
         bmqp_ctrlmsg::ConfigureStream& configureStream =
             context->request().choice().makeConfigureStream();
@@ -5239,7 +5350,12 @@ BrokerSession::createConfigureQueueContext(const bsl::shared_ptr<Queue>& queue,
 
             bmqp_ctrlmsg::Subscription subscription(d_allocator_p);
 
-            subscription.sId() = cit->first.id();
+            const unsigned int internalSubscriptionId =
+                ++d_nextInternalSubscriptionId;
+
+            subscription.sId() = internalSubscriptionId;
+            // Using unique id instead of 'SubscriptionHandle::id()'
+
             subscription.consumers().emplace_back(ci);
 
             bmqp_ctrlmsg::ExpressionVersion::Value version;
@@ -5260,9 +5376,9 @@ BrokerSession::createConfigureQueueContext(const bsl::shared_ptr<Queue>& queue,
             subscription.expression().text()    = from.expression().text();
 
             streamParams.subscriptions().emplace_back(subscription);
-            d_queueManager.registerSubscription(queue,
-                                                cit->first.id(),
-                                                cit->first.correlationId());
+            queue->registerInternalSubscriptionId(internalSubscriptionId,
+                                                  cit->first.id(),
+                                                  cit->first.correlationId());
         }
         return context;  // RETURN
     }
@@ -5298,9 +5414,9 @@ BrokerSession::createConfigureQueueContext(const bsl::shared_ptr<Queue>& queue,
         streamParams.consumerPriority()      = options.consumerPriority();
         streamParams.consumerPriorityCount() = 1;
 
-        d_queueManager.registerSubscription(queue,
-                                            queue->subQueueId(),
-                                            bmqt::CorrelationId());
+        queue->registerInternalSubscriptionId(queue->subQueueId(),
+                                              queue->subQueueId(),
+                                              bmqt::CorrelationId());
     }
 
     return context;
@@ -5460,7 +5576,7 @@ void BrokerSession::actionResumeHealthSensitiveQueues()
 bmqt::GenericResult::Enum
 BrokerSession::requestWriterCb(const RequestManagerType::RequestSp& context,
                                const bmqp::QueueId&                 queueId,
-                               const bdlbb::Blob&                   blob,
+                               const bsl::shared_ptr<bdlbb::Blob>&  blob_sp,
                                bsls::Types::Int64                   watermark)
 {
     // executed by the FSM thread
@@ -5472,7 +5588,7 @@ BrokerSession::requestWriterCb(const RequestManagerType::RequestSp& context,
 
     if (isBuffered) {
         const bmqt::MessageGUID guid =
-            d_messageCorrelationIdContainer.add(context, queueId, blob);
+            d_messageCorrelationIdContainer.add(context, queueId, *blob_sp);
         char guidHex[bmqt::MessageGUID::e_SIZE_HEX];
         guid.toHex(guidHex);
         context->adoptUserData(
@@ -5491,7 +5607,7 @@ BrokerSession::requestWriterCb(const RequestManagerType::RequestSp& context,
         return bmqt::GenericResult::e_SUCCESS;  // RETURN
     }
 
-    bmqt::GenericResult::Enum res = writeOrBuffer(blob, watermark);
+    bmqt::GenericResult::Enum res = writeOrBuffer(*blob_sp, watermark);
 
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
             res != bmqt::GenericResult::e_SUCCESS && isBuffered)) {
@@ -5514,7 +5630,7 @@ BrokerSession::writeOrBuffer(const bdlbb::Blob& eventBlob,
     BSLS_ASSERT_SAFE(d_fsmThreadChecker.inSameThread());
     BSLS_ASSERT_SAFE(d_channel_sp);
 
-    mwcio::Status             status(d_allocator_p);
+    bmqio::Status             status(d_allocator_p);
     bmqt::GenericResult::Enum res = bmqt::GenericResult::e_SUCCESS;
 
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
@@ -5535,7 +5651,7 @@ BrokerSession::writeOrBuffer(const bdlbb::Blob& eventBlob,
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(!status)) {
         BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
 
-        if (status.category() == mwcio::StatusCategory::e_LIMIT) {
+        if (status.category() == bmqio::StatusCategory::e_LIMIT) {
             d_extensionBlobBuffer.push_back(eventBlob);
             d_extensionBufferEmpty = false;
         }
@@ -5553,6 +5669,7 @@ BrokerSession::writeOrBuffer(const bdlbb::Blob& eventBlob,
 BrokerSession::BrokerSession(
     bdlmt::EventScheduler*                  scheduler,
     bdlbb::BlobBufferFactory*               bufferFactory,
+    BlobSpPool*                             blobSpPool_p,
     const bmqt::SessionOptions&             sessionOptions,
     const EventQueue::EventHandlerCallback& eventHandlerCb,
     const StateFunctor&                     stateCb,
@@ -5567,6 +5684,7 @@ BrokerSession::BrokerSession(
 , d_sessionOptions(sessionOptions)
 , d_scheduler_p(scheduler)
 , d_bufferFactory_p(bufferFactory)
+, d_blobSpPool_p(blobSpPool_p)
 , d_channel_sp()
 , d_extensionBlobBuffer(allocator)
 , d_acceptRequests(false)
@@ -5598,7 +5716,7 @@ BrokerSession::BrokerSession(
                (eventHandlerCb ? sessionOptions.numProcessingThreads() : 0),
                d_allocators.get("EventQueue"))
 , d_requestManager(bmqp::EventType::e_CONTROL,
-                   bufferFactory,
+                   blobSpPool_p,
                    scheduler,
                    true,  // lateResponseMode
                    BrokerSession_Executor(this),
@@ -5624,6 +5742,8 @@ BrokerSession::BrokerSession(
 , d_messageExpirationTimeoutHandle()
 , d_nextRequestGroupId(k_NON_BUFFERED_REQUEST_GROUP_ID)
 , d_queueRetransmissionTimeoutMap(allocator)
+, d_nextInternalSubscriptionId(bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID)
+, d_doConfigureStream(0)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(d_scheduler_p->clockType() ==
@@ -5641,7 +5761,7 @@ BrokerSession::BrokerSession(
 
     // Spawn the FSM thread
     bslmt::ThreadAttributes threadAttributes =
-        mwcsys::ThreadUtil::defaultAttributes();
+        bmqsys::ThreadUtil::defaultAttributes();
     threadAttributes.setThreadName("bmqFSMEvtQ");
     if (bslmt::ThreadUtil::createWithAllocator(
             &d_fsmThread,
@@ -5676,9 +5796,9 @@ BrokerSession::~BrokerSession()
 }
 
 void BrokerSession::initializeStats(
-    mwcst::StatContext*                       rootStatContext,
-    const mwcst::StatValue::SnapshotLocation& start,
-    const mwcst::StatValue::SnapshotLocation& end)
+    bmqst::StatContext*                       rootStatContext,
+    const bmqst::StatValue::SnapshotLocation& start,
+    const bmqst::StatValue::SnapshotLocation& end)
 {
     d_eventQueue.initializeStats(rootStatContext, start, end);
 
@@ -5697,23 +5817,27 @@ BrokerSession::processPacket(const bdlbb::Blob& packet)
     // executed by the *IO* thread
     // or *APPLICATION* thread
 
-    enum { e_NUM_BYTES_IN_BLOB_TO_DUMP = 256 };
-
     // Create a raw event with a cloned blob
     bmqp::Event event(&packet, d_allocator_p, true);
+
+    return processPacket(event);
+}
+
+bmqt::GenericResult::Enum
+BrokerSession::processPacket(const bmqp::Event& event)
+{
+    // executed by the *IO* thread
+    // or *APPLICATION* thread
+
+    enum { e_NUM_BYTES_IN_BLOB_TO_DUMP = 256 };
+
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(!event.isValid())) {
         BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
         BALL_LOG_ERROR << "Received an invalid packet: "
-                       << mwcu::BlobStartHexDumper(
-                              &packet,
+                       << bmqu::BlobStartHexDumper(
+                              event.blob(),
                               e_NUM_BYTES_IN_BLOB_TO_DUMP);
         return bmqt::GenericResult::e_INVALID_ARGUMENT;  // RETURN
-    }
-
-    if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(event.isHeartbeatReqEvent())) {
-        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-        onHeartbeat();
-        return bmqt::GenericResult::e_SUCCESS;  // RETURN
     }
 
     // Add to event queue
@@ -5722,12 +5846,12 @@ BrokerSession::processPacket(const bdlbb::Blob& packet)
     return enqueueFsmEvent(queueEvent);
 }
 
-void BrokerSession::setChannel(const bsl::shared_ptr<mwcio::Channel>& channel)
+void BrokerSession::setChannel(const bsl::shared_ptr<bmqio::Channel>& channel)
 {
     // executed by the *IO* thread
 
-    if (mwcsys::ThreadUtil::k_SUPPORT_THREAD_NAME) {
-        mwcsys::ThreadUtil::setCurrentThreadNameOnce("bmqTCPIO");
+    if (bmqsys::ThreadUtil::k_SUPPORT_THREAD_NAME) {
+        bmqsys::ThreadUtil::setCurrentThreadNameOnce("bmqTCPIO");
     }
 
     if (channel) {  // We are now connected to bmqbrkr
@@ -5765,7 +5889,7 @@ int BrokerSession::start(const bsls::TimeInterval& timeout)
         return rc;  // RETURN
     }
 
-    rc = d_startSemaphore.timedWait(mwcsys::Time::nowMonotonicClock() +
+    rc = d_startSemaphore.timedWait(bmqsys::Time::nowMonotonicClock() +
                                     timeout);
     if (rc != 0) {
         // Timeout
@@ -5986,7 +6110,7 @@ bmqt::ConfigureQueueResult::Enum BrokerSession::sendOpenConfigureQueue(
         openQueueContext,        // openQueue context
         isReopenRequest);
     const bsls::TimeInterval timeout = absTimeout -
-                                       mwcsys::Time::nowMonotonicClock();
+                                       bmqsys::Time::nowMonotonicClock();
 
     // For reopen request do not reset pendingConfigureId which could have been
     // set by buffered configure request.
@@ -6027,7 +6151,7 @@ bmqt::GenericResult::Enum BrokerSession::sendCloseQueue(
     closeQueueContext->setResponseCb(response);
 
     const bsls::TimeInterval timeout = absTimeout -
-                                       mwcsys::Time::nowMonotonicClock();
+                                       bmqsys::Time::nowMonotonicClock();
     return sendRequest(closeQueueContext,
                        bmqp::QueueId(queue->id(), queue->subQueueId()),
                        timeout);
@@ -6123,6 +6247,7 @@ void BrokerSession::onConfigureQueueResponse(
                              res == bmqt::GenericResult::e_NOT_CONNECTED ||
                              res == bmqt::GenericResult::e_NOT_SUPPORTED);
 
+            (void)res;
             BALL_LOG_INFO << "Ignore cancelled request: "
                           << context->request();
             return;  // RETURN
@@ -6489,7 +6614,7 @@ BrokerSession::nextEvent(const bsls::TimeInterval& timeout)
     BSLS_ASSERT_SAFE(!d_usingSessionEventHandler &&
                      "nextEvent() should be used without EventHandler");
 
-    const bsls::TimeInterval beginTime = mwcsys::Time::nowMonotonicClock();
+    const bsls::TimeInterval beginTime = bmqsys::Time::nowMonotonicClock();
     bsl::shared_ptr<Event>   event     = d_eventQueue.timedPopFront(timeout);
 
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
@@ -6521,7 +6646,7 @@ BrokerSession::nextEvent(const bsls::TimeInterval& timeout)
 
         // Continue waiting for next event for the duration of the remaining
         // timeout (if any)
-        const bsls::TimeInterval now = mwcsys::Time::nowMonotonicClock();
+        const bsls::TimeInterval now = bmqsys::Time::nowMonotonicClock();
         const bsls::TimeInterval remainingTimeout = timeout -
                                                     (now - beginTime);
         if (remainingTimeout > bsls::TimeInterval(0, 0)) {
@@ -6954,7 +7079,7 @@ bool BrokerSession::acceptUserEvent(const bdlbb::Blob&        eventBlob,
         BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
 
         const bsls::TimeInterval expireAfter =
-            mwcsys::Time::nowMonotonicClock() + timeout;
+            bmqsys::Time::nowMonotonicClock() + timeout;
 
         bslmt::LockGuard<bslmt::Mutex> guard(&d_extensionBufferLock);
         // LOCK
@@ -7161,7 +7286,7 @@ int BrokerSession::confirmMessage(const bsl::shared_ptr<bmqimp::Queue>& queue,
     }
 
     // Build event
-    bmqp::ConfirmEventBuilder      builder(d_bufferFactory_p, d_allocator_p);
+    bmqp::ConfirmEventBuilder      builder(d_blobSpPool_p, d_allocator_p);
     bmqt::EventBuilderResult::Enum rc =
         builder.appendMessage(queue->id(), queue->subQueueId(), messageId);
 
@@ -7175,7 +7300,7 @@ int BrokerSession::confirmMessage(const bsl::shared_ptr<bmqimp::Queue>& queue,
                        << rc;
         return rc;  // RETURN
     }
-    bool isAccepted = acceptUserEvent(builder.blob(), timeout);
+    bool isAccepted = acceptUserEvent(*builder.blob(), timeout);
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(!isAccepted)) {
         BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
 
@@ -7312,7 +7437,7 @@ void BrokerSession::onPendingPutExpirationTimeout()
 }
 
 void BrokerSession::handleChannelWatermark(
-    mwcio::ChannelWatermarkType::Enum type)
+    bmqio::ChannelWatermarkType::Enum type)
 {
     // executed by the *IO* thread
 

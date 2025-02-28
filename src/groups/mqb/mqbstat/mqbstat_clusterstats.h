@@ -30,6 +30,7 @@
 // utility namespace exposing methods to initialize the stat contexts.
 
 // BMQ
+#include <bmqst_statcontext.h>
 #include <bmqt_uri.h>
 
 // MQB
@@ -46,11 +47,6 @@
 #include <bsls_types.h>
 
 namespace BloombergLP {
-
-// FORWARD DECLARATION
-namespace mwcst {
-class StatContext;
-}
 
 namespace mqbstat {
 
@@ -163,10 +159,10 @@ class ClusterStats {
 
   private:
     // DATA
-    bslma::ManagedPtr<mwcst::StatContext> d_statContext_mp;
+    bslma::ManagedPtr<bmqst::StatContext> d_statContext_mp;
     // StatContext for the cluster
 
-    bsl::vector<bsl::shared_ptr<mwcst::StatContext> > d_partitionsStatContexts;
+    bsl::vector<bsl::shared_ptr<bmqst::StatContext> > d_partitionsStatContexts;
     // StatContext for each partition in
     // the cluster, indexed by the
     // partition id.  Those statContext
@@ -193,7 +189,7 @@ class ClusterStats {
     /// ago.
     ///
     /// THREAD: This method can only be invoked from the `snapshot` thread.
-    static bsls::Types::Int64 getValue(const mwcst::StatContext& context,
+    static bsls::Types::Int64 getValue(const bmqst::StatContext& context,
                                        int                       snapshotId,
                                        const Stat::Enum&         stat);
 
@@ -210,7 +206,7 @@ class ClusterStats {
     /// specified `allocator`.
     void initialize(const bsl::string&  name,
                     int                 partitionsCount,
-                    mwcst::StatContext* clusterStatContext,
+                    bmqst::StatContext* clusterStatContext,
                     bslma::Allocator*   allocator);
 
     /// Update statistics for the event of the specified `type` for the
@@ -258,7 +254,7 @@ class ClusterStats {
                                  bsls::Types::Int64 journalBytes);
 
     /// Return a pointer to the statcontext.
-    mwcst::StatContext* statContext();
+    bmqst::StatContext* statContext();
 };
 
 // ======================
@@ -300,8 +296,35 @@ class ClusterNodeStats {
 
   private:
     // DATA
-    bslma::ManagedPtr<mwcst::StatContext> d_statContext_mp;
+    bslma::ManagedPtr<bmqst::StatContext> d_statContext_mp;
     // StatContext
+
+    // PRIVATE TYPES
+
+    /// Namespace for the constants of stat values that applies to the
+    /// cluster node
+    struct ClusterNodeStatsIndex {
+        enum Enum {
+            /// Value:      Number of ack messages delivered to the client
+            e_STAT_ACK
+
+            ,
+            e_STAT_CONFIRM
+            // Value:      Number of confirm messages delivered to the client
+
+            ,
+            e_STAT_PUSH
+            // Value:      Accumulated bytes of all messages ever pushed to
+            //             the client
+            // Increments: Number of messages ever pushed to the client
+
+            ,
+            e_STAT_PUT
+            // Value:      Accumulated bytes of all messages ever received from
+            //             the client
+            // Increments: Number of messages ever received from the client
+        };
+    };
 
   private:
     // NOT IMPLEMENTED
@@ -320,7 +343,7 @@ class ClusterNodeStats {
     /// ago.
     ///
     /// THREAD: This method can only be invoked from the `snapshot` thread.
-    static bsls::Types::Int64 getValue(const mwcst::StatContext& context,
+    static bsls::Types::Int64 getValue(const bmqst::StatContext& context,
                                        int                       snapshotId,
                                        const Stat::Enum&         stat);
 
@@ -335,16 +358,17 @@ class ClusterNodeStats {
     /// register it as a subcontext of the specified
     /// `clusterNodesStatContext`, using the specified `allocator`.
     void initialize(const bmqt::Uri&    uri,
-                    mwcst::StatContext* clusterNodesStatContext,
+                    bmqst::StatContext* clusterNodesStatContext,
                     bslma::Allocator*   allocator);
 
     /// Update statistics for the event of the specified `type` and with the
     /// specified `value` (depending on the `type`, `value` can represent
     /// the number of bytes, a counter, ...
-    void onEvent(EventType::Enum type, bsls::Types::Int64 value);
+    template <EventType::Enum type>
+    void onEvent(bsls::Types::Int64 value);
 
     /// Return a pointer to the statcontext.
-    mwcst::StatContext* statContext();
+    bmqst::StatContext* statContext();
 };
 
 // =======================
@@ -359,14 +383,14 @@ struct ClusterStatsUtil {
     /// specified `historySize` of history.  Return the created top level
     /// stat context to use for all cluster level statistics.  Use the
     /// specified `allocator` for all stat context and stat values.
-    static bsl::shared_ptr<mwcst::StatContext>
+    static bsl::shared_ptr<bmqst::StatContext>
     initializeStatContextCluster(int historySize, bslma::Allocator* allocator);
 
     /// Initialize the statistics for the cluster nodes keeping the
     /// specified `historySize` of history: return the created top level
     /// stat context to use as parent of all domains statistics.  Use the
     /// specified `allocator` for all stat context and stat values.
-    static bsl::shared_ptr<mwcst::StatContext>
+    static bsl::shared_ptr<bmqst::StatContext>
     initializeStatContextClusterNodes(int               historySize,
                                       bslma::Allocator* allocator);
 };
@@ -379,7 +403,7 @@ struct ClusterStatsUtil {
 // class ClusterStats
 // ------------------
 
-inline mwcst::StatContext* ClusterStats::statContext()
+inline bmqst::StatContext* ClusterStats::statContext()
 {
     return d_statContext_mp.get();
 }
@@ -388,9 +412,37 @@ inline mwcst::StatContext* ClusterStats::statContext()
 // class ClusterNodeStats
 // ----------------------
 
-inline mwcst::StatContext* ClusterNodeStats::statContext()
+inline bmqst::StatContext* ClusterNodeStats::statContext()
 {
     return d_statContext_mp.get();
+}
+
+template <>
+inline void ClusterNodeStats::onEvent<ClusterNodeStats::EventType::e_ACK>(
+    BSLS_ANNOTATION_UNUSED bsls::Types::Int64 value)
+{
+    d_statContext_mp->adjustValue(ClusterNodeStatsIndex::e_STAT_ACK, 1);
+}
+
+template <>
+inline void ClusterNodeStats::onEvent<ClusterNodeStats::EventType::e_CONFIRM>(
+    BSLS_ANNOTATION_UNUSED bsls::Types::Int64 value)
+{
+    d_statContext_mp->adjustValue(ClusterNodeStatsIndex::e_STAT_CONFIRM, 1);
+}
+
+template <>
+inline void ClusterNodeStats::onEvent<ClusterNodeStats::EventType::e_PUSH>(
+    bsls::Types::Int64 value)
+{
+    d_statContext_mp->adjustValue(ClusterNodeStatsIndex::e_STAT_PUSH, value);
+}
+
+template <>
+inline void ClusterNodeStats::onEvent<ClusterNodeStats::EventType::e_PUT>(
+    bsls::Types::Int64 value)
+{
+    d_statContext_mp->adjustValue(ClusterNodeStatsIndex::e_STAT_PUT, value);
 }
 
 }  // close package namespace

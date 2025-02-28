@@ -20,6 +20,11 @@
 // MQB
 #include <mqbsi_ledger.h>
 
+// BMQ
+#include <bmqsys_time.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_printutil.h>
+
 // BDE
 #include <ball_log.h>
 #include <bdlb_scopeexit.h>
@@ -169,6 +174,7 @@ bool Ledger::insert(const bsl::shared_ptr<mqbsi::Log>& logSp)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(logSp);
+    BSLS_ASSERT_SAFE(d_logs.size() == d_logList.size());
 
     const mqbu::StorageKey& logId = logSp->logConfig().logId();
     if (d_logs.find(logId) != d_logs.end()) {
@@ -215,7 +221,7 @@ int Ledger::addNewAndOpen(LogSp* logSp)
     BSLS_ASSERT_SAFE((*logSp)->totalNumBytes() == 0);
     BSLS_ASSERT_SAFE((*logSp)->currentOffset() == 0);
 
-    return 0;
+    return LedgerOpResult::e_SUCCESS;
 }
 
 // PRIVATE ACCESSORS
@@ -254,7 +260,15 @@ int Ledger::rollOverImpl(const mqbu::StorageKey& oldLogId)
     const mqbu::StorageKey& newLogId = currentLog()->logConfig().logId();
     rc = d_config.rolloverCallback()(oldLogId, newLogId);
     if (rc != 0) {
-        return rc;  // RETURN
+        BMQTSK_ALARMLOG_ALARM("ROLLOVER")
+            << "Rollover callback from log '" << oldLogId << "' to log '"
+            << newLogId << "' failed, rc: " << rc
+            << ". Aborting rollover and reverting back to old log."
+            << BMQTSK_ALARMLOG_END;
+
+        closeAndCleanup(currentLog(), d_logs.size() - 1);
+
+        return rc * 100 + LedgerOpResult::e_LOG_ROLLOVER_CB_FAILURE;  // RETURN
     }
 
     return LedgerOpResult::e_SUCCESS;
@@ -263,6 +277,7 @@ int Ledger::rollOverImpl(const mqbu::StorageKey& oldLogId)
 int Ledger::rollOver()
 {
     LogSp& lastLog = currentLog();
+    const size_t lastLogIndex = d_logs.size() - 1;
 
     // Flush the log and roll over
     int rc = lastLog->flush();
@@ -275,16 +290,15 @@ int Ledger::rollOver()
         return rc;  // RETURN
     }
 
-    // If not keeping old logs, close the log and invoke the cleanup callback
+    // If not keeping old logs, enqueue an event in the scheduler thread
+    // to be executed right away to close and cleanup the log file.
     if (!d_config.keepOldLogs()) {
-        rc = lastLog->close();
-        if (rc != LogOpResult::e_SUCCESS) {
-            return rc * 100 + LedgerOpResult::e_LOG_CLOSE_FAILURE;  // RETURN
-        }
-        rc = d_config.cleanupCallback()(lastLog->logConfig().location());
-        if (rc != 0) {
-            return LedgerOpResult::e_LOG_CLEANUP_FAILURE;  // RETURN
-        }
+        d_config.scheduler()->scheduleEvent(
+            bmqsys::Time::nowMonotonicClock(),
+            bdlf::BindUtil::bind(&Ledger::closeAndCleanup,
+                                 this,
+                                 lastLog,
+                                 lastLogIndex));
     }
 
     return LedgerOpResult::e_SUCCESS;
@@ -292,7 +306,7 @@ int Ledger::rollOver()
 
 template <typename RECORD, typename OFFSET>
 int Ledger::writeRecordImpl(LedgerRecordId* recordId,
-                            const RECORD    record,
+                            const RECORD&   record,
                             OFFSET          offset,
                             int             length)
 {
@@ -307,7 +321,7 @@ int Ledger::writeRecordImpl(LedgerRecordId* recordId,
     bsls::Types::Int64 oldNumBytes = currentLog()->totalNumBytes();
     if (!canWrite(length)) {
         // If current log is full, create new log to hold the record.
-        int rc = rollOver();
+        const int rc = rollOver();
         if (rc != LedgerOpResult::e_SUCCESS) {
             return rc;  // RETURN
         }
@@ -330,6 +344,51 @@ int Ledger::writeRecordImpl(LedgerRecordId* recordId,
 
     d_outstandingNumBytes += length;
     d_totalNumBytes += currLog->totalNumBytes() - oldNumBytes;
+
+    return LedgerOpResult::e_SUCCESS;
+}
+
+int Ledger::closeAndCleanup(const LogSp& log, const size_t logIndex)
+{
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(d_logs.size() == d_logList.size());
+    BSLS_ASSERT_SAFE(d_logs.size() > 0);
+
+    if (d_logs.size() == 1) {
+        BALL_LOG_ERROR << "Cannot erase latest log '"
+                       << log->logConfig().logId()
+                       << "'  because there is only one log.";
+        return LedgerOpResult::e_LOG_CLEANUP_FAILURE;  // RETURN
+    }
+
+    const bsls::Types::Int64 start   = bmqsys::Time::highResolutionTimer();
+    const bsl::string&       logPath = log->logConfig().location();
+
+    LogsMapCIt cit = d_logs.find(log->logConfig().logId());
+    BSLS_ASSERT_SAFE(cit != d_logs.end());
+    d_totalNumBytes -= cit->second->totalNumBytes();
+    d_logs.erase(cit);
+    d_logList.erase(d_logList.begin() + logIndex);
+
+    int rc = log->close();
+    if (rc != LogOpResult::e_SUCCESS) {
+        BALL_LOG_ERROR << "Failed to close the log " << logPath
+                       << ", rc: " << rc;
+        return rc * 100 + LedgerOpResult::e_LOG_CLOSE_FAILURE;  // RETURN
+    }
+
+    rc = d_config.cleanupCallback()(logPath);
+    if (rc != 0) {
+        BALL_LOG_ERROR << "Failed to clean up the log " << logPath
+                       << ", rc: " << rc;
+        return rc * 100 + LedgerOpResult::e_LOG_CLEANUP_FAILURE;  // RETURN
+    }
+
+    const bsls::Types::Int64 end = bmqsys::Time::highResolutionTimer();
+
+    BALL_LOG_INFO << "Log '" << log->logConfig().logId()
+                  << "' closed and cleaned up. Time taken: "
+                  << bmqu::PrintUtil::prettyTimeInterval(end - start);
 
     return LedgerOpResult::e_SUCCESS;
 }
@@ -570,7 +629,7 @@ int Ledger::writeRecord(LedgerRecordId* recordId,
 
 int Ledger::writeRecord(LedgerRecordId*           recordId,
                         const bdlbb::Blob&        record,
-                        const mwcu::BlobPosition& offset,
+                        const bmqu::BlobPosition& offset,
                         int                       length)
 {
     // PRECONDITIONS
@@ -586,7 +645,7 @@ int Ledger::writeRecord(LedgerRecordId*           recordId,
 
 int Ledger::writeRecord(LedgerRecordId*          recordId,
                         const bdlbb::Blob&       record,
-                        const mwcu::BlobSection& section)
+                        const bmqu::BlobSection& section)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(d_state == LedgerState::e_OPENED);
@@ -594,7 +653,7 @@ int Ledger::writeRecord(LedgerRecordId*          recordId,
     BSLS_ASSERT_SAFE(!d_logs.empty());
 
     int length;
-    int rc = mwcu::BlobUtil::sectionSize(&length, record, section);
+    int rc = bmqu::BlobUtil::sectionSize(&length, record, section);
     if (rc != 0) {
         return LedgerOpResult::e_INVALID_BLOB_SECTION;  // RETURN
     }

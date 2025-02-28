@@ -17,30 +17,27 @@
 #ifndef INCLUDED_MQBC_CONTROLMESSAGETRANSMITTER
 #define INCLUDED_MQBC_CONTROLMESSAGETRANSMITTER
 
-//@PURPOSE: Provide a mechanism to transmit control messages to peer nodes.
-//
-//@CLASSES:
-//  mqbc::ControlMessageTransmitter: Transmitter of messages to peer nodes.
-//
-//@DESCRIPTION: 'mqbc::ControlMessageTransmitter' provides a mechanism to
-// transmit messages to peer nodes in the same cluster.
-//
-/// Thread Safety
-///-------------
-// The 'mqbc::ControlMessageTransmitter' object is not thread safe and should
-// always be manipulated from the associated cluster's dispatcher thread,
-// unless specified by the function (such as 'sendMessageSafe').
+/// @file mqbc_controlmessagetransmitter.h
+///
+/// @brief Provide a mechanism to transmit control messages to peer nodes.
+///
+/// @bbref{mqbc::ControlMessageTransmitter} provides a mechanism to transmit
+/// messages to peer nodes in the same cluster.
+///
+/// Thread Safety                      {#mqbc_controlmessagetransmitter_thread}
+/// =============
+///
+/// The @bbref{mqbc::ControlMessageTransmitter} object is not thread safe and
+/// should always be manipulated from the associated cluster's dispatcher
+/// thread, unless specified by the function (such as `sendMessageSafe`).
 
 // MQB
-
 #include <mqbnet_transportmanager.h>
 
 // BMQ
+#include <bmqio_channel.h>
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_schemaeventbuilder.h>
-
-// MWC
-#include <mwcio_channel.h>
 
 // BDE
 #include <ball_log.h>
@@ -70,24 +67,27 @@ namespace mqbc {
 /// This class provides a mechanism to transmit messages to peer nodes in
 /// the same cluster.
 class ControlMessageTransmitter {
+  public:
+    typedef bmqp::BlobPoolUtil::BlobSpPool BlobSpPool;
+
   private:
     // CLASS-SCOPE CATEGORY
     BALL_LOG_SET_CLASS_CATEGORY("MQBC.ControlMessageTransmitter");
 
-  private:
     // DATA
+
+    /// Allocator to use.
     bslma::Allocator* d_allocator_p;
-    // Allocator to use.
 
-    bdlbb::BlobBufferFactory* d_bufferFactory_p;
-    // Blob buffer factory to use.
+    /// Blob pool to use.  Held, not owned.
+    BlobSpPool* d_blobSpPool_p;
 
+    /// Schema event builder to use.  Must be used only in cluster dispatcher
+    /// thread.
     bmqp::SchemaEventBuilder d_schemaBuilder;
-    // Schema event builder to use.  Must be used
-    // only in cluster dispatcher thread.
 
+    /// Associated cluster.
     mqbi::Cluster* d_cluster_p;
-    // Associated cluster.
 
     mqbnet::TransportManager* d_transportManager_p;
 
@@ -128,9 +128,9 @@ class ControlMessageTransmitter {
     // CREATORS
 
     /// Create an instance of `ControlMessageTransmitter` associated with
-    /// the specified `cluster` and using the specified `bufferFactory`.
+    /// the specified `cluster` and using the specified `blobSpPool_p`.
     /// Use the specified `allocator` for memory allocations.
-    ControlMessageTransmitter(bdlbb::BlobBufferFactory* bufferFactory,
+    ControlMessageTransmitter(BlobSpPool*               blobSpPool_p,
                               mqbi::Cluster*            cluster,
                               mqbnet::TransportManager* transportManager,
                               bslma::Allocator*         allocator);
@@ -141,14 +141,20 @@ class ControlMessageTransmitter {
     // MANIPULATORS
 
     /// Encode and send the specified schema `message` to the specified
-    /// peer `destination` or the specified `channel`.
+    /// peer `destination`.
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
     void sendMessage(const bmqp_ctrlmsg::ControlMessage& message,
                      mqbnet::ClusterNode*                destination);
+
+    /// Encode and send the specified schema `message` to the specified
+    /// `channel` with the specified `description`.
+    ///
+    /// THREAD: This method is invoked in the associated cluster's
+    ///         dispatcher thread.
     void sendMessage(const bmqp_ctrlmsg::ControlMessage&    message,
-                     const bsl::shared_ptr<mwcio::Channel>& channel,
+                     const bsl::shared_ptr<bmqio::Channel>& channel,
                      const bsl::string&                     description);
 
     /// Encode and send the specified schema `message` to the specified

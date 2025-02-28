@@ -40,14 +40,14 @@
 #include <bmqt_queueoptions.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcst_statcontext.h>
-#include <mwcst_statvalue.h>
+#include <bmqst_statcontext.h>
+#include <bmqst_statvalue.h>
 
 // BDE
 #include <bsl_iosfwd.h>
 #include <bsl_optional.h>
 #include <bsl_string.h>
+#include <bsl_utility.h>
 #include <bslma_allocator.h>
 #include <bslma_managedptr.h>
 #include <bslma_usesbslmaallocator.h>
@@ -160,9 +160,9 @@ struct QueueStatsUtil {
     /// specified `allocator` for any memory allocation.
     static void
     initializeStats(Stat*                                     stat,
-                    mwcst::StatContext*                       rootStatContext,
-                    const mwcst::StatValue::SnapshotLocation& start,
-                    const mwcst::StatValue::SnapshotLocation& end,
+                    bmqst::StatContext*                       rootStatContext,
+                    const bmqst::StatValue::SnapshotLocation& start,
+                    const bmqst::StatValue::SnapshotLocation& end,
                     bslma::Allocator*                         allocator);
 };
 
@@ -172,6 +172,11 @@ struct QueueStatsUtil {
 
 /// Representation of a Queue (properties, stats, state, ...)
 class Queue {
+  public:
+    // PUBLIC TYPES
+    typedef bsl::pair<unsigned int, bmqt::CorrelationId> SubscriptionHandle;
+    // Not using private 'bmqt::SubscriptionHandle' ctor
+
   private:
     // DATA
     bslma::Allocator* d_allocator_p;
@@ -227,7 +232,7 @@ class Queue {
     // User-specified correlation id of the
     // queue
 
-    bslma::ManagedPtr<mwcst::StatContext> d_stats_mp;
+    bslma::ManagedPtr<bmqst::StatContext> d_stats_mp;
     // Stats context associated to this
     // queue.  Valid only if the queue is
     // open and 'registerStatContext()' has
@@ -255,6 +260,13 @@ class Queue {
     bmqp::SchemaLearner::Context d_schemaLearnerContext;
 
     bmqp_ctrlmsg::StreamParameters d_config;
+
+    bsl::unordered_map<unsigned int, SubscriptionHandle>
+        d_registeredInternalSubscriptionIds;
+    // This keeps SubscriptionHandle (id and CorrelationId) for Configure
+    // response processing.
+    // Supporting multiple concurrent Configure requests.
+    // TODO: This should go into ConfigureRequest context.
 
   private:
     // NOT IMPLEMENTED
@@ -309,7 +321,7 @@ class Queue {
     /// `parentStatContext`.  The behavior is undefined unless this method
     /// is called on valid queue in opened state.  The behavior is also
     /// undefined it this method is called more than once.
-    void registerStatContext(mwcst::StatContext* parentStatContext);
+    void registerStatContext(bmqst::StatContext* parentStatContext);
 
     /// Update the stats of this queue by reporting a new message of the
     /// specified `size` was received (if the specified `isOut` is false) or
@@ -324,6 +336,20 @@ class Queue {
     /// when this queue is closed, after the session has been stopped to
     /// reinitialize the state before a new start).
     void clearStatContext();
+
+    void
+    registerInternalSubscriptionId(unsigned int internalSubscriptionId,
+                                   unsigned int subscriptionHandleId,
+                                   const bmqt::CorrelationId& correlationId);
+    // Keep the specified 'subscriptionHandleId' and 'correlationId'
+    // associated with the specified 'internalSubscriptionId' between
+    // Configure request and Configure response (until
+    // 'extractSubscriptionHandle').
+
+    SubscriptionHandle
+    extractSubscriptionHandle(unsigned int internalSubscriptionId);
+    // Lookup, copy, erase, and return the copy of what was registered
+    // by 'registerInternalSubscriptionId'.
 
     // ACCESSORS
 
@@ -347,7 +373,7 @@ class Queue {
     int                                        pendingConfigureId() const;
     bsl::optional<int>                         requestGroupId() const;
     const bmqp_ctrlmsg::QueueHandleParameters& handleParameters() const;
-    const mwcst::StatContext*                  statContext() const;
+    const bmqst::StatContext*                  statContext() const;
     bool                                       isSuspended() const;
 
     /// Return the corresponding member of this object.
@@ -528,6 +554,34 @@ inline Queue& Queue::setConfig(const bmqp_ctrlmsg::StreamParameters& value)
     return *this;
 }
 
+inline void
+Queue::registerInternalSubscriptionId(unsigned int internalSubscriptionId,
+                                      unsigned int subscriptionHandleId,
+                                      const bmqt::CorrelationId& correlationId)
+{
+    d_registeredInternalSubscriptionIds.emplace(
+        internalSubscriptionId,
+        SubscriptionHandle(subscriptionHandleId, correlationId));
+}
+
+inline Queue::SubscriptionHandle
+Queue::extractSubscriptionHandle(unsigned int internalSubscriptionId)
+{
+    bsl::unordered_map<unsigned int, SubscriptionHandle>::const_iterator cit =
+        d_registeredInternalSubscriptionIds.find(internalSubscriptionId);
+
+    if (cit == d_registeredInternalSubscriptionIds.end()) {
+        return bsl::make_pair(internalSubscriptionId, bmqt::CorrelationId());
+        // RETURN
+    }
+
+    SubscriptionHandle result(cit->second);
+
+    d_registeredInternalSubscriptionIds.erase(cit);
+
+    return result;
+}
+
 // ACCESSORS
 inline QueueState::Enum Queue::state() const
 {
@@ -599,7 +653,7 @@ Queue::handleParameters() const
     return d_handleParameters;
 }
 
-inline const mwcst::StatContext* Queue::statContext() const
+inline const bmqst::StatContext* Queue::statContext() const
 {
     return d_stats_mp.get();
 }

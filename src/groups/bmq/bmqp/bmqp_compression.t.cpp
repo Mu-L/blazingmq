@@ -17,17 +17,16 @@
 #include <bmqp_compression.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // BMQ
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_protocolutil.h>
 
-// MWC
-#include <mwcu_blob.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_printutil.h>
+#include <bmqu_blob.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -115,14 +114,14 @@ static void printRecord(bsl::ostream&                   out,
     // NOTE: we can't just bsl::setw(colWidth) << PrintUtil::pretty... because
     //       internal PrintUtil uses setw, so instead print in a temp buffer
 
-    mwcu::MemOutStream bytesStream;
-    mwcu::MemOutStream compressStream;
-    mwcu::MemOutStream decompressStream;
+    bmqu::MemOutStream bytesStream;
+    bmqu::MemOutStream compressStream;
+    bmqu::MemOutStream decompressStream;
 
-    bytesStream << mwcu::PrintUtil::prettyBytes(record.d_size);
-    compressStream << mwcu::PrintUtil::prettyTimeInterval(
+    bytesStream << bmqu::PrintUtil::prettyBytes(record.d_size);
+    compressStream << bmqu::PrintUtil::prettyTimeInterval(
         record.d_compressionTime);
-    decompressStream << mwcu::PrintUtil::prettyTimeInterval(
+    decompressStream << bmqu::PrintUtil::prettyTimeInterval(
         record.d_decompressionTime);
 
     // size
@@ -141,11 +140,11 @@ static void printRecord(bsl::ostream&                   out,
     // NOTE: we can't just bsl::setw(colWidth) << PrintUtil::pretty... because
     //       internal PrintUtil uses setw, so instead print in a temp buffer
 
-    mwcu::MemOutStream inputSizeStream;
-    mwcu::MemOutStream compressedSizeStream;
+    bmqu::MemOutStream inputSizeStream;
+    bmqu::MemOutStream compressedSizeStream;
 
-    inputSizeStream << mwcu::PrintUtil::prettyBytes(record.d_inputSize);
-    compressedSizeStream << mwcu::PrintUtil::prettyBytes(
+    inputSizeStream << bmqu::PrintUtil::prettyBytes(record.d_inputSize);
+    compressedSizeStream << bmqu::PrintUtil::prettyBytes(
         record.d_compressedSize);
 
     // input size
@@ -175,7 +174,7 @@ static void printTableRows(bsl::ostream&                   out,
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(headerCols.size() == 3);
 
-    mwcu::OutStreamFormatSaver fmtSaver(out);
+    bmqu::OutStreamFormatSaver fmtSaver(out);
 
     out << bsl::right << bsl::fixed;
 
@@ -201,7 +200,7 @@ printTableRows(bsl::ostream&                              out,
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(headerCols.size() == 3);
 
-    mwcu::OutStreamFormatSaver fmtSaver(out);
+    bmqu::OutStreamFormatSaver fmtSaver(out);
 
     out << bsl::right << bsl::fixed;
 
@@ -234,7 +233,7 @@ static void populateData(bsl::vector<bsl::string>* data)
     // start with string of length 2 and go till length 2^30
     size_t length = 2;
     for (size_t i = 0; i < 30; ++i) {
-        bsl::string str("", s_allocator_p);
+        bsl::string str("", bmqtst::TestHelperUtil::allocator());
         generateRandomString(&str, length);
         data->push_back(str);
         length *= 2;
@@ -249,11 +248,15 @@ static void eZlibCompressDecompressHelper(
     const char*                                 expectedCompressed,
     const bmqt::CompressionAlgorithmType::Enum& algorithm)
 {
-    mwcu::MemOutStream             error(s_allocator_p);
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bdlbb::Blob                    input(&bufferFactory, s_allocator_p);
-    bdlbb::Blob                    compressed(&bufferFactory, s_allocator_p);
-    bdlbb::Blob                    decompressed(&bufferFactory, s_allocator_p);
+    bmqu::MemOutStream             error(bmqtst::TestHelperUtil::allocator());
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob input(&bufferFactory, bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob compressed(&bufferFactory,
+                           bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob decompressed(&bufferFactory,
+                             bmqtst::TestHelperUtil::allocator());
 
     bdlbb::BlobUtil::append(&input, data.data(), data.length());
 
@@ -264,17 +267,19 @@ static void eZlibCompressDecompressHelper(
                                          data.data(),
                                          data.length(),
                                          &error,
-                                         s_allocator_p);
+                                         bmqtst::TestHelperUtil::allocator());
     *compressionTime             = bsls::TimeUtil::getTimer() - startTime;
 
-    ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(rc, 0);
 
     // get compressed data and compare with expected_compressed
     BSLS_ASSERT_SAFE(compressed.numDataBuffers() == 1);
-    int   bufferSize     = mwcu::BlobUtil::bufferSize(compressed, 0);
+    int   bufferSize     = bmqu::BlobUtil::bufferSize(compressed, 0);
     char* receivedBuffer = compressed.buffer(0).data();
 
-    ASSERT_EQ(bsl::memcmp(expectedCompressed, receivedBuffer, bufferSize), 0);
+    BMQTST_ASSERT_EQ(
+        bsl::memcmp(expectedCompressed, receivedBuffer, bufferSize),
+        0);
 
     startTime          = bsls::TimeUtil::getTimer();
     rc                 = bmqp::Compression::decompress(&decompressed,
@@ -282,11 +287,11 @@ static void eZlibCompressDecompressHelper(
                                        algorithm,
                                        compressed,
                                        &error,
-                                       s_allocator_p);
+                                       bmqtst::TestHelperUtil::allocator());
     *decompressionTime = bsls::TimeUtil::getTimer() - startTime;
 
-    ASSERT_EQ(rc, 0);
-    ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
+    BMQTST_ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
 }
 
 template <typename D>
@@ -295,35 +300,41 @@ eZlibCompressDecompressHelper(bsls::Types::Int64* compressionTime,
                               bsls::Types::Int64* decompressionTime,
                               const D&            data)
 {
-    mwcu::MemOutStream             error(s_allocator_p);
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bdlbb::Blob                    input(&bufferFactory, s_allocator_p);
-    bdlbb::Blob                    compressed(&bufferFactory, s_allocator_p);
-    bdlbb::Blob                    decompressed(&bufferFactory, s_allocator_p);
+    bmqu::MemOutStream             error(bmqtst::TestHelperUtil::allocator());
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob input(&bufferFactory, bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob compressed(&bufferFactory,
+                           bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob decompressed(&bufferFactory,
+                             bmqtst::TestHelperUtil::allocator());
 
     bdlbb::BlobUtil::append(&input, data.data(), data.length());
 
     bsls::Types::Int64 startTime = bsls::TimeUtil::getTimer();
-    int                rc = bmqp::Compression_Impl::compressZlib(&compressed,
-                                                  &bufferFactory,
-                                                  input,
-                                                  -1,
-                                                  &error,
-                                                  s_allocator_p);
+    int                rc        = bmqp::Compression_Impl::compressZlib(
+        &compressed,
+        &bufferFactory,
+        input,
+        -1,
+        &error,
+        bmqtst::TestHelperUtil::allocator());
     *compressionTime      = bsls::TimeUtil::getTimer() - startTime;
 
-    ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(rc, 0);
 
     startTime          = bsls::TimeUtil::getTimer();
-    rc                 = bmqp::Compression_Impl::decompressZlib(&decompressed,
-                                                &bufferFactory,
-                                                compressed,
-                                                &error,
-                                                s_allocator_p);
+    rc                 = bmqp::Compression_Impl::decompressZlib(
+        &decompressed,
+        &bufferFactory,
+        compressed,
+        &error,
+        bmqtst::TestHelperUtil::allocator());
     *decompressionTime = bsls::TimeUtil::getTimer() - startTime;
 
-    ASSERT_EQ(rc, 0);
-    ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
+    BMQTST_ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
 }
 
 template <typename D>
@@ -332,31 +343,37 @@ static void eZlibCompressionRatioHelper(bsls::Types::Int64* inputSize,
                                         const D&            data,
                                         int                 level)
 {
-    mwcu::MemOutStream             error(s_allocator_p);
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bdlbb::Blob                    input(&bufferFactory, s_allocator_p);
-    bdlbb::Blob                    compressed(&bufferFactory, s_allocator_p);
-    bdlbb::Blob                    decompressed(&bufferFactory, s_allocator_p);
+    bmqu::MemOutStream             error(bmqtst::TestHelperUtil::allocator());
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob input(&bufferFactory, bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob compressed(&bufferFactory,
+                           bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob decompressed(&bufferFactory,
+                             bmqtst::TestHelperUtil::allocator());
 
     bdlbb::BlobUtil::append(&input, data.data(), data.length());
     *inputSize = input.length();
 
-    int rc = bmqp::Compression_Impl::compressZlib(&compressed,
-                                                  &bufferFactory,
-                                                  input,
-                                                  level,
-                                                  &error,
-                                                  s_allocator_p);
-    ASSERT_EQ(rc, 0);
+    int rc = bmqp::Compression_Impl::compressZlib(
+        &compressed,
+        &bufferFactory,
+        input,
+        level,
+        &error,
+        bmqtst::TestHelperUtil::allocator());
+    BMQTST_ASSERT_EQ(rc, 0);
     *compressedSize = compressed.length();
 
-    rc = bmqp::Compression_Impl::decompressZlib(&decompressed,
-                                                &bufferFactory,
-                                                compressed,
-                                                &error,
-                                                s_allocator_p);
-    ASSERT_EQ(rc, 0);
-    ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
+    rc = bmqp::Compression_Impl::decompressZlib(
+        &decompressed,
+        &bufferFactory,
+        compressed,
+        &error,
+        bmqtst::TestHelperUtil::allocator());
+    BMQTST_ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
 }
 
 }  // close unnamed namespace
@@ -389,7 +406,7 @@ static void test1_breathingTest()
 //   Basic functionality
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     {
         PV("NONEMPTY BUFFER");
@@ -457,7 +474,8 @@ static void test1_breathingTest()
             bsl::cout << test.d_line << "'" << test.d_data << "'" << bsl::endl;
             bsls::Types::Int64 compressionTime   = 0;
             bsls::Types::Int64 decompressionTime = 0;
-            bsl::string        inputString(test.d_data, s_allocator_p);
+            bsl::string        inputString(test.d_data,
+                                    bmqtst::TestHelperUtil::allocator());
             eZlibCompressDecompressHelper(
                 &compressionTime,
                 &decompressionTime,
@@ -471,7 +489,7 @@ static void test1_breathingTest()
         PV("BUFFER WITH EMPTY STRING");
 
         // Test edge case of empty string in buffer
-        const bsl::string  data("", s_allocator_p);
+        const bsl::string  data("", bmqtst::TestHelperUtil::allocator());
         bsls::Types::Int64 compressionTime   = 0;
         bsls::Types::Int64 decompressionTime = 0;
         eZlibCompressDecompressHelper(&compressionTime,
@@ -485,63 +503,80 @@ static void test1_breathingTest()
         PV("NULL BUFFER");
 
         // Test edge case of null buffer
-        mwcu::MemOutStream             error(s_allocator_p);
-        bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-        bdlbb::Blob                    input(&bufferFactory, s_allocator_p);
-        bdlbb::Blob compressed(&bufferFactory, s_allocator_p);
-        bdlbb::Blob decompressed(&bufferFactory, s_allocator_p);
+        bmqu::MemOutStream error(bmqtst::TestHelperUtil::allocator());
+        bdlbb::PooledBlobBufferFactory bufferFactory(
+            1024,
+            bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob input(&bufferFactory, bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob compressed(&bufferFactory,
+                               bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob decompressed(&bufferFactory,
+                                 bmqtst::TestHelperUtil::allocator());
         const char* expectedCompressed = "\x78\x9c\x3\x0\x0"
                                          "\x0\x0\x1";
 
-        int rc = bmqp::Compression_Impl::compressZlib(&compressed,
-                                                      &bufferFactory,
-                                                      input,
-                                                      -1,
-                                                      &error,
-                                                      s_allocator_p);
-        ASSERT_EQ(rc, 0);
+        int rc = bmqp::Compression_Impl::compressZlib(
+            &compressed,
+            &bufferFactory,
+            input,
+            -1,
+            &error,
+            bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(rc, 0);
 
         // get compressed data and compare with expected_compressed
         BSLS_ASSERT_SAFE(compressed.numDataBuffers() == 1);
-        int   bufferSize     = mwcu::BlobUtil::bufferSize(compressed, 0);
+        int   bufferSize     = bmqu::BlobUtil::bufferSize(compressed, 0);
         char* receivedBuffer = compressed.buffer(0).data();
 
-        ASSERT_EQ(bsl::memcmp(expectedCompressed, receivedBuffer, bufferSize),
-                  0);
+        BMQTST_ASSERT_EQ(
+            bsl::memcmp(expectedCompressed, receivedBuffer, bufferSize),
+            0);
 
-        rc = bmqp::Compression_Impl::decompressZlib(&decompressed,
-                                                    &bufferFactory,
-                                                    compressed,
-                                                    &error,
-                                                    s_allocator_p);
-        ASSERT_EQ(rc, 0);
-        ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
+        rc = bmqp::Compression_Impl::decompressZlib(
+            &decompressed,
+            &bufferFactory,
+            compressed,
+            &error,
+            bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(rc, 0);
+        BMQTST_ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
     }
 
     {
         PV("MULTIPLE BUFFERS");
 
         // Test edge case of multiple buffers appended to a blob
-        mwcu::MemOutStream             error(s_allocator_p);
-        bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-        bdlbb::Blob                    input(&bufferFactory, s_allocator_p);
-        bdlbb::Blob           compressed(&bufferFactory, s_allocator_p);
-        bdlbb::Blob           decompressed(&bufferFactory, s_allocator_p);
+        bmqu::MemOutStream error(bmqtst::TestHelperUtil::allocator());
+        bdlbb::PooledBlobBufferFactory bufferFactory(
+            1024,
+            bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob input(&bufferFactory, bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob compressed(&bufferFactory,
+                               bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob decompressed(&bufferFactory,
+                                 bmqtst::TestHelperUtil::allocator());
         char                  one[] = "one";
         bsl::shared_ptr<char> onePtr;
-        onePtr.reset(one, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        onePtr.reset(one,
+                     bslstl::SharedPtrNilDeleter(),
+                     bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf1(onePtr, bsl::strlen(one));
         input.appendDataBuffer(buf1);
 
         char                  two[] = "two";
         bsl::shared_ptr<char> twoPtr;
-        twoPtr.reset(two, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        twoPtr.reset(two,
+                     bslstl::SharedPtrNilDeleter(),
+                     bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf2(twoPtr, bsl::strlen(two));
         input.appendDataBuffer(buf2);
 
         char                  three[] = "three";
         bsl::shared_ptr<char> threePtr;
-        threePtr.reset(three, bslstl::SharedPtrNilDeleter(), s_allocator_p);
+        threePtr.reset(three,
+                       bslstl::SharedPtrNilDeleter(),
+                       bmqtst::TestHelperUtil::allocator());
         bdlbb::BlobBuffer buf3(threePtr, bsl::strlen(three));
         input.appendDataBuffer(buf3);
 
@@ -549,29 +584,32 @@ static void test1_breathingTest()
                                          "\xc9\x28\x4a\x4d\x5\x0\x1c\x8d\x4"
                                          "\xb5";
 
-        int rc = bmqp::Compression_Impl::compressZlib(&compressed,
-                                                      &bufferFactory,
-                                                      input,
-                                                      -1,
-                                                      &error,
-                                                      s_allocator_p);
-        ASSERT_EQ(rc, 0);
+        int rc = bmqp::Compression_Impl::compressZlib(
+            &compressed,
+            &bufferFactory,
+            input,
+            -1,
+            &error,
+            bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(rc, 0);
 
         // get compressed data and compare with expected_compressed
         BSLS_ASSERT_SAFE(compressed.numDataBuffers() == 1);
-        int   bufferSize     = mwcu::BlobUtil::bufferSize(compressed, 0);
+        int   bufferSize     = bmqu::BlobUtil::bufferSize(compressed, 0);
         char* receivedBuffer = compressed.buffer(0).data();
 
-        ASSERT_EQ(bsl::memcmp(expectedCompressed, receivedBuffer, bufferSize),
-                  0);
+        BMQTST_ASSERT_EQ(
+            bsl::memcmp(expectedCompressed, receivedBuffer, bufferSize),
+            0);
 
-        rc = bmqp::Compression_Impl::decompressZlib(&decompressed,
-                                                    &bufferFactory,
-                                                    compressed,
-                                                    &error,
-                                                    s_allocator_p);
-        ASSERT_EQ(rc, 0);
-        ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
+        rc = bmqp::Compression_Impl::decompressZlib(
+            &decompressed,
+            &bufferFactory,
+            compressed,
+            &error,
+            bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(rc, 0);
+        BMQTST_ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
     }
 }
 
@@ -590,7 +628,7 @@ static void test2_compression_cluster_message()
 //   Compression/Decompression functionality for non-string input
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // The default allocator check fails in this test case because the
     // 'loggedMessages' methods of Encoder returns a memory-aware
     // object without utilizing the parameter allocator.
@@ -598,13 +636,18 @@ static void test2_compression_cluster_message()
         PV("BUFFER WITH CLUSTER MESSAGE");
 
         // Test case with cluster message as input data
-        mwcu::MemOutStream             error(s_allocator_p);
-        bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-        bdlbb::Blob                    input(&bufferFactory, s_allocator_p);
-        bdlbb::Blob compressed(&bufferFactory, s_allocator_p);
-        bdlbb::Blob decompressed(&bufferFactory, s_allocator_p);
+        bmqu::MemOutStream error(bmqtst::TestHelperUtil::allocator());
+        bdlbb::PooledBlobBufferFactory bufferFactory(
+            1024,
+            bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob input(&bufferFactory, bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob compressed(&bufferFactory,
+                               bmqtst::TestHelperUtil::allocator());
+        bdlbb::Blob decompressed(&bufferFactory,
+                                 bmqtst::TestHelperUtil::allocator());
 
-        bmqp_ctrlmsg::ClusterMessage       clusterMessage(s_allocator_p);
+        bmqp_ctrlmsg::ClusterMessage clusterMessage(
+            bmqtst::TestHelperUtil::allocator());
         bmqp_ctrlmsg::LeaderAdvisoryCommit commit;
 
         // Create an update message
@@ -618,31 +661,34 @@ static void test2_compression_cluster_message()
 
         clusterMessage.choice().makeLeaderAdvisoryCommit(commit);
 
-        int rc = bmqp::ProtocolUtil::encodeMessage(error,
-                                                   &input,
-                                                   clusterMessage,
-                                                   bmqp::EncodingType::e_JSON,
-                                                   s_allocator_p);
-        ASSERT_EQ(rc, 0);
+        int rc = bmqp::ProtocolUtil::encodeMessage(
+            error,
+            &input,
+            clusterMessage,
+            bmqp::EncodingType::e_JSON,
+            bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(rc, 0);
 
         bsl::cout << "Input size: " << input.length() << endl;
 
-        rc = bmqp::Compression_Impl::compressZlib(&compressed,
-                                                  &bufferFactory,
-                                                  input,
-                                                  -1,
-                                                  &error,
-                                                  s_allocator_p);
-        ASSERT_EQ(rc, 0);
+        rc = bmqp::Compression_Impl::compressZlib(
+            &compressed,
+            &bufferFactory,
+            input,
+            -1,
+            &error,
+            bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(rc, 0);
         bsl::cout << "Compressed size: " << compressed.length() << endl;
 
-        rc = bmqp::Compression_Impl::decompressZlib(&decompressed,
-                                                    &bufferFactory,
-                                                    compressed,
-                                                    &error,
-                                                    s_allocator_p);
-        ASSERT_EQ(rc, 0);
-        ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
+        rc = bmqp::Compression_Impl::decompressZlib(
+            &decompressed,
+            &bufferFactory,
+            compressed,
+            &error,
+            bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(rc, 0);
+        BMQTST_ASSERT_EQ(bdlbb::BlobUtil::compare(decompressed, input), 0);
         bsl::cout << "Decompressed size: " << decompressed.length() << endl;
     }
 }
@@ -663,7 +709,7 @@ static void test3_compression_decompression_none()
 //   Basic functionality
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("NONE TYPE ALGORITHM TEST");
+    bmqtst::TestHelper::printTestName("NONE TYPE ALGORITHM TEST");
     {
         PV("BUFFERS WITH NONEMPTY STRINGS");
 
@@ -687,7 +733,8 @@ static void test3_compression_decompression_none()
             PVV(test.d_line << "'" << test.d_data << "'");
             bsls::Types::Int64 compressionTime   = 0;
             bsls::Types::Int64 decompressionTime = 0;
-            bsl::string        inputString(test.d_data, s_allocator_p);
+            bsl::string        inputString(test.d_data,
+                                    bmqtst::TestHelperUtil::allocator());
             eZlibCompressDecompressHelper(
                 &compressionTime,
                 &decompressionTime,
@@ -733,25 +780,25 @@ static void testN1_performanceCompressionDecompressionDefault()
 //   implementation.
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // The default allocator check fails in this test case because the
     // printTable method utilizes the global allocator.
 
-    mwctst::TestHelper::printTestName(
+    bmqtst::TestHelper::printTestName(
         "PERFORMANCE: COMPRESS/DECOMPRESS ON BUFFER");
 
     const int k_NUM_ITERS = 1;
 
-    bsl::vector<bsl::string> data(s_allocator_p);
+    bsl::vector<bsl::string> data(bmqtst::TestHelperUtil::allocator());
     populateData(&data);
 
     // Measure calculation time and report
-    bsl::vector<TableRecord> tableRecords(s_allocator_p);
+    bsl::vector<TableRecord> tableRecords(bmqtst::TestHelperUtil::allocator());
     for (unsigned i = 0; i < data.size(); ++i) {
         const int length = data[i].size();
 
         bsl::cout << "-----------------------\n"
-                  << " SIZE       = " << mwcu::PrintUtil::prettyBytes(length)
+                  << " SIZE       = " << bmqu::PrintUtil::prettyBytes(length)
                   << '\n'
                   << " ITERATIONS = " << k_NUM_ITERS << '\n';
 
@@ -783,15 +830,15 @@ static void testN1_performanceCompressionDecompressionDefault()
         bsl::cout
             << "Average Time:\n"
             << "  Compression   : "
-            << mwcu::PrintUtil::prettyTimeInterval(record.d_compressionTime)
+            << bmqu::PrintUtil::prettyTimeInterval(record.d_compressionTime)
             << '\n'
             << "  Decompression : "
-            << mwcu::PrintUtil::prettyTimeInterval(record.d_decompressionTime)
+            << bmqu::PrintUtil::prettyTimeInterval(record.d_decompressionTime)
             << "\n\n";
     }
 
     // Print performance comparison table
-    bsl::vector<bsl::string> headerCols(s_allocator_p);
+    bsl::vector<bsl::string> headerCols(bmqtst::TestHelperUtil::allocator());
     headerCols.emplace_back("Payload Size");
     headerCols.emplace_back("Compression");
     headerCols.emplace_back("Decompression");
@@ -821,7 +868,7 @@ static void testN2_calculateThroughput()
     size_t                    length      = 1024;     // 1 Ki
     const bsls::Types::Uint64 k_NUM_ITERS = 1000000;  // 1 M
 
-    bsl::string buffer_data("", s_allocator_p);
+    bsl::string buffer_data("", bmqtst::TestHelperUtil::allocator());
     generateRandomString(&buffer_data, length);
     // <time>
     bsls::Types::Int64 compressionTotalTime = 0, decompressionTotalTime = 0;
@@ -837,45 +884,45 @@ static void testN2_calculateThroughput()
     // </time>
 
     cout << "=========================\n";
-    cout << "For a payload of length " << mwcu::PrintUtil::prettyBytes(length)
+    cout << "For a payload of length " << bmqu::PrintUtil::prettyBytes(length)
          << ", completed "
-         << mwcu::PrintUtil::prettyNumber(
+         << bmqu::PrintUtil::prettyNumber(
                 static_cast<bsls::Types::Int64>(k_NUM_ITERS))
          << " compression iterations in "
-         << mwcu::PrintUtil::prettyTimeInterval(compressionTotalTime) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(compressionTotalTime) << ".\n"
          << "Above implies that 1 compression iteration was calculated in "
-         << mwcu::PrintUtil::prettyTimeInterval(compressionTotalTime /
+         << bmqu::PrintUtil::prettyTimeInterval(compressionTotalTime /
                                                 k_NUM_ITERS)
          << ".\nIn other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S) /
                 compressionTotalTime))
          << " iterations per second.\n"
          << "Compression throughput: "
-         << mwcu::PrintUtil::prettyBytes(
+         << bmqu::PrintUtil::prettyBytes(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S * length) /
                 compressionTotalTime)
          << " per second.\n"
          << endl;
 
     cout << "=========================\n";
-    cout << "For a payload of length " << mwcu::PrintUtil::prettyBytes(length)
+    cout << "For a payload of length " << bmqu::PrintUtil::prettyBytes(length)
          << ", completed "
-         << mwcu::PrintUtil::prettyNumber(
+         << bmqu::PrintUtil::prettyNumber(
                 static_cast<bsls::Types::Int64>(k_NUM_ITERS))
          << " decompression iterations in "
-         << mwcu::PrintUtil::prettyTimeInterval(decompressionTotalTime)
+         << bmqu::PrintUtil::prettyTimeInterval(decompressionTotalTime)
          << ".\nAbove implies that 1 decompression iteration was calculated "
          << "in "
-         << mwcu::PrintUtil::prettyTimeInterval(decompressionTotalTime /
+         << bmqu::PrintUtil::prettyTimeInterval(decompressionTotalTime /
                                                 k_NUM_ITERS)
          << ".\nIn other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S) /
                 decompressionTotalTime))
          << " iterations per second.\n"
          << "Decompression throughput: "
-         << mwcu::PrintUtil::prettyBytes(
+         << bmqu::PrintUtil::prettyBytes(
                 (k_NUM_ITERS * bdlt::TimeUnitRatio::k_NS_PER_S * length) /
                 decompressionTotalTime)
          << " per second.\n"
@@ -900,13 +947,13 @@ static void testN3_performanceCompressionRatio()
 //   implementation in a single thread environment.
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // The default allocator check fails in this test case because the
     // printTable method utilizes the global allocator.
 
-    mwctst::TestHelper::printTestName("BENCHMARK: COMPRESSION RATIO");
+    bmqtst::TestHelper::printTestName("BENCHMARK: COMPRESSION RATIO");
 
-    bsl::vector<bsl::string> data(s_allocator_p);
+    bsl::vector<bsl::string> data(bmqtst::TestHelperUtil::allocator());
     populateData(&data);
 
     // Measure calculation time and report per level
@@ -914,12 +961,13 @@ static void testN3_performanceCompressionRatio()
         bsl::cout << "---------------------\n"
                   << " LEVEL = " << level << '\n'
                   << "---------------------\n";
-        bsl::vector<CompressionRatioRecord> tableRecords(s_allocator_p);
+        bsl::vector<CompressionRatioRecord> tableRecords(
+            bmqtst::TestHelperUtil::allocator());
         for (unsigned i = 0; i < data.size(); ++i) {
             const int length = data[i].size();
 
             bsl::cout << "---------------------\n"
-                      << " SIZE = " << mwcu::PrintUtil::prettyBytes(length)
+                      << " SIZE = " << bmqu::PrintUtil::prettyBytes(length)
                       << '\n'
                       << "---------------------\n";
 
@@ -945,16 +993,17 @@ static void testN3_performanceCompressionRatio()
             tableRecords.push_back(record);
 
             bsl::cout << "Input Size        : "
-                      << mwcu::PrintUtil::prettyBytes(record.d_inputSize)
+                      << bmqu::PrintUtil::prettyBytes(record.d_inputSize)
                       << '\n'
                       << "Compressed Size   : "
-                      << mwcu::PrintUtil::prettyBytes(record.d_compressedSize)
+                      << bmqu::PrintUtil::prettyBytes(record.d_compressedSize)
                       << '\n'
                       << "Compression Ratio : " << record.d_compressionRatio
                       << "\n\n";
         }
         // Print compression ratio comparison table
-        bsl::vector<bsl::string> headerCols(s_allocator_p);
+        bsl::vector<bsl::string> headerCols(
+            bmqtst::TestHelperUtil::allocator());
         headerCols.emplace_back("Input Size");
         headerCols.emplace_back("Compressed Size");
         headerCols.emplace_back("Compression Ratio");
@@ -985,14 +1034,14 @@ static void testN1_performanceCompressionDecompressionDefault_GoogleBenchmark(
 //   implementation.
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // The default allocator check fails in this test case because the
     // printTable method utilizes the global allocator.
 
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK PERFORMANCE: "
                                       "COMPRESS/DECOMPRESS ON BUFFER");
     const int   length = state.range(0);
-    bsl::string str("", s_allocator_p);
+    bsl::string str("", bmqtst::TestHelperUtil::allocator());
     generateRandomString(&str, length);
 
     //=====================================================================
@@ -1026,11 +1075,11 @@ static void testN2_calculateThroughput_GoogleBenchmark(benchmark::State& state)
 //   implementation in a single thread environment.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK THROUGHPUT: "
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK THROUGHPUT: "
                                       "COMPRESS/DECOMPRESS ON BUFFER");
     size_t length = 1024;  // 1 Ki
 
-    bsl::string buffer_data("", s_allocator_p);
+    bsl::string buffer_data("", bmqtst::TestHelperUtil::allocator());
     generateRandomString(&buffer_data, length);
     // <time>
     for (unsigned int l = 0; l < state.range(0); ++l) {
@@ -1050,7 +1099,7 @@ static void testN2_calculateThroughput_GoogleBenchmark(benchmark::State& state)
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -1058,22 +1107,22 @@ int main(int argc, char* argv[])
     case 2: test2_compression_cluster_message(); break;
     case 3: test3_compression_decompression_none(); break;
     case -1:
-        MWC_BENCHMARK_WITH_ARGS(
+        BMQTST_BENCHMARK_WITH_ARGS(
             testN1_performanceCompressionDecompressionDefault,
             Unit(benchmark::kMillisecond)
                 ->RangeMultiplier(2)
                 ->Range(2, 1073741824));  // 2^30
         break;
     case -2:
-        MWC_BENCHMARK_WITH_ARGS(testN2_calculateThroughput,
-                                RangeMultiplier(10)
-                                    ->Range(100, 1000000)
-                                    ->Unit(benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN2_calculateThroughput,
+                                   RangeMultiplier(10)
+                                       ->Range(100, 1000000)
+                                       ->Unit(benchmark::kMillisecond));
         break;
     case -3: testN3_performanceCompressionRatio(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 #ifdef BSLS_PLATFORM_OS_LINUX
@@ -1082,7 +1131,7 @@ int main(int argc, char* argv[])
         benchmark::RunSpecifiedBenchmarks();
     }
 #endif
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }
 
 // ----------------------------------------------------------------------------

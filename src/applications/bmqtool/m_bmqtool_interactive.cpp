@@ -1,4 +1,4 @@
-// Copyright 2014-2023 Bloomberg Finance L.P.
+// Copyright 2014-2024 Bloomberg Finance L.P.
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +19,7 @@
 // BMQTOOL
 #include <m_bmqtool_inpututil.h>
 #include <m_bmqtool_parameters.h>
+#include <m_bmqtool_poster.h>
 
 // BMQ
 #include <bmqa_event.h>
@@ -29,7 +30,7 @@
 #include <bmqt_queueflags.h>
 #include <bmqt_queueoptions.h>
 #include <bmqt_resultcode.h>
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <baljsn_decoder.h>
@@ -41,15 +42,13 @@
 #include <bdls_processutil.h>
 #include <bdlt_currenttime.h>
 #include <bsl_iostream.h>
-#include <bsl_utility.h>
 #include <bslmt_lockguard.h>
+#include <bslmt_turnstile.h>
 
 namespace BloombergLP {
 namespace m_bmqtool {
 
 namespace {
-
-const char k_LOG_CATEGORY[] = "APPLICATION";
 
 /// Print to stdout the specified `message` prefixed by the specified
 /// `prefix`.
@@ -60,7 +59,7 @@ void printMessage(bsl::ostream& out, int index, const bmqa::Message& message)
     bdlbb::Blob blob;
     message.getData(&blob);
     bdlbb::BlobUtilAsciiDumper dumpy(&blob);
-    mwcu::MemOutStream         ss;
+    bmqu::MemOutStream         ss;
     ss << dumpy;
 
     bslstl::StringRef blobBegin(ss.str().data(),
@@ -117,6 +116,10 @@ void Interactive::printHelp()
         << "    (messageProperties=[{\"name\": \"\", \"value\": \"\", "
            "\"type\": \"\"}])"
         << bsl::endl
+        << "  batch-post uri=\"\" payload=[\"\",\"\"] (msgSize=u) "
+           "(eventSize=v) (eventsCount=w) (postInterval=x) (postRate=y) "
+           "(autoIncremented=\"field\")"
+        << bsl::endl
         << "  list (uri=\"\")" << bsl::endl
         << "  confirm uri=\"\" guid=\"\" "
         << "('*' for all, '+/-n' for oldest/latest 'n')" << bsl::endl
@@ -147,6 +150,20 @@ void Interactive::printHelp()
         << bsl::endl
         << "    - 'post' command requires 'uri' and 'payload' arguments, "
         << "parameter 'messageProperties' is optional" << bsl::endl
+        << bsl::endl
+        << "  batch-post uri=\"bmq://bmq.test.persistent.priority/qqq\" "
+           "payload=[\"sample message\"] eventsCount=300 postInterval=5000 "
+           "postRate=10 autoIncremented=\"x\""
+        << bsl::endl
+        << "    - 'batch-post' command requires 'uri' argument, "
+           "all the rest are optional"
+        << bsl::endl
+        << bsl::endl
+        << "  load-post uri=\"bmq://bmq.test.persistent.priority/qqq\" "
+           "file=\"message.dump\""
+        << bsl::endl
+        << "    - 'load-post' command requires 'uri' and 'file' arguments"
+        << bsl::endl
         << bsl::endl;
 }
 
@@ -167,9 +184,9 @@ void Interactive::processCommand(const StartCommand& command)
         << "<-- session.start(5.0) => " << bmqt::GenericResult::Enum(rc)
         << " (" << rc << ")";
 
-    if (d_parameters_p->noSessionEventHandler()) {
+    if (d_parameters.noSessionEventHandler()) {
         BALL_LOG_INFO << "Creating processing threads";
-        for (int i = 0; i < d_parameters_p->numProcessingThreads(); ++i) {
+        for (int i = 0; i < d_parameters.numProcessingThreads(); ++i) {
             bslmt::ThreadUtil::Handle threadHandle;
             rc = bslmt::ThreadUtil::create(
                 &threadHandle,
@@ -201,7 +218,7 @@ void Interactive::processCommand(const StopCommand& command)
 
     BALL_LOG_INFO << "<-- session.stop()";
 
-    if (d_parameters_p->noSessionEventHandler()) {
+    if (d_parameters.noSessionEventHandler()) {
         // Join on all threads
         BALL_LOG_INFO << "Joining event handler threads";
         for (size_t i = 0; i < d_eventHandlerThreads.size(); ++i) {
@@ -230,7 +247,7 @@ void Interactive::processCommand(const OpenQueueCommand& command)
     }
 
     // Parse and validate FLAGS
-    mwcu::MemOutStream  error;
+    bmqu::MemOutStream  error;
     bsls::Types::Uint64 flags = 0;
     rc = bmqt::QueueFlagsUtil::fromString(error, &flags, command.flags());
     if (rc != 0) {
@@ -463,11 +480,8 @@ void Interactive::processCommand(const PostCommand& command, bool hasMPs)
         if (hasMPs) {
             d_session_p->loadMessageProperties(&properties);
 
-            for (size_t j = 0; j < command.messageProperties().size(); ++j) {
-                InputUtil::populateProperties(&properties,
-                                              command.messageProperties());
-            }
-
+            InputUtil::populateProperties(&properties,
+                                          command.messageProperties());
             msg.setPropertiesRef(&properties);
         }
 
@@ -695,6 +709,133 @@ void Interactive::processCommand(const ListCommand& command)
     }
 }
 
+void Interactive::processCommand(const BatchPostCommand& command)
+{
+    Parameters parameters(d_allocator_p);
+    parameters.setEventsCount(command.eventsCount());
+    parameters.setPostRate(command.postRate());
+    parameters.setEventSize(command.eventSize());
+    parameters.setPostInterval(command.postInterval());
+    parameters.setMsgSize(command.msgSize());
+    parameters.setAutoIncrementedField(command.autoIncremented());
+
+    // Lookup the Queue by URI
+    bmqa::QueueId queueId;
+    if (d_session_p->getQueueId(&queueId, command.uri()) != 0) {
+        BALL_LOG_ERROR << "unknown queue '" << command.uri() << "'";
+        return;  // RETURN
+    }
+    parameters.setQueueFlags(queueId.flags());
+
+    bslmt::Turnstile turnstile(1000.0);
+    if (parameters.postInterval() != 0) {
+        turnstile.reset(1000.0 / parameters.postInterval());
+    }
+
+    bsl::shared_ptr<PostingContext> postingContext =
+        d_poster_p->createPostingContext(d_session_p, parameters, queueId);
+
+    while (postingContext->pendingPost()) {
+        postingContext->postNext();
+        if (parameters.postInterval() != 0 && postingContext->pendingPost()) {
+            turnstile.waitTurn();
+        }
+    }
+
+    BALL_LOG_INFO << "All messages have been posted";
+}
+
+void Interactive::processCommand(const LoadPostCommand& command)
+{
+    // Validate command parameters
+    if (command.uri().empty()) {
+        BALL_LOG_ERROR << "'uri' is mandatory";
+        return;  // RETURN
+    }
+    if (command.file().empty()) {
+        BALL_LOG_ERROR << "'file' is mandatory";
+        return;  // RETURN
+    }
+
+    // Lookup the Queue by URI
+    bmqa::QueueId queueId;
+    if (d_session_p->getQueueId(&queueId, command.uri()) != 0) {
+        BALL_LOG_ERROR << "unknown queue '" << command.uri() << "'";
+        return;  // RETURN
+    }
+
+    BALL_LOG_INFO << "--> Loading and posting message: " << command;
+
+    // Build the messageEvent
+    bmqa::MessageEventBuilder eventBuilder;
+    d_session_p->loadMessageEventBuilder(&eventBuilder);
+    bmqa::Message& msg = eventBuilder.startMessage();
+
+    // Put a correlationId if the queue was opened with ACK
+    if (bmqt::QueueFlagsUtil::isAck(queueId.flags())) {
+        bmqt::CorrelationId cid(bmqt::CorrelationId::autoValue());
+        msg.setCorrelationId(cid);
+        BALL_LOG_DEBUG << "PUT'ing msg with corrId: " << cid;
+    }
+    else {
+        BALL_LOG_DEBUG << "PUT'ing msg with no corrId";
+    }
+
+    // Load message content from the file
+    bmqu::MemOutStream payloadStream;
+    bmqu::MemOutStream propertiesStream;
+    bmqu::MemOutStream errorDescription;
+    if (!InputUtil::loadMessageFromFile(&payloadStream,
+                                        &propertiesStream,
+                                        &errorDescription,
+                                        command.file(),
+                                        d_allocator_p)) {
+        BALL_LOG_ERROR << "Failed to load message from file: "
+                       << errorDescription.str();
+        return;  // RETURN
+    }
+
+    // Set message properties
+    const bsl::string              properties = propertiesStream.str();
+    bmqa::MessageProperties        messageProperties(d_allocator_p);
+    bdlbb::PooledBlobBufferFactory bufferFactory(1024, d_allocator_p);
+    if (!properties.empty()) {
+        // Convert string to blob
+        bdlbb::Blob blob(&bufferFactory, d_allocator_p);
+        bdlbb::BlobUtil::append(&blob,
+                                properties.c_str(),
+                                static_cast<int>(properties.size()));
+
+        // Deserialize message properties from blob
+        const int rc = messageProperties.streamIn(blob);
+        if (rc != 0) {
+            BALL_LOG_ERROR << "Failed to streamIn message properties, rc = "
+                           << rc;
+            return;  // RETURN
+        }
+        msg.setPropertiesRef(&messageProperties);
+    }
+
+    // Set payload
+    bsl::string payload = payloadStream.str();
+    msg.setDataRef(payload.c_str(), payload.size());
+
+    bmqt::EventBuilderResult::Enum ebr = eventBuilder.packMessage(queueId);
+    if (bmqt::EventBuilderResult::e_SUCCESS != ebr) {
+        BALL_LOG_ERROR << "Failed to pack message. rc: " << ebr;
+        return;  // RETURN
+    }
+
+    // Post
+    const int rc = d_session_p->post(eventBuilder.messageEvent());
+
+    ball::Severity::Level severity = (rc == 0 ? ball::Severity::INFO
+                                              : ball::Severity::ERROR);
+    BALL_LOG_STREAM(severity)
+        << "<-- session.post() => " << bmqt::GenericResult::Enum(rc) << " ("
+        << rc << ")";
+}
+
 Interactive::UriEntryPtr
 Interactive::createUriEntry(const bsl::string&          uri,
                             Interactive::UriEntryStatus status)
@@ -746,15 +887,21 @@ void Interactive::eventHandlerThread()
     BALL_LOG_INFO << "EventHandlerThread terminated";
 }
 
-Interactive::Interactive(Parameters* parameters, bslma::Allocator* allocator)
+Interactive::Interactive(const Parameters& parameters,
+                         Poster*           poster,
+                         bslma::Allocator* allocator)
 : d_session_p(0)
 , d_sessionEventHandler_p(0)
-, d_parameters_p(parameters)
+, d_parameters(parameters)
 , d_uris(allocator)
 , d_eventHandlerThreads(allocator)
 , d_producerIdProperty("** NONE **", allocator)
+, d_poster_p(poster)
 , d_allocator_p(allocator)
 {
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(poster);
+
     bdls::ProcessUtil::getProcessName(&d_producerIdProperty);  // ignore rc
 
     bsl::ostringstream pidStr;
@@ -861,6 +1008,18 @@ int Interactive::mainLoop()
                     processCommand(command);
                 }
             }
+            else if (verb == "batch-post") {
+                BatchPostCommand command;
+                if (InputUtil::parseCommand(&command, &error, jsonInput)) {
+                    processCommand(command);
+                }
+            }
+            else if (verb == "load-post") {
+                LoadPostCommand command;
+                if (InputUtil::parseCommand(&command, &error, jsonInput)) {
+                    processCommand(command);
+                }
+            }
             else {
                 BALL_LOG_ERROR << "Unknown command: " << verb;
             }
@@ -928,7 +1087,7 @@ void Interactive::onMessage(const bmqa::Message& message)
 
 void Interactive::onOpenQueueStatus(const bmqa::OpenQueueStatus& status)
 {
-    if (d_parameters_p->verbosity() != ParametersVerbosity::e_SILENT) {
+    if (d_parameters.verbosity() != ParametersVerbosity::e_SILENT) {
         BALL_LOG_INFO << "==> OPEN_QUEUE_RESULT received: " << status;
     }
 
@@ -952,7 +1111,7 @@ void Interactive::onOpenQueueStatus(const bmqa::OpenQueueStatus& status)
 void Interactive::onConfigureQueueStatus(
     const bmqa::ConfigureQueueStatus& status)
 {
-    if (d_parameters_p->verbosity() != ParametersVerbosity::e_SILENT) {
+    if (d_parameters.verbosity() != ParametersVerbosity::e_SILENT) {
         BALL_LOG_INFO << "==> CONFIGURE_QUEUE_RESULT received: " << status;
     }
 
@@ -966,7 +1125,7 @@ void Interactive::onConfigureQueueStatus(
 
 void Interactive::onCloseQueueStatus(const bmqa::CloseQueueStatus& status)
 {
-    if (d_parameters_p->verbosity() != ParametersVerbosity::e_SILENT) {
+    if (d_parameters.verbosity() != ParametersVerbosity::e_SILENT) {
         BALL_LOG_INFO << "==> CLOSE_QUEUE_RESULT received: " << status;
     }
 

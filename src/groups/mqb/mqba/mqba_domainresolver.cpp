@@ -22,11 +22,10 @@
 #include <mqbcfg_messages.h>
 #include <mqbcmd_messages.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
-#include <mwcu_stringutil.h>
+#include <bmqsys_time.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
+#include <bmqu_stringutil.h>
 
 // BDE
 #include <baljsn_decoder.h>
@@ -59,7 +58,11 @@ const bsls::TimeInterval k_DIR_CHECK_TTL = bsls::TimeInterval(60.0);
 
 void DomainResolver::updateTimestamps()
 {
-    const bsls::TimeInterval now = mwcsys::Time::nowRealtimeClock();
+    // executed by the thread that holds the 'd_mutex'
+
+    BSLMT_MUTEXASSERT_IS_LOCKED_SAFE(&d_mutex);  // mutex LOCKED
+
+    const bsls::TimeInterval now = bmqsys::Time::nowRealtimeClock();
 
     if (now <= d_timestampsValidUntil) {
         // We last checked recently, don't do anything
@@ -85,6 +88,8 @@ void DomainResolver::updateTimestamps()
 bool DomainResolver::cacheLookup(mqbconfm::DomainResolver* out,
                                  const bslstl::StringRef&  domainName)
 {
+    // executed by the thread that holds the 'd_mutex'
+
     BSLMT_MUTEXASSERT_IS_LOCKED_SAFE(&d_mutex);  // mutex LOCKED
 
     CacheMap::const_iterator it = d_cache.find(domainName);
@@ -98,7 +103,7 @@ bool DomainResolver::cacheLookup(mqbconfm::DomainResolver* out,
     // member is different than the 'd_lastCfgDirTimestamp'.
     //
     // NOTE: the caller must call 'updateTimestamps()' to update the
-    //       d_lastCfgDirTimestamp' prior to calling this method.
+    //       'd_lastCfgDirTimestamp' prior to calling this method.
     if (it->second.d_cfgDirTimestamp != d_lastCfgDirTimestamp) {
         // Stale entry, clear from the map
         d_cache.erase(it);
@@ -113,6 +118,8 @@ int DomainResolver::getOrRead(bsl::ostream&             errorDescription,
                               mqbconfm::DomainResolver* out,
                               const bslstl::StringRef&  domainName)
 {
+    // executed by *ANY* thread
+
     bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // mutex LOCKED
 
     // Make sure we have the latest script timestamp
@@ -144,14 +151,12 @@ int DomainResolver::getOrRead(bsl::ostream&             errorDescription,
         bsl::string filePath = mqbcfg::BrokerConfig::get().etcDir() +
                                "/domains/" + resolvedDomainName + ".json";
 
-        bdlma::LocalSequentialAllocator<1024> localAllocator(d_allocator_p);
-
         // This is copy-pasted from mqba_configprovider.cpp. Maybe we are
         // going to merge the two? If not, consider factoring this bit.
         if (!bdls::FilesystemUtil::exists(filePath)) {
             bdlma::LocalSequentialAllocator<1024> localAllocator(
                 d_allocator_p);
-            mwcu::MemOutStream os(&localAllocator);
+            bmqu::MemOutStream os(&localAllocator);
             os << "Domain file '" << filePath << "' doesn't exist";
             content.assign(os.str().data(), os.str().length());
             rc = rc_READ_ERROR;
@@ -161,7 +166,7 @@ int DomainResolver::getOrRead(bsl::ostream&             errorDescription,
             if (!fileStream) {
                 bdlma::LocalSequentialAllocator<1024> localAllocator(
                     d_allocator_p);
-                mwcu::MemOutStream os(&localAllocator);
+                bmqu::MemOutStream os(&localAllocator);
                 os << "Unable to open domain file '" << filePath << "'";
                 content.assign(os.str().data(), os.str().length());
                 rc = rc_READ_ERROR;
@@ -184,7 +189,7 @@ int DomainResolver::getOrRead(bsl::ostream&             errorDescription,
 
             // Remove the trailing '\n' (if any) for cleaner log printing
             // (avoid extra blank lines added by BALL_LOG).
-            mwcu::StringUtil::rtrim(&content);
+            bmqu::StringUtil::rtrim(&content);
 
             BALL_LOG_INFO << "Error reading the domain config file "
                           << "[domain: '" << domainName << "'"
@@ -269,6 +274,8 @@ DomainResolver::~DomainResolver()
 
 int DomainResolver::start(bsl::ostream& errorDescription)
 {
+    // executed by *ANY* thread
+
     // Verify that the config directory exists
     const mqbcfg::AppConfig& brkrCfg = mqbcfg::BrokerConfig::get();
     if (!bdls::FilesystemUtil::exists(brkrCfg.etcDir())) {
@@ -282,6 +289,7 @@ int DomainResolver::start(bsl::ostream& errorDescription)
 
 void DomainResolver::stop()
 {
+    // executed by *ANY* thread
     // NOTHING
 }
 
@@ -289,7 +297,9 @@ bmqp_ctrlmsg::Status
 DomainResolver::getOrReadDomain(mqbconfm::DomainResolver* out,
                                 const bslstl::StringRef&  domainName)
 {
-    mwcu::MemOutStream errorDescription;
+    // executed by *ANY* thread
+
+    bmqu::MemOutStream errorDescription;
 
     int rc = getOrRead(errorDescription, out, domainName);
 
@@ -307,6 +317,8 @@ void DomainResolver::qualifyDomain(
     const bslstl::StringRef&                      domainName,
     const mqbi::DomainFactory::QualifiedDomainCb& callback)
 {
+    // executed by *ANY* thread
+
     mqbconfm::DomainResolver response;
     bmqp_ctrlmsg::Status     status = getOrReadDomain(&response, domainName);
 
@@ -316,6 +328,8 @@ void DomainResolver::qualifyDomain(
 void DomainResolver::locateDomain(const bslstl::StringRef& domainName,
                                   const LocateDomainCb&    callback)
 {
+    // executed by *ANY* thread
+
     mqbconfm::DomainResolver response;
     bmqp_ctrlmsg::Status     status = getOrReadDomain(&response, domainName);
 
@@ -324,6 +338,8 @@ void DomainResolver::locateDomain(const bslstl::StringRef& domainName,
 
 void DomainResolver::clearCache(const bslstl::StringRef& domainName)
 {
+    // executed by *ANY* thread
+
     bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // mutex LOCKED
 
     if (domainName.length() == 0) {
@@ -343,6 +359,11 @@ int DomainResolver::processCommand(
     const mqbcmd::DomainResolverCommand& command,
     mqbcmd::Error*                       error)
 {
+    // executed by *ANY* thread
+
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(error);
+
     if (command.isClearCacheValue()) {
         if (command.clearCache().isAllValue()) {
             clearCache();
@@ -353,7 +374,7 @@ int DomainResolver::processCommand(
             {
                 bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // LOCK
                 if (d_cache.find(domainName) == d_cache.end()) {
-                    mwcu::MemOutStream os;
+                    bmqu::MemOutStream os;
                     os << "Domain '" << domainName << "' doesn't exist";
                     error->message() = os.str();
                     return -1;  // RETURN
@@ -365,7 +386,7 @@ int DomainResolver::processCommand(
         }
     }
 
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << "Unknown command '" << command << "'";
     error->message() = os.str();
     return -1;

@@ -17,13 +17,16 @@
 #include <m_bmqtool_inpututil.h>
 
 // BMQ
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlb_string.h>
 #include <bdlb_tokenizer.h>
+#include <bdlde_hexdecoder.h>
 #include <bsl_cstdlib.h>
+#include <bsl_fstream.h>
 #include <bsl_iostream.h>
+#include <bsl_string.h>
 
 namespace BloombergLP {
 namespace m_bmqtool {
@@ -34,12 +37,11 @@ namespace m_bmqtool {
 
 bool InputUtil::getLine(bsl::string* out)
 {
-    const int BUFFER_SIZE = 512;
-    char      buffer[BUFFER_SIZE];
+    BSLS_ASSERT_SAFE(out);
+
     bsl::cout << "> " << bsl::flush;
     bsl::cin.clear();
-    bsl::cin.getline(buffer, BUFFER_SIZE);
-    out->assign(buffer);
+    bsl::getline(bsl::cin, *out);
     bdlb::String::trim(out);
     if (bsl::cin.eof()) {
         // User typed Ctrl-D
@@ -54,7 +56,10 @@ void InputUtil::preprocessInput(bsl::string*                     verb,
                                 const bsl::string&               input,
                                 bsl::unordered_set<bsl::string>* keys)
 {
-    mwcu::MemOutStream oss;
+    BSLS_ASSERT_SAFE(verb);
+    BSLS_ASSERT_SAFE(output);
+
+    bmqu::MemOutStream oss;
 
     bool isKey = true, isFirstKey = true, isVerb = true;
 
@@ -133,6 +138,8 @@ void InputUtil::populateProperties(
     bmqa::MessageProperties*            out,
     const bsl::vector<MessageProperty>& properties)
 {
+    BSLS_ASSERT_SAFE(out);
+
     for (size_t i = 0; i < properties.size(); ++i) {
         const bsl::string& name  = properties[i].name();
         const bsl::string& value = properties[i].value();
@@ -175,6 +182,8 @@ void InputUtil::verifyProperties(
 
             bsl::unordered_set<bsl::string> pairs;
 
+            pairs.insert("pairs_");
+
             while (it.hasNext()) {
                 bsl::string name = it.name();
 
@@ -203,7 +212,7 @@ void InputUtil::verifyProperties(
                     break;
                 }
                 case bmqt::PropertyType::e_SHORT: {
-                    BSLS_ASSERT_SAFE(it.getAsShort()() ==
+                    BSLS_ASSERT_SAFE(it.getAsShort() ==
                                      in.getPropertyAsShort(name));
                     break;
                 }
@@ -262,6 +271,8 @@ void InputUtil::verifyProperties(
 bool InputUtil::populateSubscriptions(bmqt::QueueOptions*              out,
                                       const bsl::vector<Subscription>& in)
 {
+    BSLS_ASSERT_SAFE(out);
+
     bool failed = false;
     for (size_t i = 0; i < in.size(); ++i) {
         bmqt::Subscription             to;
@@ -308,6 +319,160 @@ bool InputUtil::populateSubscriptions(bmqt::QueueOptions*              out,
         }
     }
     return !failed;
+}
+
+bool InputUtil::decodeHexDump(bsl::ostream*     out,
+                              bsl::ostream*     error,
+                              bsl::istream&     in,
+                              bslma::Allocator* allocator)
+{
+    // PRECONDITIONS
+    BSLS_ASSERT(out);
+    BSLS_ASSERT(error);
+
+    char outputBuffer[4];  // should be equal to k_BLOCK_SIZE in
+                           // bdlb::Print::hexDump()
+    bdlde::HexDecoder hexDecoder;
+
+    bsl::string line(allocator);
+    int         numOut = 0;
+    int         numIn  = 0;
+
+    while (bsl::getline(in, line)) {
+        if (line.empty()) {
+            // Stop at the end of hexdump (empty line)
+            break;  // BREAK
+        }
+
+        // Sanity check
+        if (line.find(' ') == bsl::string::npos) {
+            *error << "Wrong hexdump format, space delimeter is not detected";
+            return false;  // RETURN
+        }
+
+        // Convert hexdump to binary, see format in bdlb::Print::hexDump()
+        bdlb::Tokenizer           tokenizer(line, " ");
+        bdlb::Tokenizer::iterator tokenizerIt = tokenizer.begin();
+        // Process tokens skipping the first one (address offset)
+        for (++tokenizerIt; tokenizerIt != tokenizer.end(); ++tokenizerIt) {
+            bslstl::StringRef token = *tokenizerIt;
+
+            // Stop when ASCII representation is detected
+            if (token.front() == '|')
+                break;  // BREAK
+
+            // Check token size fits outputBuffer size
+            if (token.size() > 2 * sizeof(outputBuffer)) {
+                *error << "Wrong hexdump format, block size is greater than "
+                       << 2 * sizeof(outputBuffer) << ": " << token.size();
+                return false;  // RETURN
+            }
+
+            const int rc = hexDecoder.convert(outputBuffer,
+                                              &numOut,
+                                              &numIn,
+                                              token.begin(),
+                                              token.end());
+            if (rc < 0) {
+                *error << "HexDecoder convert error: " << rc;
+                return false;  // RETURN
+            }
+            out->write(outputBuffer, numOut);
+        }
+    }
+
+    return true;
+}
+
+bool InputUtil::loadMessageFromFile(bsl::ostream*      payload,
+                                    bsl::ostream*      properties,
+                                    bsl::ostream*      error,
+                                    const bsl::string& filePath,
+                                    bslma::Allocator*  allocator)
+{
+    // PRECONDITIONS
+    BSLS_ASSERT(payload);
+    BSLS_ASSERT(properties);
+    BSLS_ASSERT(error);
+
+    bsl::ifstream fileStream(filePath.c_str());
+    if (!fileStream.is_open()) {
+        *error << "Failed to open file: " << filePath;
+        return false;  // RETURN
+    }
+
+    // Parse file according to format defined in
+    // QueueEngineUtil::dumpMessageInTempfile()
+    char        tmpBuffer[2];
+    bsl::string line(allocator);
+    bsl::getline(fileStream, line);
+
+    // Check if properties are present
+    if (line == "Message Properties:") {
+        fileStream.read(tmpBuffer, 1);  // skip empty line
+
+        // Read human readable properties lines to check surrounding markers [
+        // ]
+        bsl::getline(fileStream, line);
+        if (line.front() != '[') {
+            *error << "Properties '[' marker missed";
+            return false;  // RETURN
+        }
+        if (line.back() != ']') {
+            // Binary properties are multiline, read lines until close marker
+            // ']'
+            while (!fileStream.eof()) {
+                bsl::getline(fileStream, line);
+                // Check for close marker
+                if (line.back() == ']')
+                    break;  // BREAK
+            }
+            if (fileStream.eof()) {
+                *error << "Properties ']' marker missed";
+                return false;  // RETURN
+            }
+        }
+
+        fileStream.read(tmpBuffer, 2);  // skip empty lines
+
+        // Check if properties hexdump is present
+        bsl::getline(fileStream, line);
+        if (line != "Message Properties hexdump:") {
+            *error << "Unexpected file format, 'Message Properties hexdump:' "
+                      "expected";
+            return false;  // RETURN
+        }
+
+        fileStream.read(tmpBuffer, 1);  // skip empty line
+        // Read and convert message properties
+        if (!InputUtil::decodeHexDump(properties,
+                                      error,
+                                      fileStream,
+                                      allocator)) {
+            return false;  // RETURN
+        }
+
+        // Check message payload presence
+        fileStream.read(tmpBuffer, 1);  // skip empty line
+        bsl::getline(fileStream, line);
+        if (line != "Message Payload:") {
+            *error << "Unexpected file format, 'Message Payload:' expected";
+            return false;  // RETURN
+        }
+    }
+    else if (line != "Application Data:") {
+        *error << "Unexpected file format, either 'Message Properties:' or "
+                  "'Application Data:' expected";
+        return false;  // RETURN
+    }
+
+    // Read and convert message payload
+    fileStream.read(tmpBuffer, 1);  // skip empty line
+    if (!InputUtil::decodeHexDump(payload, error, fileStream, allocator)) {
+        return false;  // RETURN
+    }
+
+    return true;
 }
 
 }  // close package namespace

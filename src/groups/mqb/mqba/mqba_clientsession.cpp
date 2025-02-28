@@ -53,7 +53,7 @@
 // for remotely activated asynchronous requests (such as 'openQueue' which
 // could be sending an async request to the cluster, and deliver the response
 // through the proxyBroker<->clusterBroker IO channel).  For those kind of
-// requests, the 'mwcu::SharedResource' must be used.  All callbacks having the
+// requests, the 'bmqu::SharedResource' must be used.  All callbacks having the
 // shared resource bound and which will be invoked through the dispatcher must
 // do so by using the 'e_DISPATCHER' dispatcher event type, to ensure the
 // client will not be added to the dispatcher's flush list: the client may
@@ -153,6 +153,7 @@
 #include <mqbcfg_brokerconfig.h>
 #include <mqbi_cluster.h>
 #include <mqbi_queue.h>
+#include <mqbnet_tcpsessionfactory.h>
 #include <mqbstat_brokerstats.h>
 #include <mqbu_messageguidutil.h>
 
@@ -171,13 +172,12 @@
 #include <bmqt_resultcode.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcio_status.h>
-#include <mwcst_statcontext.h>
-#include <mwctsk_alarmlog.h>
-#include <mwcu_blob.h>
-#include <mwcu_printutil.h>
-#include <mwcu_weakmemfn.h>
+#include <bmqio_status.h>
+#include <bmqst_statcontext.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_blob.h>
+#include <bmqu_printutil.h>
+#include <bmqu_weakmemfn.h>
 
 // BDE
 #include <ball_log.h>
@@ -187,6 +187,7 @@
 #include <bdld_datummapbuilder.h>
 #include <bdld_manageddatum.h>
 #include <bdlf_bind.h>
+#include <bdlf_noop.h>
 #include <bdlf_placeholder.h>
 #include <bdlma_localsequentialallocator.h>
 #include <bdlt_timeunitratio.h>
@@ -209,20 +210,24 @@ BALL_LOG_SET_NAMESPACE_CATEGORY("MQBA.CLIENTSESSION");
 
 const int k_NAGLE_PACKET_SIZE = 1024 * 1024;  // 1MB
 
-/// This method does nothing; it is just used so that we can control when
-/// the session can be destroyed, during the shutdown flow, by binding the
-/// specified `handle` (which is a shared_ptr to the session itself) to
-/// events being enqueued to the dispatcher and let it die `naturally` when
-/// all router threads are drained up to the event.
+/// This method does nothing other than calling the 'initiateShutdown' callback
+/// if it is present; it is just used so that we can control when the session
+/// can be destroyed, during the shutdown flow, by binding the specified
+/// `session` (which is a shared_ptr to the session itself) to events being
+/// enqueued to the dispatcher and let it die `naturally` when all threads are
+/// drained up to the event.
 void sessionHolderDummy(
+    const mqba::ClientSession::ShutdownCb& shutdownCallback,
     BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<void>& session)
 {
-    // NOTHING
+    if (shutdownCallback) {
+        shutdownCallback();
+    }
 }
 
 /// Create the queue stats datum associated with the specified `statContext`
 /// and having the specified `domain`, `cluster`, and `queueFlags`.
-void createQueueStatsDatum(mwcst::StatContext* statContext,
+void createQueueStatsDatum(bmqst::StatContext* statContext,
                            const bsl::string&  domain,
                            const bsl::string&  cluster,
                            bsls::Types::Uint64 queueFlags)
@@ -269,6 +274,69 @@ bool isClientGeneratingGUIDs(
     return !clientIdentity.guidInfo().clientId().empty();  // RETURN
 }
 
+// Finalize the specified 'handle' associated with the specified 'description'
+void finalizeClosedHandle(bsl::string description,
+                          const bsl::shared_ptr<mqbi::QueueHandle>& handle)
+{
+    // executed by ONE of the *QUEUE* dispatcher threads
+
+    BSLS_ASSERT_SAFE(
+        handle->queue()->dispatcher()->inDispatcherThread(handle->queue()));
+
+    BALL_LOG_INFO << description << ": Closed queue handle is finalized: "
+                  << handle->handleParameters();
+}
+
+/// Stack-built functor to pass to `bmqp::ProtocolUtil::buildEvent`
+struct BuildAckFunctor {
+    // DATA
+    bmqp::AckEventBuilder&   d_ackBuilder;
+    int                      d_status;
+    int                      d_correlationId;
+    const bmqt::MessageGUID& d_messageGUID;
+    int                      d_queueId;
+
+    // CREATORS
+    inline explicit BuildAckFunctor(bmqp::AckEventBuilder&   ackBuilder,
+                                    int                      status,
+                                    int                      correlationId,
+                                    const bmqt::MessageGUID& messageGUID,
+                                    int                      queueId)
+    : d_ackBuilder(ackBuilder)
+    , d_status(status)
+    , d_correlationId(correlationId)
+    , d_messageGUID(messageGUID)
+    , d_queueId(queueId)
+    {
+        // NOTHING
+    }
+
+    // MANIPULATORS
+    inline bmqt::EventBuilderResult::Enum operator()()
+    {
+        return d_ackBuilder.appendMessage(d_status,
+                                          d_correlationId,
+                                          d_messageGUID,
+                                          d_queueId);
+    }
+};
+
+/// Stack-built functor to pass to `bmqp::ProtocolUtil::buildEvent`
+struct BuildAckOverflowFunctor {
+    // DATA
+    mqba::ClientSession& d_session;
+
+    // CREATORS
+    inline explicit BuildAckOverflowFunctor(mqba::ClientSession& session)
+    : d_session(session)
+    {
+        // NOTHING
+    }
+
+    // MANIPULATORS
+    inline void operator()() { d_session.flush(); }
+};
+
 }  // close unnamed namespace
 
 // -------------------------
@@ -276,7 +344,7 @@ bool isClientGeneratingGUIDs(
 // -------------------------
 
 ClientSessionState::ClientSessionState(
-    bslma::ManagedPtr<mwcst::StatContext>& clientStatContext,
+    bslma::ManagedPtr<bmqst::StatContext>& clientStatContext,
     BlobSpPool*                            blobSpPool,
     bdlbb::BlobBufferFactory*              bufferFactory,
     bmqp::EncodingType::Enum               encodingType,
@@ -288,9 +356,9 @@ ClientSessionState::ClientSessionState(
 , d_statContext_mp(clientStatContext)
 , d_bufferFactory_p(bufferFactory)
 , d_blobSpPool_p(blobSpPool)
-, d_schemaEventBuilder(bufferFactory, allocator, encodingType)
-, d_pushBuilder(bufferFactory, allocator)
-, d_ackBuilder(bufferFactory, allocator)
+, d_schemaEventBuilder(blobSpPool, encodingType, allocator)
+, d_pushBuilder(blobSpPool, allocator)
+, d_ackBuilder(blobSpPool, allocator)
 , d_throttledFailedAckMessages()
 , d_throttledFailedPutMessages()
 {
@@ -351,10 +419,23 @@ void ClientSession::sendErrorResponse(
                   << " failure response: " << response;
 
     // Send the response
-    sendPacket(d_state.d_schemaEventBuilder.blob(), true);
+    sendPacketDispatched(d_state.d_schemaEventBuilder.blob(), true);
 }
 
-void ClientSession::sendPacket(const bdlbb::Blob& blob, bool flushBuilders)
+void ClientSession::sendPacket(const bsl::shared_ptr<bdlbb::Blob>& blob,
+                               bool flushBuilders)
+{
+    dispatcher()->execute(
+        bdlf::BindUtil::bind(&ClientSession::sendPacketDispatched,
+                             this,
+                             blob,
+                             flushBuilders),
+        this);
+}
+
+void ClientSession::sendPacketDispatched(
+    const bsl::shared_ptr<bdlbb::Blob>& blob,
+    bool                                flushBuilders)
 {
     // executed by the *CLIENT* dispatcher thread
 
@@ -404,20 +485,20 @@ void ClientSession::sendPacket(const bdlbb::Blob& blob, bool flushBuilders)
     // Try to send the data, if we fail due to high watermark limit, enqueue
     // the message to the channelBufferQueue, and we'll send it later, once we
     // get the lowWatermark notification.
-    mwcio::Status status;
-    d_channel_sp->write(&status, blob);
+    bmqio::Status status;
+    d_channel_sp->write(&status, *blob);
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
-            status.category() != mwcio::StatusCategory::e_SUCCESS)) {
+            status.category() != bmqio::StatusCategory::e_SUCCESS)) {
         BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-        if (status.category() == mwcio::StatusCategory::e_CONNECTION) {
+        if (status.category() == bmqio::StatusCategory::e_CONNECTION) {
             // This code relies on the fact that `e_CONNECTION` error cannot be
             // returned without calling `tearDown`.
             return;  // RETURN
         }
-        if (status.category() == mwcio::StatusCategory::e_LIMIT) {
+        if (status.category() == bmqio::StatusCategory::e_LIMIT) {
             BALL_LOG_WARN << "#CLIENT_SEND_FAILURE " << description()
                           << ": Failed to send data [size: "
-                          << mwcu::PrintUtil::prettyNumber(blob.length())
+                          << bmqu::PrintUtil::prettyNumber(blob->length())
                           << " bytes] to client due to channel watermark limit"
                           << "; enqueuing to the ChannelBufferQueue.";
             d_state.d_channelBufferQueue.push_back(blob);
@@ -425,7 +506,7 @@ void ClientSession::sendPacket(const bdlbb::Blob& blob, bool flushBuilders)
         else {
             BALL_LOG_INFO << "#CLIENT_SEND_FAILURE " << description()
                           << ": Failed to send data [size: "
-                          << mwcu::PrintUtil::prettyNumber(blob.length())
+                          << bmqu::PrintUtil::prettyNumber(blob->length())
                           << " bytes] to client with status: " << status;
         }
     }
@@ -448,11 +529,12 @@ void ClientSession::flushChannelBufferQueue()
 
     // Try to send as many data as possible
     while (!d_state.d_channelBufferQueue.empty()) {
-        const bdlbb::Blob& blob = d_state.d_channelBufferQueue.front();
+        const bsl::shared_ptr<bdlbb::Blob>& blob_sp =
+            d_state.d_channelBufferQueue.front();
 
-        mwcio::Status status;
-        d_channel_sp->write(&status, blob);
-        if (status.category() == mwcio::StatusCategory::e_LIMIT) {
+        bmqio::Status status;
+        d_channel_sp->write(&status, *blob_sp);
+        if (status.category() == bmqio::StatusCategory::e_LIMIT) {
             // We are hitting the limit again, can't continue.. stop sending
             // and we'll resume with the next lowWatermark notification.
             BALL_LOG_WARN
@@ -502,9 +584,11 @@ void ClientSession::sendAck(bmqt::AckResult::Enum    status,
 
             // If queue is found, report locally generated NACK
             if (isSelfGenerated) {
-                queueState->d_handle_p->queue()->stats()->onEvent(
-                    mqbstat::QueueStatsDomain::EventType::e_NACK,
-                    1);
+                queueState->d_handle_p->queue()
+                    ->stats()
+                    ->onEvent<mqbstat::QueueStatsDomain::EventType::e_NACK>(
+
+                        1);
             }
         }
 
@@ -531,13 +615,12 @@ void ClientSession::sendAck(bmqt::AckResult::Enum    status,
 
     // Append the ACK to the ackBuilder
     bmqt::EventBuilderResult::Enum rc = bmqp::ProtocolUtil::buildEvent(
-        bdlf::BindUtil::bind(&bmqp::AckEventBuilder::appendMessage,
-                             &d_state.d_ackBuilder,
-                             bmqp::ProtocolUtil::ackResultToCode(status),
-                             correlationId,
-                             messageGUID,
-                             queueId),
-        bdlf::BindUtil::bind(&ClientSession::flush, this));
+        BuildAckFunctor(d_state.d_ackBuilder,
+                        bmqp::ProtocolUtil::ackResultToCode(status),
+                        correlationId,
+                        messageGUID,
+                        queueId),
+        BuildAckOverflowFunctor(*this));
 
     if (rc != bmqt::EventBuilderResult::e_SUCCESS) {
         BALL_LOG_ERROR << "Failed to append ACK [rc: " << rc << ", source: '"
@@ -592,16 +675,14 @@ void ClientSession::tearDownImpl(bslmt::Semaphore*            semaphore,
 
     BALL_LOG_INFO << description() << ": tearDownImpl";
 
+    bdlb::ScopeExitAny guard(bdlf::BindUtil::bind(
+        static_cast<void (bslmt::Semaphore::*)()>(&bslmt::Semaphore::post),
+        semaphore));
+
     if (d_operationState == e_DEAD) {
         // Cannot do any work anymore
         return;  // RETURN
     }
-
-    // Set up the 'd_operationState' to indicate that the channel is dying and
-    // we should not use it anymore trying to send any messages and should also
-    // stop enqueuing 'callbacks' to the client dispatcher thread ...
-    const bool doDeconfigure = d_operationState == e_RUNNING;
-    d_operationState         = e_DISCONNECTED;
 
     // If stop request handling is in progress cancel checking for the
     // unconfirmed messages.
@@ -633,37 +714,31 @@ void ClientSession::tearDownImpl(bslmt::Semaphore*            semaphore,
     // closeQueue request is in process in the queue thread, so the handle is
     // still active at the time tearDown is processed).
 
-    int numHandlesDropped = 0;
-    for (QueueStateMapIter it = d_queueSessionManager.queues().begin();
-         it != d_queueSessionManager.queues().end();
-         ++it) {
-        if (!it->second.d_hasReceivedFinalCloseQueue) {
-            mqbi::Queue* queue = it->second.d_handle_p->queue();
-            BSLS_ASSERT_SAFE(queue);
+    const bool hasLostTheClient = (!isBrokerShutdown && !isProxy());
 
-            if (isBrokerShutdown ||
-                d_clientIdentity_p->clientType() ==
-                    bmqp_ctrlmsg::ClientType::E_TCPBROKER) {
-                it->second.d_handle_p->clearClient(false);
-            }
-            else {
-                it->second.d_handle_p->clearClient(true);
-            }
+    //    if (d_operationState == e_SHUTTING_DOWN_V2) {
+    //        // Leave over queues and handles
+    //    }
+    //    else {
+    // Set up the 'd_operationState' to indicate that the channel is dying and
+    // we should not use it anymore trying to send any messages and should also
+    // stop enqueuing 'callbacks' to the client dispatcher thread ...
+    const bool doDeconfigure = d_operationState == e_RUNNING;
 
-            it->second.d_handle_p->drop(doDeconfigure);
-            it->second.d_handle_p                   = 0;
-            it->second.d_hasReceivedFinalCloseQueue = true;
-            ++numHandlesDropped;
-        }
-    }
+    int numHandlesDropped = dropAllQueueHandles(doDeconfigure,
+                                                hasLostTheClient);
+    BALL_LOG_INFO << description() << ": Dropped " << numHandlesDropped
+                  << " queue handles.";
+    //    }
+    // Set up the 'd_operationState' to indicate that the channel is dying and
+    // we should not use it anymore trying to send any messages and should also
+    // stop enqueuing 'callbacks' to the client dispatcher thread ...
+    d_operationState = e_DEAD;
 
     // Invalidating 'd_queueSessionManager' _after_ calling 'clearClient',
     // otherwise handle can get destructed because of
     // 'QueueSessionManager::onHandleReleased' early exit.
     d_queueSessionManager.tearDown();
-
-    BALL_LOG_INFO << description() << ": Dropped " << numHandlesDropped
-                  << " queue handles.";
 
     // Now that we enqueued a 'drop' for all applicable queue handles, we need
     // to synchronize on all queues, to make sure this drop event has been
@@ -676,9 +751,6 @@ void ClientSession::tearDownImpl(bslmt::Semaphore*            semaphore,
         bdlf::BindUtil::bind(&ClientSession::tearDownAllQueuesDone,
                              this,
                              session));
-
-    // We can now wake up the IO thread, and let the channel be destroyed
-    semaphore->post();
 }
 
 void ClientSession::tearDownAllQueuesDone(const bsl::shared_ptr<void>& session)
@@ -696,9 +768,10 @@ void ClientSession::tearDownAllQueuesDone(const bsl::shared_ptr<void>& session)
     // by having the 'handle' go out of scope.  This dispatcher event must be
     // of type 'e_DISPATCHER' to make sure this client will not be added to the
     // dispatcher's flush list, since it is being destroyed.
-    dispatcher()->execute(bdlf::BindUtil::bind(&sessionHolderDummy, session),
-                          this,
-                          mqbi::DispatcherEventType::e_DISPATCHER);
+    dispatcher()->execute(
+        bdlf::BindUtil::bind(&sessionHolderDummy, d_shutdownCallback, session),
+        this,
+        mqbi::DispatcherEventType::e_DISPATCHER);
 }
 
 void ClientSession::onHandleConfigured(
@@ -727,8 +800,29 @@ void ClientSession::onHandleConfiguredDispatched(
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
 
+    const unsigned int qId =
+        streamParamsCtrlMsg.choice().isConfigureQueueStreamValue()
+            ? streamParamsCtrlMsg.choice().configureQueueStream().qId()
+            : streamParamsCtrlMsg.choice().configureStream().qId();
+
+    ClientSessionState::QueueStateMap::iterator queueStateIter =
+        d_queueSessionManager.queues().find(qId);
+
+    d_currentOpDescription << "Configure queue [qId=" << qId;
+
+    if (queueStateIter != d_queueSessionManager.queues().end()) {
+        if (queueStateIter->second.d_handle_p) {
+            d_currentOpDescription
+                << ", uri='"
+                << queueStateIter->second.d_handle_p->queue()->uri() << "'";
+        }
+    }
+
+    d_currentOpDescription << "]";
+
     if (isDisconnected()) {
         // The client is disconnected or the channel is down
+        logOperationTime(d_currentOpDescription);
         return;  // RETURN
     }
 
@@ -748,13 +842,10 @@ void ClientSession::onHandleConfiguredDispatched(
                        << "]";
     }
     else {
-        unsigned int qId;
-
         if (streamParamsCtrlMsg.choice().isConfigureQueueStreamValue()) {
             bmqp_ctrlmsg::ConfigureQueueStream& configureQueueStream =
                 response.choice().makeConfigureQueueStreamResponse().request();
 
-            qId = streamParamsCtrlMsg.choice().configureQueueStream().qId();
             configureQueueStream.qId() = qId;
             bmqp::ProtocolUtil::convert(
                 &configureQueueStream.streamParameters(),
@@ -768,14 +859,10 @@ void ClientSession::onHandleConfiguredDispatched(
             bmqp_ctrlmsg::ConfigureStream& configureStream =
                 response.choice().makeConfigureStreamResponse().request();
 
-            qId = streamParamsCtrlMsg.choice().configureStream().qId();
-
             configureStream.qId()              = qId;
             configureStream.streamParameters() = streamParameters;
         }
 
-        ClientSessionState::QueueStateMap::iterator queueStateIter =
-            d_queueSessionManager.queues().find(qId);
         if (queueStateIter == d_queueSessionManager.queues().end()) {
             // Failure to find queue
             BALL_LOG_WARN
@@ -799,6 +886,8 @@ void ClientSession::onHandleConfiguredDispatched(
                       << "ENCODING_FAILED, rc: " << rc
                       << ", request: " << streamParamsCtrlMsg
                       << "]: " << response;
+
+        logOperationTime(d_currentOpDescription);
         return;  // RETURN
     }
 
@@ -807,12 +896,15 @@ void ClientSession::onHandleConfiguredDispatched(
                   << " for request: " << streamParamsCtrlMsg;
 
     // Send the response
-    sendPacket(d_state.d_schemaEventBuilder.blob(), true);
+    sendPacketDispatched(d_state.d_schemaEventBuilder.blob(), true);
+
+    logOperationTime(d_currentOpDescription);
 }
 
 void ClientSession::initiateShutdownDispatched(
     const ShutdownCb&         callback,
-    const bsls::TimeInterval& timeout)
+    const bsls::TimeInterval& timeout,
+    bool                      supportShutdownV2)
 {
     // executed by the *CLIENT* dispatcher thread
 
@@ -823,17 +915,72 @@ void ClientSession::initiateShutdownDispatched(
     BALL_LOG_INFO << description()
                   << ": initiateShutdownDispatched. Timeout: " << timeout;
 
-    if (d_operationState != e_RUNNING) {
-        // This means the client is disconnected.  No need to wait for the
-        // unconfirmed messages.
+    if (d_operationState == e_DEAD) {
+        // The client is disconnected.  No need to wait for tearDown.
         callback();
         return;  // RETURN
     }
 
+    if (d_operationState == e_SHUTTING_DOWN) {
+        // More than one cluster calls 'initiateShutdown'?
+        callback();
+        return;  // RETURN
+    }
+
+    if (d_operationState == e_SHUTTING_DOWN_V2) {
+        // More than one cluster calls 'initiateShutdown'?
+        callback();
+        return;  // RETURN
+    }
+
+    flush();  // Flush any pending messages
+
+    // 'tearDown' should invoke the 'callback'
+    d_shutdownCallback = callback;
+
+    if (d_operationState == e_DISCONNECTING) {
+        // Not teared down yet. No need to wait for unconfirmed messages.
+        // Wait for tearDown.
+
+        closeChannel();
+        return;  // RETURN
+    }
+
+    if (supportShutdownV2) {
+        d_operationState = e_SHUTTING_DOWN_V2;
+        d_queueSessionManager.shutDown();
+
+        callback();
+    }
+    else {
+        // After de-configuring (below), wait for unconfirmed messages.
+        // Once the wait for unconfirmed is over, close the channel
+
+        ShutdownContextSp context;
+        context.createInplace(
+            d_state.d_allocator_p,
+            bdlf::BindUtil::bind(&ClientSession::closeChannel, this),
+            timeout);
+
+        deconfigureAndWait(context);
+    }
+}
+
+void ClientSession::deconfigureAndWait(ShutdownContextSp& context)
+{
+    // executed by the *CLIENT* dispatcher thread
+
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
+    BSLS_ASSERT_SAFE(context);
+
+    // Use the same 'e_SHUTTING_DOWN' state for both shutting down and
+    // StopRequest processing.
+
     d_operationState = e_SHUTTING_DOWN;
 
     // Fill the first link with handle deconfigure operations
-    mwcu::OperationChainLink link(d_shutdownChain.allocator());
+    bmqu::OperationChainLink link(d_shutdownChain.allocator());
 
     for (QueueStateMapIter it = d_queueSessionManager.queues().begin();
          it != d_queueSessionManager.queues().end();
@@ -848,10 +995,6 @@ void ClientSession::initiateShutdownDispatched(
     // No-op if the link is empty
     d_shutdownChain.append(&link);
 
-    // Check unconfirmed messages once all the handles are deconfigured
-    ShutdownContextSp context;
-    context.createInplace(d_state.d_allocator_p, callback, timeout);
-
     d_shutdownChain.appendInplace(
         bdlf::BindUtil::bind(&ClientSession::checkUnconfirmed,
                              this,
@@ -865,12 +1008,11 @@ void ClientSession::invalidateDispatched()
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
 
-    BALL_LOG_INFO << description() << ": invalidateDispatched";
-
-    if (!isDisconnected()) {
-        d_self.invalidate();
+    if (d_operationState == e_DEAD) {
+        return;  // RETURN
     }
 
+    d_self.invalidate();
     d_operationState = e_DEAD;
 }
 
@@ -905,7 +1047,7 @@ void ClientSession::checkUnconfirmedDispatched(
     // expired or the client is disconnected skip checking of the unconfirmed
     // messages and break the shutdown sequence.
     const bool isDisconnected = d_operationState != e_SHUTTING_DOWN;
-    if (mwcsys::Time::nowMonotonicClock() >= shutdownCtx->d_stopTime ||
+    if (bmqsys::Time::nowMonotonicClock() >= shutdownCtx->d_stopTime ||
         isDisconnected) {
         BALL_LOG_INFO << description()
                       << (isDisconnected ? ": the client is disconnected."
@@ -920,7 +1062,7 @@ void ClientSession::checkUnconfirmedDispatched(
     shutdownCtx->d_numUnconfirmedTotal = 0;
 
     // Add countUnconfirmed operations
-    mwcu::OperationChainLink link(d_shutdownChain.allocator());
+    bmqu::OperationChainLink link(d_shutdownChain.allocator());
 
     for (QueueStateMapIter it = d_queueSessionManager.queues().begin();
          it != d_queueSessionManager.queues().end();
@@ -1009,7 +1151,7 @@ void ClientSession::finishCheckUnconfirmedDispatched(
     bdlb::ScopeExitAny guard(completionCb);
 
     const bsls::TimeInterval nextCheckTime =
-        mwcsys::Time::nowMonotonicClock().addSeconds(1);
+        bmqsys::Time::nowMonotonicClock().addSeconds(1);
 
     // If there are no unconfirmed messages, or if there is no more time to
     // wait for the confirms, or the client is disconnected  then finish the
@@ -1035,10 +1177,53 @@ void ClientSession::finishCheckUnconfirmedDispatched(
         &d_periodicUnconfirmedCheckHandler,
         nextCheckTime,
         bdlf::BindUtil::bind(
-            mwcu::WeakMemFnUtil::weakMemFn(&ClientSession::checkUnconfirmed,
+            bmqu::WeakMemFnUtil::weakMemFn(&ClientSession::checkUnconfirmed,
                                            d_self.acquireWeak()),
             shutdownCtx,
-            mwcu::NoOp()));
+            bdlf::noOp));
+}
+
+void ClientSession::closeChannel()
+{
+    // executed by *ANY* thread
+
+    // Assume thread-safe read-only access to 'description()' and 'channel()'
+
+    BALL_LOG_INFO << description() << ": Closing channel "
+                  << channel()->peerUri();
+
+    bmqio::Status status(
+        bmqio::StatusCategory::e_SUCCESS,
+        mqbnet::TCPSessionFactory::k_CHANNEL_STATUS_CLOSE_REASON,
+        true,
+        d_state.d_allocator_p);
+
+    // Assume safe to call 'bmqio::Channel::close' on already closed channel.
+
+    channel()->close(status);
+}
+
+void ClientSession::logOperationTime(bmqu::MemOutStream& opDescription)
+{
+    if (d_beginTimestamp) {
+        BALL_LOG_INFO_BLOCK
+        {
+            const bsls::Types::Int64 elapsed =
+                bmqsys::Time::highResolutionTimer() - d_beginTimestamp;
+            BALL_LOG_OUTPUT_STREAM
+                << description() << ": " << opDescription.str()
+                << " took: " << bmqu::PrintUtil::prettyTimeInterval(elapsed)
+                << " (" << elapsed << " nanoseconds)";
+        }
+        d_beginTimestamp = 0;
+    }
+    else {
+        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+        BALL_LOG_WARN << "d_beginTimestamp was not initialized for operation: "
+                      << opDescription.str();
+    }
+
+    opDescription.reset();
 }
 
 void ClientSession::processDisconnectAllQueues(
@@ -1075,18 +1260,8 @@ void ClientSession::processDisconnectAllQueues(
     // us back to notify the handle can be deleted and we also don't need to
     // send a close queue response since this release is not initiated by the
     // client, but by the broker upon client's disconnect request.
-    int numHandlesDropped = 0;
-    for (QueueStateMapIter it = d_queueSessionManager.queues().begin();
-         it != d_queueSessionManager.queues().end();
-         ++it) {
-        if (!it->second.d_hasReceivedFinalCloseQueue) {
-            it->second.d_handle_p->clearClient(false);
-            it->second.d_handle_p->drop(doDeconfigure);
-            it->second.d_handle_p                   = 0;
-            it->second.d_hasReceivedFinalCloseQueue = true;
-            ++numHandlesDropped;
-        }
-    }
+
+    int numHandlesDropped = dropAllQueueHandles(doDeconfigure, false);
 
     BALL_LOG_INFO << description() << ": processing disconnect, dropped "
                   << numHandlesDropped << " queue handles.";
@@ -1095,12 +1270,12 @@ void ClientSession::processDisconnectAllQueues(
     // 'processDisconnectAllQueuesDone' once all queues threads have been
     // drained.  Note, this must be using an 'e_DISPATCHER' dispatcher event
     // type, refer to top level documention for explanation (paragraph about
-    // the mwcu::SharedResource).
+    // the bmqu::SharedResource).
     dispatcher()->execute(
         mqbi::Dispatcher::ProcessorFunctor(),  // empty
         mqbi::DispatcherClientType::e_QUEUE,
         bdlf::BindUtil::bind(
-            mwcu::WeakMemFnUtil::weakMemFn(
+            bmqu::WeakMemFnUtil::weakMemFn(
                 &ClientSession::processDisconnectAllQueuesDone,
                 d_self.acquireWeak()),
             controlMessage));
@@ -1118,7 +1293,7 @@ void ClientSession::processDisconnectAllQueuesDone(
 
     dispatcher()->execute(
         bdlf::BindUtil::bind(
-            mwcu::WeakMemFnUtil::weakMemFn(&ClientSession::processDisconnect,
+            bmqu::WeakMemFnUtil::weakMemFn(&ClientSession::processDisconnect,
                                            d_self.acquireWeak()),
             controlMessage),
         this);
@@ -1168,7 +1343,7 @@ void ClientSession::processDisconnect(
                   << ": Sending disconnect response: " << response;
 
     // Send the response
-    sendPacket(d_state.d_schemaEventBuilder.blob(), true);
+    sendPacketDispatched(d_state.d_schemaEventBuilder.blob(), true);
 
     // Setting the 'd_operationState' to 'e_DISCONNECTED' implies that no
     // messages will be pushed to the client after this one: we set it now
@@ -1228,8 +1403,8 @@ void ClientSession::openQueueCb(
         response.choice().makeStatus(status);
 
         BALL_LOG_WARN << "#CLIENT_OPENQUEUE_FAILURE " << description()
-                      << ": Error while opening queue: [reason: '" << status
-                      << "', request: " << handleParamsCtrlMsg << "]";
+                      << ": Error while opening queue: [reason: " << status
+                      << ", request: " << handleParamsCtrlMsg << "]";
     }
     else {
         bmqp_ctrlmsg::OpenQueueResponse& res =
@@ -1255,7 +1430,12 @@ void ClientSession::openQueueCb(
                   << " for request: " << handleParamsCtrlMsg;
 
     // Send the response
-    sendPacket(d_state.d_schemaEventBuilder.blob(), true);
+    sendPacketDispatched(d_state.d_schemaEventBuilder.blob(), true);
+
+    const bsl::string& queueUri =
+        handleParamsCtrlMsg.choice().openQueue().handleParameters().uri();
+    d_currentOpDescription << "Open queue '" << queueUri << "'";
+    logOperationTime(d_currentOpDescription);
 }
 
 void ClientSession::processCloseQueue(
@@ -1312,7 +1492,7 @@ void ClientSession::closeQueueCb(
                   << ": Sending closeQueue response: " << response;
 
     // Send the response.
-    sendPacket(d_state.d_schemaEventBuilder.blob(), true);
+    sendPacketDispatched(d_state.d_schemaEventBuilder.blob(), true);
 
     // Release the handle's ptr in the queue's context to guarantee that the
     // handle will be destroyed after all ongoing queue events are handled.
@@ -1323,27 +1503,22 @@ void ClientSession::closeQueueCb(
     // queue's thread allows to keep the handle alive until the check is
     // complete.
     //
+    // NOTE: We copy and pass 'description()' string to the callback because
+    //       this 'ClientSession' object might be already destroyed when event
+    //       is executed.  See internal-ticket D173020032.
+    //
     // NOTE: We use the e_DISPATCHER type because the handle gets destroyed,
     //       and the process of this event by the dispatcher should not add it
     //       to the flush list.
     handle->queue()->dispatcher()->execute(
-        bdlf::BindUtil::bind(&ClientSession::finalizeClosedHandle,
-                             this,
-                             handle),
+        bdlf::BindUtil::bind(&finalizeClosedHandle, description(), handle),
         handle->queue(),
         mqbi::DispatcherEventType::e_DISPATCHER);
-}
 
-void ClientSession::finalizeClosedHandle(
-    const bsl::shared_ptr<mqbi::QueueHandle>& handle)
-{
-    // executed by ONE of the *QUEUE* dispatcher threads
-
-    BSLS_ASSERT_SAFE(
-        handle->queue()->dispatcher()->inDispatcherThread(handle->queue()));
-
-    BALL_LOG_INFO << description() << ": Closed queue handle is finalized: "
-                  << handle->handleParameters();
+    const bsl::string& queueUri =
+        handleParamsCtrlMsg.choice().closeQueue().handleParameters().uri();
+    d_currentOpDescription << "Close queue '" << queueUri << "'";
+    logOperationTime(d_currentOpDescription);
 }
 
 void ClientSession::processConfigureStream(
@@ -1440,7 +1615,7 @@ void ClientSession::processConfigureStream(
     handle->configure(
         req.streamParameters(),
         bdlf::BindUtil::bind(
-            mwcu::WeakMemFnUtil::weakMemFn(&ClientSession::onHandleConfigured,
+            bmqu::WeakMemFnUtil::weakMemFn(&ClientSession::onHandleConfigured,
                                            d_self.acquireWeak()),
             bdlf::PlaceHolders::_1,  // status
             bdlf::PlaceHolders::_2,  // streamParams
@@ -1484,10 +1659,10 @@ void ClientSession::onAckEvent(const mqbi::DispatcherAckEvent& event)
         if (cit != d_state.d_unackedMessageInfos.end()) {
             // Calculate time delta between PUT and ACK
             const bsls::Types::Int64 timeDelta =
-                mwcsys::Time::highResolutionTimer() - cit->second.d_timeStamp;
-            queue->stats()->onEvent(
-                mqbstat::QueueStatsDomain::EventType::e_ACK_TIME,
-                timeDelta);
+                bmqsys::Time::highResolutionTimer() - cit->second.d_timeStamp;
+            queue->stats()
+                ->onEvent<mqbstat::QueueStatsDomain::EventType::e_ACK_TIME>(
+                    timeDelta);
 
             if (!d_isClientGeneratingGUIDs) {
                 // Legacy client.
@@ -1571,7 +1746,7 @@ void ClientSession::onConfirmEvent(const mqbi::DispatcherConfirmEvent& event)
     int rc     = 0;
 
     bdlma::LocalSequentialAllocator<256> localAllocator(d_state.d_allocator_p);
-    mwcu::MemOutStream                   errorStream(&localAllocator);
+    bmqu::MemOutStream                   errorStream(&localAllocator);
 
     while ((rc = confIt.next()) == 1) {
         const int          id    = confIt.message().queueId();
@@ -1656,7 +1831,7 @@ void ClientSession::onRejectEvent(const mqbi::DispatcherRejectEvent& event)
     int rc     = 0;
 
     bdlma::LocalSequentialAllocator<256> localAllocator(d_state.d_allocator_p);
-    mwcu::MemOutStream                   errorStream(&localAllocator);
+    bmqu::MemOutStream                   errorStream(&localAllocator);
 
     while ((rc = rejectIt.next()) == 1) {
         const int          id    = rejectIt.message().queueId();
@@ -1843,7 +2018,7 @@ void ClientSession::onPushEvent(const mqbi::DispatcherPushEvent& event)
                            << it->second.d_handle_p->queue()->uri() << "'"
                            << ", subQueueInfo: " << event.subQueueInfos()[i]
                            << ", GUID: " << event.guid() << "]:\n"
-                           << mwcu::BlobStartHexDumper(blob, k_PAYLOAD_DUMP);
+                           << bmqu::BlobStartHexDumper(blob, k_PAYLOAD_DUMP);
         }
     }
 
@@ -1870,10 +2045,7 @@ void ClientSession::onPushEvent(const mqbi::DispatcherPushEvent& event)
 
     // Append the message to the builder
     if (pushProperties.isExtended()) {
-        if (!bmqp::ProtocolUtil::hasFeature(
-                bmqp::MessagePropertiesFeatures::k_FIELD_NAME,
-                bmqp::MessagePropertiesFeatures::k_MESSAGE_PROPERTIES_EX,
-                d_clientIdentity_p->features())) {
+        if (!d_supportsMessagePropertiesEX) {
             // Re-encode 'payload'
             // Convert MessageProperties into the old style
             // 1. Copy MPHs (if needed)
@@ -1896,10 +2068,18 @@ void ClientSession::onPushEvent(const mqbi::DispatcherPushEvent& event)
     }
 
     if (convertingRc == 0) {
+        int flags = 0;
+
+        if (event.isOutOfOrderPush()) {
+            bmqp::PushHeaderFlagUtil::setFlag(
+                &flags,
+                bmqp::PushHeaderFlags::e_OUT_OF_ORDER);
+        }
+
         d_state.d_pushBuilder.packMessage(*blob,
                                           event.queueId(),
                                           event.guid(),
-                                          0,
+                                          flags,
                                           cat,
                                           pushProperties);
 
@@ -1929,7 +2109,7 @@ void ClientSession::onPushEvent(const mqbi::DispatcherPushEvent& event)
                     << citer->second.d_handle_p->queue()->uri()
                     << "', subQueueInfo: " << event.subQueueInfos()[i]
                     << ", GUID: " << event.guid() << "]:\n"
-                    << mwcu::BlobStartHexDumper(blob, k_PAYLOAD_DUMP);
+                    << bmqu::BlobStartHexDumper(blob, k_PAYLOAD_DUMP);
 
                 invalidQueueStats()->onEvent(
                     mqbstat::QueueStatsClient::EventType::e_PUSH,
@@ -1949,12 +2129,13 @@ void ClientSession::onPushEvent(const mqbi::DispatcherPushEvent& event)
         int         dumpRc = mqbblp::QueueEngineUtil::dumpMessageInTempfile(
             &filepath,
             *event.blob().get(),
-            0);
+            0,
+            d_state.d_bufferFactory_p);
 
         // REVISIT: An alternative is to send Reject upstream
 
         if (dumpRc == 0) {
-            MWCTSK_ALARMLOG_ALARM("CLIENT_INVALID_PUSH")
+            BMQTSK_ALARMLOG_ALARM("CLIENT_INVALID_PUSH")
                 << description() << ": error '" << convertingRc
                 << "' converting to old format [queue: '"
                 << citer->second.d_handle_p->queue()->uri()
@@ -1962,10 +2143,10 @@ void ClientSession::onPushEvent(const mqbi::DispatcherPushEvent& event)
                 << ", compressionAlgorithmType: "
                 << event.compressionAlgorithmType()
                 << "] Message was dumped in file at location [" << filepath
-                << "] on this machine." << MWCTSK_ALARMLOG_END;
+                << "] on this machine." << BMQTSK_ALARMLOG_END;
         }
         else {
-            MWCTSK_ALARMLOG_ALARM("CLIENT_INVALID_PUSH")
+            BMQTSK_ALARMLOG_ALARM("CLIENT_INVALID_PUSH")
                 << description() << ": error '" << convertingRc
                 << "' converting to old format [queue: '"
                 << citer->second.d_handle_p->queue()->uri()
@@ -1973,7 +2154,7 @@ void ClientSession::onPushEvent(const mqbi::DispatcherPushEvent& event)
                 << ", compressionAlgorithmType: "
                 << event.compressionAlgorithmType()
                 << "] Attempt to dump message in a file failed with error "
-                << dumpRc << MWCTSK_ALARMLOG_END;
+                << dumpRc << BMQTSK_ALARMLOG_END;
         }
     }
 }
@@ -2182,7 +2363,7 @@ void ClientSession::onPutEvent(const mqbi::DispatcherPutEvent& event)
                     bsl::make_pair(putHeader.messageGUID(),
                                    ClientSessionState::UnackedMessageInfo(
                                        correlationId,
-                                       mwcsys::Time::highResolutionTimer())));
+                                       bmqsys::Time::highResolutionTimer())));
             if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(insertRc.second ==
                                                       false)) {
                 BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
@@ -2220,7 +2401,7 @@ void ClientSession::onPutEvent(const mqbi::DispatcherPutEvent& event)
                        << ", flags: " << putIt.header().flags()
                        << ", message size: " << putIt.applicationDataSize()
                        << "]:\n"
-                       << mwcu::BlobStartHexDumper(appDataSp.get(), 64);
+                       << bmqu::BlobStartHexDumper(appDataSp.get(), 64);
 
         queueStatePtr->d_handle_p->postMessage(putIt.header(),
                                                appDataSp,
@@ -2263,7 +2444,7 @@ mqbstat::QueueStatsClient* ClientSession::invalidQueueStats()
         //      only be done once the stats UI panel has been updated to
         //      support that.
 
-        mwcst::StatContext* statContext =
+        bmqst::StatContext* statContext =
             d_state.d_invalidQueueStats.value().statContext();
         createQueueStatsDatum(statContext, "invalid", "none", 0);
     }
@@ -2460,13 +2641,13 @@ bool ClientSession::validatePutMessage(QueueState**   queueState,
 
 // CREATORS
 ClientSession::ClientSession(
-    const bsl::shared_ptr<mwcio::Channel>&  channel,
+    const bsl::shared_ptr<bmqio::Channel>&  channel,
     const bmqp_ctrlmsg::NegotiationMessage& negotiationMessage,
     const bsl::string&                      sessionDescription,
     mqbi::Dispatcher*                       dispatcher,
     mqbblp::ClusterCatalog*                 clusterCatalog,
     mqbi::DomainFactory*                    domainFactory,
-    bslma::ManagedPtr<mwcst::StatContext>&  clientStatContext,
+    bslma::ManagedPtr<bmqst::StatContext>&  clientStatContext,
     ClientSessionState::BlobSpPool*         blobSpPool,
     bdlbb::BlobBufferFactory*               bufferFactory,
     bdlmt::EventScheduler*                  scheduler,
@@ -2477,6 +2658,10 @@ ClientSession::ClientSession(
 , d_negotiationMessage(negotiationMessage, allocator)
 , d_clientIdentity_p(extractClientIdentity(d_negotiationMessage))
 , d_isClientGeneratingGUIDs(isClientGeneratingGUIDs(*d_clientIdentity_p))
+, d_supportsMessagePropertiesEX(bmqp::ProtocolUtil::hasFeature(
+      bmqp::MessagePropertiesFeatures::k_FIELD_NAME,
+      bmqp::MessagePropertiesFeatures::k_MESSAGE_PROPERTIES_EX,
+      d_clientIdentity_p->features()))
 , d_description(sessionDescription, allocator)
 , d_channel_sp(channel)
 , d_state(clientStatContext,
@@ -2494,6 +2679,9 @@ ClientSession::ClientSession(
 , d_scheduler_p(scheduler)
 , d_periodicUnconfirmedCheckHandler()
 , d_shutdownChain(allocator)
+, d_shutdownCallback()
+, d_beginTimestamp(0)
+, d_currentOpDescription(256, allocator)
 {
     // Register this client to the dispatcher
     mqbi::Dispatcher::ProcessorHandle processor = dispatcher->registerClient(
@@ -2508,8 +2696,8 @@ ClientSession::ClientSession(
                              this,
                              bdlf::PlaceHolders::_1));  // type
 
-    mqbstat::BrokerStats::instance().onEvent(
-        mqbstat::BrokerStats::EventType::e_CLIENT_CREATED);
+    mqbstat::BrokerStats::instance()
+        .onEvent<mqbstat::BrokerStats::EventType::e_CLIENT_CREATED>();
 
     BALL_LOG_INFO << description() << ": created "
                   << "[dispatcherProcessor: " << processor
@@ -2529,11 +2717,14 @@ ClientSession::~ClientSession()
 
     BALL_LOG_INFO << description() << ": destructor";
 
-    mqbstat::BrokerStats::instance().onEvent(
-        mqbstat::BrokerStats::EventType::e_CLIENT_DESTROYED);
+    mqbstat::BrokerStats::instance()
+        .onEvent<mqbstat::BrokerStats::EventType::e_CLIENT_DESTROYED>();
 
     // Unregister from the dispatcher
     dispatcher()->unregisterClient(this);
+
+    d_currentOpDescription << "Close session";
+    logOperationTime(d_currentOpDescription);
 }
 
 // MANIPULATORS
@@ -2555,7 +2746,7 @@ void ClientSession::processEvent(
                            << ": Received invalid control message from client "
                            << "[reason: 'failed to decode', rc: " << rc
                            << "]:\n"
-                           << mwcu::BlobStartHexDumper(event.blob());
+                           << bmqu::BlobStartHexDumper(event.blob());
             return;  // RETURN
         }
 
@@ -2589,6 +2780,8 @@ void ClientSession::processEvent(
                 return;  // RETURN
             }
 
+            d_beginTimestamp = bmqsys::Time::highResolutionTimer();
+
             d_isDisconnecting = true;
             eventCallback     = bdlf::BindUtil::bind(
                 &ClientSession::processDisconnectAllQueues,
@@ -2596,12 +2789,16 @@ void ClientSession::processEvent(
                 controlMessage);
         } break;
         case MsgChoice::SELECTION_ID_OPEN_QUEUE: {
+            d_beginTimestamp = bmqsys::Time::highResolutionTimer();
+
             eventCallback = bdlf::BindUtil::bind(
                 &ClientSession::processOpenQueue,
                 this,
                 controlMessage);
         } break;
         case MsgChoice::SELECTION_ID_CLOSE_QUEUE: {
+            d_beginTimestamp = bmqsys::Time::highResolutionTimer();
+
             eventCallback = bdlf::BindUtil::bind(
                 &ClientSession::processCloseQueue,
                 this,
@@ -2609,6 +2806,8 @@ void ClientSession::processEvent(
         } break;
         case MsgChoice::SELECTION_ID_CONFIGURE_QUEUE_STREAM:
         case MsgChoice::SELECTION_ID_CONFIGURE_STREAM: {
+            d_beginTimestamp = bmqsys::Time::highResolutionTimer();
+
             eventCallback = bdlf::BindUtil::bind(
                 &ClientSession::processConfigureStream,
                 this,
@@ -2627,34 +2826,11 @@ void ClientSession::processEvent(
             return;  // RETURN
         }
         case MsgChoice::SELECTION_ID_CLUSTER_MESSAGE: {
-            if (d_clientIdentity_p->clientType() ==
-                    bmqp_ctrlmsg::ClientType::E_TCPBROKER &&
-                choice.clusterMessage().choice().isStopResponseValue()) {
-                bsl::shared_ptr<mqbi::Cluster> cluster;
-
-                if (d_clusterCatalog_p->findCluster(&cluster,
-                                                    choice.clusterMessage()
-                                                        .choice()
-                                                        .stopResponse()
-                                                        .clusterName())) {
-                    BSLS_ASSERT_SAFE(cluster);
-                    cluster->processResponse(controlMessage);
-                    return;  // RETURN
-                }
-                else {
-                    BALL_LOG_ERROR << "#CLIENT_IMPROPER_BEHAVIOR "
-                                   << description()
-                                   << ": unknown Cluster in ClusterMessage: "
-                                   << controlMessage;
-                }
-            }
-            else {
-                BALL_LOG_ERROR
-                    << "#CLIENT_IMPROPER_BEHAVIOR " << description()
-                    << ": unexpected ClusterMessage: " << controlMessage;
-            }
-            return;  // RETURN
-        }
+            eventCallback = bdlf::BindUtil::bind(
+                &ClientSession::processClusterMessage,
+                this,
+                controlMessage);
+        } break;
         case MsgChoice::SELECTION_ID_UNDEFINED:
         case MsgChoice::SELECTION_ID_STATUS:
         default: {
@@ -2718,7 +2894,7 @@ void ClientSession::processEvent(
 void ClientSession::tearDown(const bsl::shared_ptr<void>& session,
                              bool                         isBrokerShutdown)
 {
-    // executed by the *IO* thread
+    // executed by the *IO* thread (except for UT)
 
     BALL_LOG_INFO << description() << ": tearDown";
 
@@ -2749,26 +2925,57 @@ void ClientSession::tearDown(const bsl::shared_ptr<void>& session,
 }
 
 void ClientSession::initiateShutdown(const ShutdownCb&         callback,
-                                     const bsls::TimeInterval& timeout)
+                                     const bsls::TimeInterval& timeout,
+                                     bool supportShutdownV2)
 {
     // executed by the *ANY* thread
 
+    d_beginTimestamp = bmqsys::Time::highResolutionTimer();
+
     BALL_LOG_INFO << description() << ": initiateShutdown";
 
-    dispatcher()->execute(
-        bdlf::BindUtil::bind(&ClientSession::initiateShutdownDispatched,
-                             this,
-                             callback,
-                             timeout),
-        this);
+    // The 'd_self.acquire()' return 'shared_ptr<ClientSession>' but that does
+    // not relate to the 'shared_ptr<mqbnet::Session>' acquired by
+    // 'mqbnet::TransportManagerIterator'.  The latter is bound to the
+    // 'initiateShutdown'.  The former can be null after 'd_self.invalidate()'
+    // call. ('invalidate()' waits for all _acquired_ 'shared_ptr' references
+    // to drop).
+    //
+    // We have a choice, either 1) bind the latter to 'initiateShutdown' to
+    // make sure 'd_self.acquire()' returns not null, or 2) invoke the
+    // 'callback' earlier if fail to 'acquire()' because of 'invalidate()', or
+    // 3) bind _acquired_ 'shared_ptr' to 'initiateShutdown'.
+    //
+    // Choosing 2), assuming that calling the (completion) callback from a
+    // thread other than the *CLIENT* dispatcher thread is ok.  The
+    // 'bmqu::OperationChainLink' expects the completion callback from multiple
+    // sessions anyway.
+
+    bsl::shared_ptr<ClientSession> ptr = d_self.acquire();
+
+    if (!ptr) {
+        callback();
+    }
+    else {
+        dispatcher()->execute(
+            bdlf::BindUtil::bind(
+                bdlf::MemFnUtil::memFn(
+                    &ClientSession::initiateShutdownDispatched,
+                    d_self.acquire()),
+                callback,
+                timeout,
+                supportShutdownV2),
+            this,
+            mqbi::DispatcherEventType::e_DISPATCHER);
+        // Use 'mqbi::DispatcherEventType::e_DISPATCHER' to avoid (re)enabling
+        // 'd_flushList'
+    }
 }
 
 void ClientSession::invalidate()
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(!dispatcher()->inDispatcherThread(this));
-
-    BALL_LOG_INFO << description() << ": invalidate";
 
     dispatcher()->execute(
         bdlf::BindUtil::bind(&ClientSession::invalidateDispatched, this),
@@ -2777,13 +2984,13 @@ void ClientSession::invalidate()
 }
 
 // MANIPULATORS
-void ClientSession::onWatermark(mwcio::ChannelWatermarkType::Enum type)
+void ClientSession::onWatermark(bmqio::ChannelWatermarkType::Enum type)
 {
     switch (type) {
-    case mwcio::ChannelWatermarkType::e_LOW_WATERMARK: {
+    case bmqio::ChannelWatermarkType::e_LOW_WATERMARK: {
         onLowWatermark();
     } break;  // BREAK
-    case mwcio::ChannelWatermarkType::e_HIGH_WATERMARK: {
+    case bmqio::ChannelWatermarkType::e_HIGH_WATERMARK: {
         onHighWatermark();
     } break;  // BREAK
     default: {
@@ -2873,35 +3080,35 @@ void ClientSession::onDispatcherEvent(const mqbi::DispatcherEvent& event)
         BSLS_ASSERT_OPT(false &&
                         "'CONTROL_MSG' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_DISPATCHER: {
         BSLS_ASSERT_OPT(false &&
                         "'DISPATCHER' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_UNDEFINED: {
         BSLS_ASSERT_OPT(false && "'NONE' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_CLUSTER_STATE: {
         BSLS_ASSERT_OPT(false &&
                         "'CLUSTER_STATE' dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_STORAGE: {
         BSLS_ASSERT_OPT(false && "'STORAGE' dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_RECOVERY: {
         BSLS_ASSERT_OPT(false &&
                         "'RECOVERY' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_REPLICATION_RECEIPT: {
         BSLS_ASSERT_OPT(
             false && "'REPLICATION_RECEIPT' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     default: {
         BALL_LOG_ERROR
             << "#CLIENT_UNEXPECTED_EVENT " << description()
@@ -2923,7 +3130,7 @@ void ClientSession::flush()
         BALL_LOG_TRACE << description() << ": Flushing "
                        << d_state.d_pushBuilder.messageCount()
                        << " PUSH messages";
-        sendPacket(d_state.d_pushBuilder.blob(), false);
+        sendPacketDispatched(d_state.d_pushBuilder.blob(), false);
         d_state.d_pushBuilder.reset();
     }
 
@@ -2932,9 +3139,133 @@ void ClientSession::flush()
         BALL_LOG_TRACE << description() << ": Flushing "
                        << d_state.d_ackBuilder.messageCount()
                        << " ACK messages";
-        sendPacket(d_state.d_ackBuilder.blob(), false);
+        sendPacketDispatched(d_state.d_ackBuilder.blob(), false);
         d_state.d_ackBuilder.reset();
     }
+}
+
+void ClientSession::processClusterMessage(
+    const bmqp_ctrlmsg::ControlMessage& message)
+{
+    if (message.choice().clusterMessage().choice().isStopResponseValue()) {
+        BALL_LOG_INFO << description() << ": processStopResponse: " << message;
+        d_clusterCatalog_p->stopRequestManger().processResponse(message);
+    }
+    else if (message.choice().clusterMessage().choice().isStopRequestValue()) {
+        // This is StopRequest from Proxy
+        // Assume StopRequest V2
+
+        const bmqp_ctrlmsg::StopRequest& request =
+            message.choice().clusterMessage().choice().stopRequest();
+
+        BSLS_ASSERT_SAFE(request.version() == 2);
+
+        // Deconfigure all queues.  Do NOT wait for unconfirmed
+
+        BALL_LOG_INFO << description() << ": processing StopRequest.";
+
+        bmqp_ctrlmsg::ControlMessage response;
+
+        response.choice().makeClusterMessage().choice().makeStopResponse();
+        response.rId() = message.rId();
+
+        d_state.d_schemaEventBuilder.reset();
+        int rc = d_state.d_schemaEventBuilder.setMessage(
+            response,
+            bmqp::EventType::e_CONTROL);
+
+        if (rc != 0) {
+            BALL_LOG_ERROR
+                << "#CLIENT_SEND_FAILURE " << description()
+                << ": Encoding StopRequest response has failed, [rc: " << rc
+                << "]: " << response;
+
+            return;  // RETURN
+        }
+
+        ShutdownContextSp context;
+        context.createInplace(
+            d_state.d_allocator_p,
+            bdlf::BindUtil::bind(&ClientSession::sendPacket,
+                                 this,
+                                 d_state.d_schemaEventBuilder.blob(),
+                                 false));
+
+        processStopRequest(context);
+    }
+    else {
+        BALL_LOG_ERROR << "#CLIENT_IMPROPER_BEHAVIOR " << description()
+                       << ": unknown Cluster in StopResponse: " << message;
+    }
+}
+
+void ClientSession::onDeconfiguredHandle(const ShutdownContextSp& contextSp)
+{
+    (void)contextSp;
+}
+
+void ClientSession::processStopRequest(ShutdownContextSp& contextSp)
+{
+    // This StopRequest arrives from a downstream (otherwise, ClusterProxy
+    // would receive it).  As an upstream, this node needs to deconfigure all
+    // queues and then respond with StopResponse.
+
+    // Use the same logic as in the 'initiateShutdown' except that the final
+    // step is sending StopResponse instead of 'closeChannel'
+    // executed by the *CLIENT* dispatcher thread
+
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
+
+    if (d_operationState == e_DEAD) {
+        // The client is disconnected.  No-op
+        return;  // RETURN
+    }
+    if (d_operationState == e_SHUTTING_DOWN) {
+        // The broker is already shutting down or processing a StopRequest
+        // The de-configuring is done.
+        // Even if the waiting is in progress, still reply with StopResponse
+        return;  // RETURN
+    }
+    if (d_operationState == e_SHUTTING_DOWN_V2) {
+        // The broker is already shutting down or processing a StopRequest
+        // The de-configuring is done.
+        // Even if the waiting is in progress, still reply with StopResponse
+        return;  // RETURN
+    }
+
+    if (d_operationState == e_DISCONNECTING) {
+        // The client is disconnecting.  No-op
+        return;  // RETURN
+    }
+    for (QueueStateMapCIter cit = d_queueSessionManager.queues().begin();
+         cit != d_queueSessionManager.queues().end();
+         ++cit) {
+        if (!cit->second.d_hasReceivedFinalCloseQueue) {
+            cit->second.d_handle_p->deconfigureAll(
+                bdlf::BindUtil::bind(&ClientSession::onDeconfiguredHandle,
+                                     this,
+                                     contextSp));
+        }
+    }
+}
+
+int ClientSession::dropAllQueueHandles(bool doDeconfigure, bool hasLostClient)
+{
+    int numHandlesDropped = 0;
+    for (QueueStateMapIter it = d_queueSessionManager.queues().begin();
+         it != d_queueSessionManager.queues().end();
+         ++it) {
+        if (!it->second.d_hasReceivedFinalCloseQueue) {
+            it->second.d_handle_p->clearClient(hasLostClient);
+            it->second.d_handle_p->drop(doDeconfigure);
+            it->second.d_handle_p                   = 0;
+            it->second.d_hasReceivedFinalCloseQueue = true;
+            ++numHandlesDropped;
+        }
+    }
+
+    return numHandlesDropped;
 }
 
 }  // close package namespace
