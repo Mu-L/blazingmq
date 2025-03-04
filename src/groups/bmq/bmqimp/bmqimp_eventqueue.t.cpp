@@ -16,14 +16,12 @@
 // bmqimp_eventqueue.t.cpp                                            -*-C++-*-
 #include <bmqimp_eventqueue.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
+#include <bmqsys_time.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
 
-// MWC
-#include <mwcst_statcontext.h>
-#include <mwcst_statvalue.h>
+#include <bmqst_statcontext.h>
+#include <bmqst_statvalue.h>
 
 // BDE
 #include <bdlbb_pooledblobbufferfactory.h>
@@ -38,7 +36,7 @@
 #include <bsls_timeutil.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -123,8 +121,8 @@ void printProcessedItems(int numItems, bsls::Types::Int64 elapsedTime)
     const bsls::Types::Int64 itemsPerSec = numItems / numSeconds;
 
     bsl::cout << "Processed " << numItems << " items in "
-              << mwcu::PrintUtil::prettyTimeInterval(elapsedTime) << ". "
-              << mwcu::PrintUtil::prettyNumber(itemsPerSec) << "/s"
+              << bmqu::PrintUtil::prettyTimeInterval(elapsedTime) << ". "
+              << bmqu::PrintUtil::prettyNumber(itemsPerSec) << "/s"
               << bsl::endl;
 }
 
@@ -139,7 +137,7 @@ void queuePerformance(int                       numReaders,
         numReaders + numWriters,          // minThreads
         numReaders + numWriters,          // maxThreads
         bsl::numeric_limits<int>::max(),  // maxIdleTime
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
     BSLS_ASSERT_OPT(threadPool.start() == 0);
 
     PRINT_SAFE("===================");
@@ -152,7 +150,7 @@ void queuePerformance(int                       numReaders,
                              bufferFactory,
                              bdlf::PlaceHolders::_2),  // allocator
         -1,
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     bmqimp::EventQueue::EventHandlerCallback emptyEventHandler;
     bmqimp::EventQueue                       obj(&eventPool,
@@ -161,11 +159,11 @@ void queuePerformance(int                       numReaders,
                            queueSize / 2,  // highWatermark
                            emptyEventHandler,
                            0,  // numProcessingThreads
-                           s_allocator_p);
+                           bmqtst::TestHelperUtil::allocator());
 
     for (int i = 0; i < numReaders; i++) {
         threadPool.enqueueJob(
-            bdlf::BindUtil::bindS(s_allocator_p,
+            bdlf::BindUtil::bindS(bmqtst::TestHelperUtil::allocator(),
                                   &performanceTestQueuePopper,
                                   &obj,
                                   numIter / numReaders));
@@ -174,7 +172,7 @@ void queuePerformance(int                       numReaders,
     bsls::Types::Int64 startTime = bsls::TimeUtil::getTimer();
     for (int i = 0; i < numWriters; i++) {
         threadPool.enqueueJob(
-            bdlf::BindUtil::bindS(s_allocator_p,
+            bdlf::BindUtil::bindS(bmqtst::TestHelperUtil::allocator(),
                                   &performanceTestQueuePusher,
                                   &obj,
                                   numIter / numWriters));
@@ -195,17 +193,19 @@ void queuePerformance(int                       numReaders,
 
 static void test1_breathingTest()
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     bmqimp::EventQueue::EventHandlerCallback emptyEventHandler;
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqimp::EventQueue::EventPool  eventPool(
+    bdlbb::PooledBlobBufferFactory           bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqimp::EventQueue::EventPool eventPool(
         bdlf::BindUtil::bind(&poolCreateEvent,
                              bdlf::PlaceHolders::_1,  // address
                              &bufferFactory,
                              bdlf::PlaceHolders::_2),  // allocator
         -1,
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     bmqimp::EventQueue obj(&eventPool,
                            1,  // initialCapacity
@@ -213,7 +213,7 @@ static void test1_breathingTest()
                            6,  // highWatermark
                            emptyEventHandler,
                            0,  // numProcessingThreads
-                           s_allocator_p);
+                           bmqtst::TestHelperUtil::allocator());
 
     // Basic testing.. enqueue one item, pop it out ..
     bsl::shared_ptr<bmqimp::Event> event = eventPool.getObject();
@@ -227,7 +227,7 @@ static void test1_breathingTest()
     // Dequeue.. expect statusCode 1
     event = obj.popFront();
     PV("Dequeued: " << (*event));
-    ASSERT_EQ(event->statusCode(), 1);
+    BMQTST_ASSERT_EQ(event->statusCode(), 1);
 }
 
 static void test2_capacityTest()
@@ -253,19 +253,26 @@ static void test2_capacityTest()
 //   - timedPopFront
 //   ----------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("CAPACITY TEST");
+    bmqtst::TestHelper::printTestName("CAPACITY TEST");
 
     const int k_INITIAL_CAPACITY = 3;
 
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqp::PutEventBuilder          builder(&bufferFactory, s_allocator_p);
-    bmqimp::EventQueue::EventPool  eventPool(
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+    bmqp::PutEventBuilder         builder(blobSpPool.get(),
+                                  bmqtst::TestHelperUtil::allocator());
+    bmqimp::EventQueue::EventPool eventPool(
         bdlf::BindUtil::bind(&poolCreateEvent,
                              bdlf::PlaceHolders::_1,  // address
                              &bufferFactory,
                              bdlf::PlaceHolders::_2),  // allocator
         -1,
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     bmqimp::EventQueue::EventHandlerCallback emptyEventHandler;
 
@@ -275,12 +282,12 @@ static void test2_capacityTest()
                            k_INITIAL_CAPACITY - 1,  // highWatermark
                            emptyEventHandler,
                            0,  // numProcessingThreads
-                           s_allocator_p);
+                           bmqtst::TestHelperUtil::allocator());
 
     builder.startMessage();
-    const bdlbb::Blob& eventBlob = builder.blob();
+    const bdlbb::Blob& eventBlob = *builder.blob();
 
-    bmqp::Event                    rawEvent(&eventBlob, s_allocator_p);
+    bmqp::Event rawEvent(&eventBlob, bmqtst::TestHelperUtil::allocator());
     bsl::shared_ptr<bmqimp::Event> event;
 
     // Enqueue k_INITIAL_CAPACITY events
@@ -288,43 +295,46 @@ static void test2_capacityTest()
         event = eventPool.getObject();
         event->configureAsMessageEvent(rawEvent);
         PVV("[" << i << "] Enqueuing: " << (*event));
-        ASSERT_EQ_D(i, obj.pushBack(event), 0);
+        BMQTST_ASSERT_EQ_D(i, obj.pushBack(event), 0);
     }
 
     // Trying to push one over succeeds
     event = eventPool.getObject();
     event->configureAsMessageEvent(rawEvent);
 
-    ASSERT_EQ(obj.pushBack(event), 0);
+    BMQTST_ASSERT_EQ(obj.pushBack(event), 0);
 
     // Dequeue k_INITIAL_CAPACITY + 1 plus two events (2 session events)
     for (int i = 0; i < k_INITIAL_CAPACITY + 1 + 2; ++i) {
         event = obj.popFront();
         PVV("Dequeued: " << (*event));
-        ASSERT(event != 0);
+        BMQTST_ASSERT(event != 0);
     }
 
     // No more events
     bsls::TimeInterval timeout(0, 2000000);  // 2 ms
     event = obj.timedPopFront(timeout);
 
-    ASSERT(event != 0);
-    ASSERT_EQ(event->sessionEventType(), bmqt::SessionEventType::e_TIMEOUT);
+    BMQTST_ASSERT(event != 0);
+    BMQTST_ASSERT_EQ(event->sessionEventType(),
+                     bmqt::SessionEventType::e_TIMEOUT);
 }
 
 static void test3_watermark()
 {
-    mwctst::TestHelper::printTestName("WATERMARK");
+    bmqtst::TestHelper::printTestName("WATERMARK");
 
     bmqimp::EventQueue::EventHandlerCallback emptyEventHandler;
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqimp::EventQueue::EventPool  eventPool(
+    bdlbb::PooledBlobBufferFactory           bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqimp::EventQueue::EventPool eventPool(
         bdlf::BindUtil::bind(&poolCreateEvent,
                              bdlf::PlaceHolders::_1,  // address
                              &bufferFactory,
                              bdlf::PlaceHolders::_2),  // allocator
         -1,
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     bmqimp::EventQueue obj(&eventPool,
                            1,  // initialCapacity
@@ -332,7 +342,7 @@ static void test3_watermark()
                            6,  // highWatermark
                            emptyEventHandler,
                            0,  // numProcessingThreads
-                           s_allocator_p);
+                           bmqtst::TestHelperUtil::allocator());
 
     bsl::shared_ptr<bmqimp::Event> event;
 
@@ -351,22 +361,22 @@ static void test3_watermark()
     // Now deque.. it should be a HighWatermark event
     event = obj.popFront();
     PV("Dequeued: " << (*event));
-    ASSERT_EQ(event->sessionEventType(),
-              bmqt::SessionEventType::e_SLOWCONSUMER_HIGHWATERMARK);
+    BMQTST_ASSERT_EQ(event->sessionEventType(),
+                     bmqt::SessionEventType::e_SLOWCONSUMER_HIGHWATERMARK);
 
     // And dequeue 6 times checking order
     for (int i = 0; i < 6; ++i) {
         event = obj.popFront();
         PVV("Dequeued: " << (*event));
-        ASSERT_EQ(event->statusCode(), i);
+        BMQTST_ASSERT_EQ(event->statusCode(), i);
     }
 
     // Finally we should be able to dequeue a last item, consumer_normal
     // (note that this event is not prioritized)
     event = obj.popFront();
     PV("Dequeued: " << (*event));
-    ASSERT_EQ(event->sessionEventType(),
-              bmqt::SessionEventType::e_SLOWCONSUMER_NORMAL);
+    BMQTST_ASSERT_EQ(event->sessionEventType(),
+                     bmqt::SessionEventType::e_SLOWCONSUMER_NORMAL);
 }
 
 static void test4_basicEventHandlerTest()
@@ -392,18 +402,20 @@ static void test4_basicEventHandlerTest()
 //   - timedPopFront
 //   ----------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BASIC EVENT HANDLER");
+    bmqtst::TestHelper::printTestName("BASIC EVENT HANDLER");
 
     const int                      k_NUM_THREADS = 15;
     bsls::AtomicInt                eventCounter;
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqimp::EventQueue::EventPool  eventPool(
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqimp::EventQueue::EventPool eventPool(
         bdlf::BindUtil::bind(&poolCreateEvent,
                              bdlf::PlaceHolders::_1,  // address
                              &bufferFactory,
                              bdlf::PlaceHolders::_2),  // allocator
         -1,
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     bmqimp::EventQueue obj(&eventPool,
                            100,  // initialCapacity
@@ -413,7 +425,7 @@ static void test4_basicEventHandlerTest()
                                                 bdlf::PlaceHolders::_1,
                                                 bsl::ref(eventCounter)),
                            k_NUM_THREADS,  // numProcessingThreads
-                           s_allocator_p);
+                           bmqtst::TestHelperUtil::allocator());
 
     obj.start();
 
@@ -430,7 +442,7 @@ static void test4_basicEventHandlerTest()
     obj.stop();
 
     // The event handler should be called once for the user event
-    ASSERT_EQ(eventCounter, 1);
+    BMQTST_ASSERT_EQ(eventCounter, 1);
 }
 
 static void test5_emptyStatsTest()
@@ -451,10 +463,10 @@ static void test5_emptyStatsTest()
 //   - printStats
 //   ----------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("EMPTY STATS");
+    bmqtst::TestHelper::printTestName("EMPTY STATS");
 
-    mwcu::MemOutStream out(s_allocator_p);
-    mwcu::MemOutStream expected(s_allocator_p);
+    bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+    bmqu::MemOutStream expected(bmqtst::TestHelperUtil::allocator());
 
     expected << "\n"
              << " Queue  | Queue Time"
@@ -467,27 +479,32 @@ static void test5_emptyStatsTest()
              << "\n"
              << "\n";
 
-    mwcst::StatContextConfiguration config("stats", s_allocator_p);
+    bmqst::StatContextConfiguration config(
+        "stats",
+        bmqtst::TestHelperUtil::allocator());
 
     config.defaultHistorySize(2);
 
-    mwcst::StatContext rootStatContext(config, s_allocator_p);
+    bmqst::StatContext rootStatContext(config,
+                                       bmqtst::TestHelperUtil::allocator());
 
-    mwcst::StatValue::SnapshotLocation start;
-    mwcst::StatValue::SnapshotLocation end;
+    bmqst::StatValue::SnapshotLocation start;
+    bmqst::StatValue::SnapshotLocation end;
 
     start.setLevel(0).setIndex(0);
     end.setLevel(0).setIndex(1);
 
     bmqimp::EventQueue::EventHandlerCallback emptyEventHandler;
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqimp::EventQueue::EventPool  eventPool(
+    bdlbb::PooledBlobBufferFactory           bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqimp::EventQueue::EventPool eventPool(
         bdlf::BindUtil::bind(&poolCreateEvent,
                              bdlf::PlaceHolders::_1,  // address
                              &bufferFactory,
                              bdlf::PlaceHolders::_2),  // allocator
         -1,
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     bmqimp::EventQueue obj(&eventPool,
                            1,  // initialCapacity
@@ -495,21 +512,21 @@ static void test5_emptyStatsTest()
                            6,  // highWatermark
                            emptyEventHandler,
                            0,  // numProcessingThreads
-                           s_allocator_p);
+                           bmqtst::TestHelperUtil::allocator());
 
-    ASSERT_SAFE_FAIL(obj.printStats(out, false));
+    BMQTST_ASSERT_SAFE_FAIL(obj.printStats(out, false));
 
     obj.initializeStats(&rootStatContext, start, end);
 
-    ASSERT_EQ(rootStatContext.numSubcontexts(), 0);
+    BMQTST_ASSERT_EQ(rootStatContext.numSubcontexts(), 0);
 
     rootStatContext.snapshot();
 
-    ASSERT_EQ(rootStatContext.numSubcontexts(), 1);
+    BMQTST_ASSERT_EQ(rootStatContext.numSubcontexts(), 1);
 
     obj.printStats(out, false);
 
-    ASSERT_EQ(out.str(), expected.str());
+    BMQTST_ASSERT_EQ(out.str(), expected.str());
 }
 
 static void test6_workingStatsTest()
@@ -533,7 +550,7 @@ static void test6_workingStatsTest()
 //   - printStats
 //   ----------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("EMPTY STATS");
+    bmqtst::TestHelper::printTestName("EMPTY STATS");
 
     const int k_MILL_SEC = bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND;
 
@@ -546,37 +563,47 @@ static void test6_workingStatsTest()
     //      HighWatermark and another one for the LowWatermark
 
     TestClock                      testClock;
-    mwcu::MemOutStream             out(s_allocator_p);
-    mwcu::MemOutStream             expected(s_allocator_p);
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqp::PutEventBuilder          builder(&bufferFactory, s_allocator_p);
-    bmqimp::EventQueue::EventPool  eventPool(
+    bmqu::MemOutStream             out(bmqtst::TestHelperUtil::allocator());
+    bmqu::MemOutStream expected(bmqtst::TestHelperUtil::allocator());
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+    bmqp::PutEventBuilder         builder(blobSpPool.get(),
+                                  bmqtst::TestHelperUtil::allocator());
+    bmqimp::EventQueue::EventPool eventPool(
         bdlf::BindUtil::bind(&poolCreateEvent,
                              bdlf::PlaceHolders::_1,  // address
                              &bufferFactory,
                              bdlf::PlaceHolders::_2),  // allocator
         -1,
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     bmqimp::EventQueue::EventHandlerCallback emptyEventHandler;
 
-    mwcst::StatContextConfiguration    config("stats", s_allocator_p);
-    mwcst::StatValue::SnapshotLocation start;
-    mwcst::StatValue::SnapshotLocation end;
+    bmqst::StatContextConfiguration config(
+        "stats",
+        bmqtst::TestHelperUtil::allocator());
+    bmqst::StatValue::SnapshotLocation start;
+    bmqst::StatValue::SnapshotLocation end;
 
     config.defaultHistorySize(3);
 
-    mwcst::StatContext rootStatContext(config, s_allocator_p);
+    bmqst::StatContext rootStatContext(config,
+                                       bmqtst::TestHelperUtil::allocator());
 
     start.setLevel(0).setIndex(0);
     end.setLevel(0).setIndex(1);
 
-    mwcsys::Time::shutdown();
-    mwcsys::Time::initialize(
+    bmqsys::Time::shutdown();
+    bmqsys::Time::initialize(
         bdlf::BindUtil::bind(&TestClock::realtimeClock, &testClock),
         bdlf::BindUtil::bind(&TestClock::monotonicClock, &testClock),
         bdlf::BindUtil::bind(&TestClock::highResTimer, &testClock),
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     expected << "\n"
              << "                        Queue                        |       "
@@ -595,18 +622,18 @@ static void test6_workingStatsTest()
                            k_QUEUE_HWM,         // highWatermark
                            emptyEventHandler,
                            0,  // numProcessingThreads
-                           s_allocator_p);
+                           bmqtst::TestHelperUtil::allocator());
 
     // May also call 'start' for the queue without custom event
     // handler
-    ASSERT_EQ(obj.start(), 0);
+    BMQTST_ASSERT_EQ(obj.start(), 0);
 
     obj.initializeStats(&rootStatContext, start, end);
 
     builder.startMessage();
-    const bdlbb::Blob& eventBlob = builder.blob();
+    const bdlbb::Blob& eventBlob = *builder.blob();
 
-    bmqp::Event                    rawEvent(&eventBlob, s_allocator_p);
+    bmqp::Event rawEvent(&eventBlob, bmqtst::TestHelperUtil::allocator());
     bsl::shared_ptr<bmqimp::Event> event;
 
     // Enqueue events
@@ -614,7 +641,7 @@ static void test6_workingStatsTest()
         event = eventPool.getObject();
         event->configureAsMessageEvent(rawEvent);
         PVV("[" << i << "] Enqueuing: " << (*event));
-        ASSERT_EQ_D(i, obj.pushBack(event), 0);
+        BMQTST_ASSERT_EQ_D(i, obj.pushBack(event), 0);
         testClock.d_highResTimer += k_MILL_SEC;
     }
 
@@ -623,7 +650,7 @@ static void test6_workingStatsTest()
     // And dequeue some of them
     for (int i = 0; i < k_QUEUE_POPPED; ++i) {
         event = obj.popFront();
-        ASSERT(event != 0);
+        BMQTST_ASSERT(event != 0);
         PVV("Dequeued: " << (*event));
     }
 
@@ -632,26 +659,28 @@ static void test6_workingStatsTest()
 
     PVV(out.str());
 
-    ASSERT_EQ(out.str(), expected.str());
+    BMQTST_ASSERT_EQ(out.str(), expected.str());
 
-    const mwcst::StatContext* pSubCtx = rootStatContext.getSubcontext(
+    const bmqst::StatContext* pSubCtx = rootStatContext.getSubcontext(
         "EventQueue");
 
-    ASSERT(pSubCtx != 0);
-    ASSERT_EQ(pSubCtx->numValues(), 2);
-    ASSERT_EQ(pSubCtx->valueName(0), "Queue");
-    ASSERT_EQ(pSubCtx->valueName(1), "Time");
+    BMQTST_ASSERT(pSubCtx != 0);
+    BMQTST_ASSERT_EQ(pSubCtx->numValues(), 2);
+    BMQTST_ASSERT_EQ(pSubCtx->valueName(0), "Queue");
+    BMQTST_ASSERT_EQ(pSubCtx->valueName(1), "Time");
 
-    mwcst::StatValue valQueue =
-        pSubCtx->value(mwcst::StatContext::DMCST_DIRECT_VALUE, 0);
+    bmqst::StatValue valQueue =
+        pSubCtx->value(bmqst::StatContext::e_DIRECT_VALUE, 0);
 
-    mwcst::StatValue valTime =
-        pSubCtx->value(mwcst::StatContext::DMCST_DIRECT_VALUE, 1);
+    bmqst::StatValue valTime =
+        pSubCtx->value(bmqst::StatContext::e_DIRECT_VALUE, 1);
 
-    ASSERT_EQ(valQueue.min(), 0);
-    ASSERT_EQ(valQueue.max(), k_INITIAL_CAPACITY + 1);  // +1 for HighWatermark
-    ASSERT_EQ(valTime.min(), 0);
-    ASSERT_EQ(valTime.max(), k_INITIAL_CAPACITY * k_MILL_SEC + k_QUEUE_WAIT);
+    BMQTST_ASSERT_EQ(valQueue.min(), 0);
+    BMQTST_ASSERT_EQ(valQueue.max(),
+                     k_INITIAL_CAPACITY + 1);  // +1 for HighWatermark
+    BMQTST_ASSERT_EQ(valTime.min(), 0);
+    BMQTST_ASSERT_EQ(valTime.max(),
+                     k_INITIAL_CAPACITY * k_MILL_SEC + k_QUEUE_WAIT);
 }
 
 static void testN1_performance()
@@ -674,7 +703,9 @@ static void testN1_performance()
     // CONSTANTS
     const int k_NUM_ITERATIONS   = 10 * 1000 * 1000;  // 10 M
     const int k_FIXED_QUEUE_SIZE = 10 * 1000 * 1000;  // 10 M
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
 
     queuePerformance(1,
                      1,
@@ -709,10 +740,10 @@ static void testN1_performance()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    mwcsys::Time::initialize();
-    bmqt::UriParser::initialize(s_allocator_p);
+    bmqsys::Time::initialize();
+    bmqt::UriParser::initialize(bmqtst::TestHelperUtil::allocator());
 
     switch (_testCase) {
     case 0:
@@ -725,15 +756,15 @@ int main(int argc, char* argv[])
     case -1: testN1_performance(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
     bmqt::UriParser::shutdown();
-    mwcsys::Time::shutdown();
+    bmqsys::Time::shutdown();
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_GBL_ALLOC);
-    // Default: EventQueue uses mwcc::MonitoredFixedQueue, which uses
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_GBL_ALLOC);
+    // Default: EventQueue uses bmqc::MonitoredFixedQueue, which uses
     //          'bdlcc::SharedObjectPool' which uses bslmt::Semaphore which
     //          generates a unique name using an ostringstream, hence the
     //          default allocator.

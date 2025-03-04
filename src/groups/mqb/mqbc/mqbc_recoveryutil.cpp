@@ -26,8 +26,7 @@
 #include <mqbs_filesystemutil.h>
 #include <mqbs_offsetptr.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bsl_string.h>
@@ -53,7 +52,7 @@ int RecoveryUtil::loadFileDescriptors(mqbs::MappedFileDescriptor* journalFd,
         rc_INVALID_FILE_SET   = -2
     };
 
-    mwcu::MemOutStream errorDesc;
+    bmqu::MemOutStream errorDesc;
     int                rc = mqbs::FileStoreUtil::openFileSetReadMode(errorDesc,
                                                       fileSet,
                                                       journalFd,
@@ -247,7 +246,7 @@ int RecoveryUtil::incrementCurrentSeqNum(
     const bmqp_ctrlmsg::PartitionSequenceNumber& endSeqNum,
     int                                          partitionId,
     const mqbnet::ClusterNode&                   destination,
-    const mqbc::ClusterData&                     clusterData,
+    const bsl::string&                           clusterDescription,
     mqbs::JournalFileIterator&                   journalIt)
 {
     // PRECONDITIONS
@@ -283,8 +282,7 @@ int RecoveryUtil::incrementCurrentSeqNum(
         // smaller or equal.
 
         BALL_LOG_ERROR
-            << clusterData.identity().description() << " PartitionId ["
-            << partitionId
+            << clusterDescription << " Partition [" << partitionId
             << "]: incorrect sequence number encountered while attempting "
             << "to replay partition to peer: " << *currentSeqNum
             << ". Sequence number cannot be greater than: " << endSeqNum

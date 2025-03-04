@@ -38,8 +38,7 @@
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_requestmanager.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlcc_objectpool.h>
@@ -197,8 +196,9 @@ class MultiRequestManager {
 
   private:
     // PRIVATE MANIPULATORS
-    static bmqt::GenericResult::Enum sendHelper(mwcio::Channel*    channel,
-                                                const bdlbb::Blob& blob);
+    static bmqt::GenericResult::Enum
+    sendHelper(bmqio::Channel*                     channel,
+               const bsl::shared_ptr<bdlbb::Blob>& blob);
 
     /// Create a `MultiRequestManagerRequestContext` object at the specified
     /// `address` using the supplied `allocator`.  This is used by the
@@ -252,6 +252,8 @@ class MultiRequestManager {
 
     void sendRequest(const RequestContextSp& context,
                      bsls::TimeInterval      timeout);
+
+    void processResponse(const bmqp_ctrlmsg::ControlMessage& message);
 };
 
 // ============================================================================
@@ -335,22 +337,22 @@ MultiRequestManagerRequestContext<REQUEST, RESPONSE, TARGET>::response() const
 template <class REQUEST, class RESPONSE, class TARGET>
 inline bmqt::GenericResult::Enum
 MultiRequestManager<REQUEST, RESPONSE, TARGET>::sendHelper(
-    mwcio::Channel*    channel,
-    const bdlbb::Blob& blob)
+    bmqio::Channel*                     channel,
+    const bsl::shared_ptr<bdlbb::Blob>& blob)
 {
-    mwcio::Status status;
-    channel->write(&status, blob);
+    bmqio::Status status;
+    channel->write(&status, *blob);
 
     switch (status.category()) {
-    case mwcio::StatusCategory::e_SUCCESS:
+    case bmqio::StatusCategory::e_SUCCESS:
         return bmqt::GenericResult::e_SUCCESS;
-    case mwcio::StatusCategory::e_CONNECTION:
+    case bmqio::StatusCategory::e_CONNECTION:
         return bmqt::GenericResult::e_NOT_CONNECTED;
-    case mwcio::StatusCategory::e_LIMIT:
+    case bmqio::StatusCategory::e_LIMIT:
         return bmqt::GenericResult::e_NOT_READY;
-    case mwcio::StatusCategory::e_GENERIC_ERROR:
-    case mwcio::StatusCategory::e_TIMEOUT:
-    case mwcio::StatusCategory::e_CANCELED:
+    case bmqio::StatusCategory::e_GENERIC_ERROR:
+    case bmqio::StatusCategory::e_TIMEOUT:
+    case bmqio::StatusCategory::e_CANCELED:
     default: return bmqt::GenericResult::e_UNKNOWN;
     }
     return bmqt::GenericResult::e_UNKNOWN;
@@ -472,7 +474,7 @@ void MultiRequestManager<REQUEST, RESPONSE, TARGET>::sendRequest(
             (void)rc;  // compiler happiness
             failure.code() = static_cast<int>(sendRc);
 
-            mwcu::MemOutStream errorMsg;
+            bmqu::MemOutStream errorMsg;
             errorMsg << "Unable to send request to '"
                      << targetDescription(it->first)
                      << "' [reason: " << errorMsg.str()
@@ -485,6 +487,13 @@ void MultiRequestManager<REQUEST, RESPONSE, TARGET>::sendRequest(
         context->d_responseCb(context);
     }
 }
+
+template <class REQUEST, class RESPONSE, class TARGET>
+inline void MultiRequestManager<REQUEST, RESPONSE, TARGET>::processResponse(
+    const bmqp_ctrlmsg::ControlMessage& response)
+{
+    d_requestManager_p->processResponse(response);
+};
 
 template <class REQUEST, class RESPONSE, class TARGET>
 inline const bsl::string&

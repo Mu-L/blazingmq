@@ -30,7 +30,7 @@
 #include <bsls_assert.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -68,7 +68,7 @@ mqbcmd::Command fromJson(const bslstl::StringRef& json)
 
 void verifyExpected(const Test& test)
 {
-    mwctst::TestHelper::printTestName(test.d_description);
+    bmqtst::TestHelper::printTestName(test.d_description);
 
     BSLS_ASSERT_OPT(test.d_expectedJson);
 
@@ -77,15 +77,18 @@ void verifyExpected(const Test& test)
     bsl::string           error;
     const int rc = mqbcmd::ParseUtil::parse(&actual, &error, test.d_input);
 
-    ASSERT_EQ_D(test.d_sourceLine << ": " << test.d_input << ": " << error,
-                rc,
-                0);
-    ASSERT_EQ_D(test.d_sourceLine << ": " << test.d_input, actual, expected);
+    BMQTST_ASSERT_EQ_D(test.d_sourceLine << ": " << test.d_input << ": "
+                                         << error,
+                       rc,
+                       0);
+    BMQTST_ASSERT_EQ_D(test.d_sourceLine << ": " << test.d_input,
+                       actual,
+                       expected);
 }
 
 void verifyFailure(const Test& test)
 {
-    mwctst::TestHelper::printTestName(test.d_description);
+    bmqtst::TestHelper::printTestName(test.d_description);
 
     BSLS_ASSERT_OPT(test.d_expectedJson == 0);
 
@@ -93,7 +96,7 @@ void verifyFailure(const Test& test)
     bsl::string     error;
     const int rc = mqbcmd::ParseUtil::parse(&actual, &error, test.d_input);
 
-    ASSERT_NE_D(test.d_sourceLine << ": parsing should fail", rc, 0);
+    BMQTST_ASSERT_NE_D(test.d_sourceLine << ": parsing should fail", rc, 0);
 }
 
 void verifyFailsWithExtra(const Test& test)
@@ -310,12 +313,25 @@ const Test k_TESTS[] = {
      "CLUSTERS CLUSTER cloister STATE ELECTOR SET parameter 478",
      "{\"clusters\": {\"cluster\": {\"name\": \"cloister\", \"command\": {"
      "\"state\": { \"elector\": {\"setTunable\": {\"name\": \"parameter\", "
-     "\"value\": {\"theInteger\": 478}}}}}}}}"},
+     "\"value\": {\"theInteger\": 478}, \"self\": {}}}}}}}}"},
+    {__LINE__,
+     "set a tunable on a cluster's elector state for all nodes in the cluster",
+     "CLUSTERS CLUSTER cloister STATE ELECTOR SET_ALL parameter 478",
+     "{\"clusters\": {\"cluster\": {\"name\": \"cloister\", \"command\": {"
+     "\"state\": { \"elector\": {\"setTunable\": {\"name\": \"parameter\", "
+     "\"value\": {\"theInteger\": 478}, \"all\": {}}}}}}}}"},
     {__LINE__,
      "get a tunable on a cluster's elector state",
      "CLUSTERS CLUSTER cloister STATE ELECTOR GET parameter",
      "{\"clusters\": {\"cluster\": {\"name\": \"cloister\", \"command\": {"
-     "\"state\": { \"elector\": {\"getTunable\": \"parameter\"}}}}}}"},
+     "\"state\": { \"elector\": {\"getTunable\": {\"name\": \"parameter\", "
+     "\"self\": {}}}}}}}}"},
+    {__LINE__,
+     "get a tunable on a cluster's elector state for all nodes in the cluster",
+     "CLUSTERS CLUSTER cloister STATE ELECTOR GET_ALL parameter",
+     "{\"clusters\": {\"cluster\": {\"name\": \"cloister\", \"command\": {"
+     "\"state\": { \"elector\": {\"getTunable\": {\"name\": \"parameter\", "
+     "\"all\": {}}}}}}}}"},
     {__LINE__,
      "list supported tunables on a cluster's elector state",
      "CLUSTERS CLUSTER cloister STATE ELECTOR LIST_TUNABLES",
@@ -373,7 +389,7 @@ void test3_parseFailsWithExtra()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -382,8 +398,8 @@ int main(int argc, char* argv[])
     case 3: test3_parseFailsWithExtra(); break;
     default:
         bsl::cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND.\n";
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_EPILOG(bmqtst::TestHelper::e_DEFAULT);
 }

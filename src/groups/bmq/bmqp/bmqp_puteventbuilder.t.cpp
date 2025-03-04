@@ -27,9 +27,8 @@
 #include <bmqp_puttester.h>
 #include <bmqt_messageguid.h>
 
-// MWC
-#include <mwcu_blob.h>
-#include <mwcu_memoutstream.h>
+#include <bmqu_blob.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlb_guid.h>
@@ -52,7 +51,7 @@
 #include <bsls_assert.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -96,9 +95,10 @@ Data::Data(const Data& other, bslma::Allocator* allocator)
     // NOTHING
 }
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
 void setMsgGroupId(bmqp::PutEventBuilder* peb, const size_t iteration)
 {
-    mwcu::MemOutStream oss(s_allocator_p);
+    bmqu::MemOutStream oss(bmqtst::TestHelperUtil::allocator());
     oss << "gid:" << iteration;
     peb->setMsgGroupId(oss.str());
 }
@@ -106,13 +106,14 @@ void setMsgGroupId(bmqp::PutEventBuilder* peb, const size_t iteration)
 void validateGroupId(const size_t                    iteration,
                      const bmqp::PutMessageIterator& putIter)
 {
-    ASSERT(putIter.hasMsgGroupId());
+    BMQTST_ASSERT(putIter.hasMsgGroupId());
     bmqp::Protocol::MsgGroupId msgGroupId;
-    ASSERT(putIter.extractMsgGroupId(&msgGroupId));
-    mwcu::MemOutStream oss(s_allocator_p);
+    BMQTST_ASSERT(putIter.extractMsgGroupId(&msgGroupId));
+    bmqu::MemOutStream oss(bmqtst::TestHelperUtil::allocator());
     oss << "gid:" << iteration;
-    ASSERT_EQ(oss.str(), msgGroupId);
+    BMQTST_ASSERT_EQ(oss.str(), msgGroupId);
 }
+#endif
 
 bmqt::EventBuilderResult::Enum
 appendMessage(size_t                    iteration,
@@ -123,7 +124,7 @@ appendMessage(size_t                    iteration,
               const bmqt::MessageGUID&  guid,
               bslma::Allocator*         allocator)
 {
-    Data data(bufferFactory, s_allocator_p);
+    Data data(bufferFactory, bmqtst::TestHelperUtil::allocator());
     data.d_guid = guid;
     data.d_qid  = iteration;
 
@@ -137,7 +138,9 @@ appendMessage(size_t                    iteration,
         peb->startMessage();
     }
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
     setMsgGroupId(peb, iteration);
+#endif
 
     peb->setMessagePayload(&data.d_payload);
     peb->setMessageGUID(data.d_guid);
@@ -153,7 +156,8 @@ unsigned int findExpectedCrc32(
     bslma::Allocator*                    allocator,
     bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType)
 {
-    bdlbb::Blob applicationData(bufferFactory, s_allocator_p);
+    bdlbb::Blob applicationData(bufferFactory,
+                                bmqtst::TestHelperUtil::allocator());
     if (hasProperties) {
         bdlbb::BlobUtil::append(
             &applicationData,
@@ -163,7 +167,7 @@ unsigned int findExpectedCrc32(
         // New format.
     }
 
-    mwcu::MemOutStream error(allocator);
+    bmqu::MemOutStream error(allocator);
     int                rc = bmqp::Compression::compress(&applicationData,
                                          bufferFactory,
                                          compressionAlgorithmType,
@@ -208,17 +212,27 @@ static void test1_breathingTest()
 //   Basic functionality
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
-    bdlbb::PooledBlobBufferFactory   bufferFactory(1024, s_allocator_p);
-    const bmqp::Protocol::MsgGroupId k_MSG_GROUP_ID("gid:0", s_allocator_p);
-    const int                        k_PROPERTY_VAL_ENCODING = 3;
-    const bsl::string                k_PROPERTY_VAL_ID       = "myCoolId";
-    const unsigned int               k_CRC32                 = 123;
-    const bsls::Types::Int64         k_TIME_STAMP            = 1234567890LL;
-    const int                        k_NUM_PROPERTIES        = 3;
-    const char*                      k_PAYLOAD = "abcdefghijklmnopqrstuvwxyz";
-    const int                        k_PAYLOAD_BIGGER_LEN =
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    const bmqp::Protocol::MsgGroupId k_MSG_GROUP_ID(
+        "gid:0",
+        bmqtst::TestHelperUtil::allocator());
+#endif
+    const int                k_PROPERTY_VAL_ENCODING = 3;
+    const bsl::string        k_PROPERTY_VAL_ID       = "myCoolId";
+    const unsigned int       k_CRC32                 = 123;
+    const bsls::Types::Int64 k_TIME_STAMP            = 1234567890LL;
+    const int                k_NUM_PROPERTIES        = 3;
+    const char*              k_PAYLOAD = "abcdefghijklmnopqrstuvwxyz";
+    const int                k_PAYLOAD_BIGGER_LEN =
         bmqp::Protocol::k_COMPRESSION_MIN_APPDATA_SIZE + 400;
 
     char        k_PAYLOAD_BIGGER[k_PAYLOAD_BIGGER_LEN];
@@ -234,7 +248,7 @@ static void test1_breathingTest()
 
     {
         PVV("DO NOT USE COMPRESSION FOR MESSAGE PROPERTIES AND PAYLOAD");
-        bmqp::MessageProperties msgProps(s_allocator_p);
+        bmqp::MessageProperties msgProps(bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(
             0 ==
@@ -247,14 +261,17 @@ static void test1_breathingTest()
         BSLS_ASSERT_OPT(k_NUM_PROPERTIES == msgProps.numProperties());
 
         // Create PutEventBuilder
-        bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+        bmqp::PutEventBuilder obj(blobSpPool.get(),
+                                  bmqtst::TestHelperUtil::allocator());
 
-        ASSERT_EQ(obj.crc32c(), 0U);
+        BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
         obj.startMessage();
         obj.setMessagePayload(k_PAYLOAD_BIGGER, k_PAYLOAD_BIGGER_LEN);
         obj.setMessageProperties(&msgProps);
+#ifdef BMQ_ENABLE_MSG_GROUPID
         obj.setMsgGroupId(k_MSG_GROUP_ID);
+#endif
 
         struct Test {
             int                d_line;
@@ -282,7 +299,7 @@ static void test1_breathingTest()
             obj.setCompressionAlgorithmType(
                 bmqt::CompressionAlgorithmType::e_NONE);
 
-            ASSERT_EQ(obj.crc32c(), k_CRC32);
+            BMQTST_ASSERT_EQ(obj.crc32c(), k_CRC32);
 
             if (test.d_hasNewTimeStamp) {
                 BSLS_ASSERT_OPT(0 ==
@@ -300,53 +317,57 @@ static void test1_breathingTest()
                 &msgProps,
                 test.d_hasProperties,
                 &bufferFactory,
-                s_allocator_p,
+                bmqtst::TestHelperUtil::allocator(),
                 obj.compressionAlgorithmType());
 
-            ASSERT_EQ(obj.msgGroupId().isNull(), false);
-            ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), false);
+            BMQTST_ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
 
             bmqt::EventBuilderResult::Enum rc = obj.packMessage(
                 test.d_queueId);
 
-            ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-            ASSERT_EQ(obj.messageCount(), msgNum);
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
-            ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
-            ASSERT_EQ(obj.crc32c(), 0U);
+            BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+            BMQTST_ASSERT_EQ(obj.messageCount(), msgNum);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+            BMQTST_ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
+            BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
-            ASSERT_GT(obj.eventSize(),
-                      k_PAYLOAD_BIGGER_LEN * msgNum + msgProps.totalSize());
+            BMQTST_ASSERT_GT(obj.eventSize(),
+                             k_PAYLOAD_BIGGER_LEN * msgNum +
+                                 msgProps.totalSize());
         }
 
         // Get blob and use bmqp iterator to test.  Note that bmqp event and
         // bmqp iterators are lower than bmqp builders, and thus, can be used
         // to test them.
-        const bdlbb::Blob& eventBlob = obj.blob();
-        bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+        bmqp::Event rawEvent(obj.blob().get(),
+                             bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(rawEvent.isValid());
         BSLS_ASSERT_OPT(rawEvent.isPutEvent());
 
-        bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+        bmqp::PutMessageIterator putIter(&bufferFactory,
+                                         bmqtst::TestHelperUtil::allocator());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
         BSLS_ASSERT_OPT(putIter.isValid());
-        bdlbb::Blob payloadBlob(s_allocator_p);
+        bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
 
         for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
             const Test&       test = k_DATA[idx];
             bmqt::MessageGUID guid;
             guid.fromHex(k_HEX_GUIDS[idx]);
 
-            ASSERT_EQ(1, putIter.next());
-            ASSERT_EQ(test.d_queueId, putIter.header().queueId());
-            ASSERT_EQ(guid, putIter.header().messageGUID());
-            ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
-            ASSERT_EQ(bmqt::CompressionAlgorithmType::e_NONE,
-                      putIter.header().compressionAlgorithmType());
+            BMQTST_ASSERT_EQ(1, putIter.next());
+            BMQTST_ASSERT_EQ(test.d_queueId, putIter.header().queueId());
+            BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
+            BMQTST_ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
+            BMQTST_ASSERT_EQ(bmqt::CompressionAlgorithmType::e_NONE,
+                             putIter.header().compressionAlgorithmType());
 
             payloadBlob.removeAll();
 
@@ -355,9 +376,9 @@ static void test1_breathingTest()
                             k_PAYLOAD_BIGGER_LEN);
 
             int res, compareResult;
-            res = mwcu::BlobUtil::compareSection(&compareResult,
+            res = bmqu::BlobUtil::compareSection(&compareResult,
                                                  payloadBlob,
-                                                 mwcu::BlobPosition(),
+                                                 bmqu::BlobPosition(),
                                                  k_PAYLOAD_BIGGER,
                                                  k_PAYLOAD_BIGGER_LEN);
 
@@ -365,47 +386,51 @@ static void test1_breathingTest()
             BSLS_ASSERT_OPT(compareResult == 0);
 
             bmqt::PropertyType::Enum ptype;
-            bmqp::MessageProperties  prop(s_allocator_p);
+            bmqp::MessageProperties  prop(bmqtst::TestHelperUtil::allocator());
 
             if (!test.d_hasProperties) {
-                ASSERT_EQ(false, putIter.hasMessageProperties());
-                ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-                ASSERT_EQ(0, prop.numProperties());
+                BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+                BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+                BMQTST_ASSERT_EQ(0, prop.numProperties());
             }
             else {
-                ASSERT_EQ(putIter.hasMessageProperties(), true);
-                ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
-                ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
-                ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
+                BMQTST_ASSERT_EQ(putIter.hasMessageProperties(), true);
+                BMQTST_ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
+                BMQTST_ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
+                BMQTST_ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
 
-                ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
-                          k_PROPERTY_VAL_ENCODING);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
+                                 k_PROPERTY_VAL_ENCODING);
 
-                ASSERT_EQ(prop.hasProperty("id", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
-                ASSERT_EQ(prop.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
-                ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
-                ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
-                          test.d_timeStamp);
+                BMQTST_ASSERT_EQ(prop.hasProperty("id", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsString("id"),
+                                 k_PROPERTY_VAL_ID);
+                BMQTST_ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
+                                 test.d_timeStamp);
             }
 
-            bmqp::Protocol::MsgGroupId msgGroupId(s_allocator_p);
-            ASSERT_EQ(putIter.hasMsgGroupId(), true);
-            ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
-            ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
-            ASSERT_EQ(putIter.isValid(), true);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            bmqp::Protocol::MsgGroupId msgGroupId(
+                bmqtst::TestHelperUtil::allocator());
+            BMQTST_ASSERT_EQ(putIter.hasMsgGroupId(), true);
+            BMQTST_ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
+            BMQTST_ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+            BMQTST_ASSERT_EQ(putIter.isValid(), true);
+#endif
         }
 
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
 
         // Reset the builder, pack 1 msg. Test.
         obj.reset();
-        ASSERT_EQ(0, obj.messageCount());
-        ASSERT_EQ(0U, obj.crc32c());
+        BMQTST_ASSERT_EQ(0, obj.messageCount());
+        BMQTST_ASSERT_EQ(0U, obj.crc32c());
 
         obj.startMessage();
 
@@ -418,41 +443,41 @@ static void test1_breathingTest()
         obj.setMessageGUID(guid);
         bmqt::EventBuilderResult::Enum rc = obj.packMessage(k_QID);
 
-        ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-        ASSERT_GT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(obj.messageCount(), 1);
+        BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+        BMQTST_ASSERT_GT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(obj.messageCount(), 1);
 
-        rawEvent.reset(&obj.blob());
+        rawEvent.reset(obj.blob().get());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
-        ASSERT_EQ(1, putIter.next());
-        ASSERT_EQ(k_QID, putIter.header().queueId());
-        ASSERT_EQ(guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ(1, putIter.next());
+        BMQTST_ASSERT_EQ(k_QID, putIter.header().queueId());
+        BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
 
         payloadBlob.removeAll();
 
-        ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-        ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+        BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
 
-        bmqp::MessageProperties prop(s_allocator_p);
+        bmqp::MessageProperties prop(bmqtst::TestHelperUtil::allocator());
         int                     res, compareResult;
-        res = mwcu::BlobUtil::compareSection(&compareResult,
+        res = bmqu::BlobUtil::compareSection(&compareResult,
                                              payloadBlob,
-                                             mwcu::BlobPosition(),
+                                             bmqu::BlobPosition(),
                                              k_PAYLOAD_BIGGER,
                                              k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(0, res);
-        ASSERT_EQ(0, compareResult);
-        ASSERT_EQ(false, putIter.hasMessageProperties());
-        ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-        ASSERT_EQ(0, prop.numProperties());
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 1 msg
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, res);
+        BMQTST_ASSERT_EQ(0, compareResult);
+        BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+        BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+        BMQTST_ASSERT_EQ(0, prop.numProperties());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
     }
     {
         PVV("USE ZLIB COMPRESSION FOR MESSAGE PROPERTIES AND PAYLOAD");
-        bmqp::MessageProperties msgProps(s_allocator_p);
+        bmqp::MessageProperties msgProps(bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(
             0 ==
@@ -465,14 +490,17 @@ static void test1_breathingTest()
         BSLS_ASSERT_OPT(k_NUM_PROPERTIES == msgProps.numProperties());
 
         // Create PutEventBuilder
-        bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+        bmqp::PutEventBuilder obj(blobSpPool.get(),
+                                  bmqtst::TestHelperUtil::allocator());
 
-        ASSERT_EQ(obj.crc32c(), 0U);
+        BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
         obj.startMessage();
         obj.setMessagePayload(k_PAYLOAD_BIGGER, k_PAYLOAD_BIGGER_LEN);
         obj.setMessageProperties(&msgProps);
+#ifdef BMQ_ENABLE_MSG_GROUPID
         obj.setMsgGroupId(k_MSG_GROUP_ID);
+#endif
 
         struct Test {
             int                d_line;
@@ -499,7 +527,7 @@ static void test1_breathingTest()
             obj.setCrc32c(k_CRC32);
             obj.setCompressionAlgorithmType(
                 bmqt::CompressionAlgorithmType::e_ZLIB);
-            ASSERT_EQ(obj.crc32c(), k_CRC32);
+            BMQTST_ASSERT_EQ(obj.crc32c(), k_CRC32);
 
             if (test.d_hasNewTimeStamp) {
                 BSLS_ASSERT_OPT(0 ==
@@ -517,54 +545,58 @@ static void test1_breathingTest()
                 &msgProps,
                 test.d_hasProperties,
                 &bufferFactory,
-                s_allocator_p,
+                bmqtst::TestHelperUtil::allocator(),
                 obj.compressionAlgorithmType());
 
-            ASSERT_EQ(obj.msgGroupId().isNull(), false);
-            ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), false);
+            BMQTST_ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
 
             bmqt::EventBuilderResult::Enum rc = obj.packMessage(
                 test.d_queueId);
 
-            ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-            ASSERT_EQ(obj.messageCount(), msgNum);
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
-            ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
-            ASSERT_EQ(obj.crc32c(), 0U);
+            BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+            BMQTST_ASSERT_EQ(obj.messageCount(), msgNum);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+            BMQTST_ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
+            BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
             // since we compress a large size message; expect event to be small
-            ASSERT_LT(obj.eventSize(),
-                      k_PAYLOAD_BIGGER_LEN * msgNum + msgProps.totalSize());
+            BMQTST_ASSERT_LT(obj.eventSize(),
+                             k_PAYLOAD_BIGGER_LEN * msgNum +
+                                 msgProps.totalSize());
         }
 
         // Get blob and use bmqp iterator to test.  Note that bmqp event and
         // bmqp iterators are lower than bmqp builders, and thus, can be used
         // to test them.
-        const bdlbb::Blob& eventBlob = obj.blob();
-        bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+        bmqp::Event rawEvent(obj.blob().get(),
+                             bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(rawEvent.isValid());
         BSLS_ASSERT_OPT(rawEvent.isPutEvent());
 
-        bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+        bmqp::PutMessageIterator putIter(&bufferFactory,
+                                         bmqtst::TestHelperUtil::allocator());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
         BSLS_ASSERT_OPT(putIter.isValid());
-        bdlbb::Blob payloadBlob(s_allocator_p);
+        bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
 
         for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
             const Test&       test = k_DATA[idx];
             bmqt::MessageGUID guid;
             guid.fromHex(test.d_guidHex);
 
-            ASSERT_EQ(1, putIter.next());
-            ASSERT_EQ(test.d_queueId, putIter.header().queueId());
-            ASSERT_EQ(guid, putIter.header().messageGUID());
-            ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
-            ASSERT_EQ(bmqt::CompressionAlgorithmType::e_ZLIB,
-                      putIter.header().compressionAlgorithmType());
+            BMQTST_ASSERT_EQ(1, putIter.next());
+            BMQTST_ASSERT_EQ(test.d_queueId, putIter.header().queueId());
+            BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
+            BMQTST_ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
+            BMQTST_ASSERT_EQ(bmqt::CompressionAlgorithmType::e_ZLIB,
+                             putIter.header().compressionAlgorithmType());
 
             payloadBlob.removeAll();
 
@@ -573,9 +605,9 @@ static void test1_breathingTest()
                             k_PAYLOAD_BIGGER_LEN);
 
             int res, compareResult;
-            res = mwcu::BlobUtil::compareSection(&compareResult,
+            res = bmqu::BlobUtil::compareSection(&compareResult,
                                                  payloadBlob,
-                                                 mwcu::BlobPosition(),
+                                                 bmqu::BlobPosition(),
                                                  k_PAYLOAD_BIGGER,
                                                  k_PAYLOAD_BIGGER_LEN);
 
@@ -583,48 +615,52 @@ static void test1_breathingTest()
             BSLS_ASSERT_OPT(compareResult == 0);
 
             bmqt::PropertyType::Enum ptype;
-            bmqp::MessageProperties  prop(s_allocator_p);
+            bmqp::MessageProperties  prop(bmqtst::TestHelperUtil::allocator());
 
             if (!test.d_hasProperties) {
-                ASSERT_EQ(false, putIter.hasMessageProperties());
-                ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-                ASSERT_EQ(0, prop.numProperties());
+                BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+                BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+                BMQTST_ASSERT_EQ(0, prop.numProperties());
             }
             else {
-                ASSERT_EQ(putIter.hasMessageProperties(), true);
-                ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
-                ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
-                ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
+                BMQTST_ASSERT_EQ(putIter.hasMessageProperties(), true);
+                BMQTST_ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
+                BMQTST_ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
+                BMQTST_ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
 
-                ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
-                          k_PROPERTY_VAL_ENCODING);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
+                                 k_PROPERTY_VAL_ENCODING);
 
-                ASSERT_EQ(prop.hasProperty("id", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
-                ASSERT_EQ(prop.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
-                ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
-                ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
-                          test.d_timeStamp);
+                BMQTST_ASSERT_EQ(prop.hasProperty("id", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsString("id"),
+                                 k_PROPERTY_VAL_ID);
+                BMQTST_ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
+                                 test.d_timeStamp);
             }
 
-            bmqp::Protocol::MsgGroupId msgGroupId(s_allocator_p);
-            ASSERT_EQ(putIter.hasMsgGroupId(), true);
-            ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
-            ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            bmqp::Protocol::MsgGroupId msgGroupId(
+                bmqtst::TestHelperUtil::allocator());
+            BMQTST_ASSERT_EQ(putIter.hasMsgGroupId(), true);
+            BMQTST_ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
+            BMQTST_ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(putIter.isValid(), true);
+            BMQTST_ASSERT_EQ(putIter.isValid(), true);
         }
 
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
 
         // Reset the builder, pack 1 msg. Test.
         obj.reset();
-        ASSERT_EQ(0, obj.messageCount());
-        ASSERT_EQ(0U, obj.crc32c());
+        BMQTST_ASSERT_EQ(0, obj.messageCount());
+        BMQTST_ASSERT_EQ(0U, obj.crc32c());
 
         obj.startMessage();
 
@@ -639,44 +675,44 @@ static void test1_breathingTest()
             bmqt::CompressionAlgorithmType::e_ZLIB);
         bmqt::EventBuilderResult::Enum rc = obj.packMessage(k_QID);
 
-        ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+        BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
 
         // Compression using ZLIB should reduce a large message size
         // significantly
-        ASSERT_LT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(obj.messageCount(), 1);
+        BMQTST_ASSERT_LT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(obj.messageCount(), 1);
 
-        rawEvent.reset(&obj.blob());
+        rawEvent.reset(obj.blob().get());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
-        ASSERT_EQ(1, putIter.next());
-        ASSERT_EQ(k_QID, putIter.header().queueId());
-        ASSERT_EQ(guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ(1, putIter.next());
+        BMQTST_ASSERT_EQ(k_QID, putIter.header().queueId());
+        BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
 
         payloadBlob.removeAll();
 
-        ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-        ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+        BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
 
-        bmqp::MessageProperties prop(s_allocator_p);
+        bmqp::MessageProperties prop(bmqtst::TestHelperUtil::allocator());
         int                     res, compareResult;
-        res = mwcu::BlobUtil::compareSection(&compareResult,
+        res = bmqu::BlobUtil::compareSection(&compareResult,
                                              payloadBlob,
-                                             mwcu::BlobPosition(),
+                                             bmqu::BlobPosition(),
                                              k_PAYLOAD_BIGGER,
                                              k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(0, res);
-        ASSERT_EQ(0, compareResult);
-        ASSERT_EQ(false, putIter.hasMessageProperties());
-        ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-        ASSERT_EQ(0, prop.numProperties());
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 1 msg
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, res);
+        BMQTST_ASSERT_EQ(0, compareResult);
+        BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+        BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+        BMQTST_ASSERT_EQ(0, prop.numProperties());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
     }
     {
         PVV("USE MIX OF ZLIB COMPRESSION AND NO COMPRESSION FOR MESSAGES");
-        bmqp::MessageProperties msgProps(s_allocator_p);
+        bmqp::MessageProperties msgProps(bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(
             0 ==
@@ -689,14 +725,17 @@ static void test1_breathingTest()
         BSLS_ASSERT_OPT(k_NUM_PROPERTIES == msgProps.numProperties());
 
         // Create PutEventBuilder
-        bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+        bmqp::PutEventBuilder obj(blobSpPool.get(),
+                                  bmqtst::TestHelperUtil::allocator());
 
-        ASSERT_EQ(obj.crc32c(), 0U);
+        BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
         obj.startMessage();
         obj.setMessagePayload(k_PAYLOAD_BIGGER, k_PAYLOAD_BIGGER_LEN);
         obj.setMessageProperties(&msgProps);
+#ifdef BMQ_ENABLE_MSG_GROUPID
         obj.setMsgGroupId(k_MSG_GROUP_ID);
+#endif
 
         struct Test {
             int                d_line;
@@ -730,7 +769,7 @@ static void test1_breathingTest()
             obj.setMessageGUID(guid);
             obj.setCrc32c(k_CRC32);
 
-            ASSERT_EQ(obj.crc32c(), k_CRC32);
+            BMQTST_ASSERT_EQ(obj.crc32c(), k_CRC32);
 
             if (test.d_hasNewTimeStamp) {
                 BSLS_ASSERT_OPT(0 ==
@@ -748,60 +787,64 @@ static void test1_breathingTest()
                 &msgProps,
                 test.d_hasProperties,
                 &bufferFactory,
-                s_allocator_p,
+                bmqtst::TestHelperUtil::allocator(),
                 obj.compressionAlgorithmType());
 
-            ASSERT_EQ(obj.msgGroupId().isNull(), false);
-            ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), false);
+            BMQTST_ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
 
             bmqt::EventBuilderResult::Enum rc = obj.packMessage(
                 test.d_queueId);
 
-            ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-            ASSERT_EQ(obj.messageCount(), msgNum);
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
-            ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
-            ASSERT_EQ(obj.crc32c(), 0U);
+            BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+            BMQTST_ASSERT_EQ(obj.messageCount(), msgNum);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+            BMQTST_ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
+            BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
             // mix of zlib and no compression should have event much smaller
             // than message
-            ASSERT_LT(obj.eventSize(),
-                      k_PAYLOAD_BIGGER_LEN * msgNum + msgProps.totalSize());
+            BMQTST_ASSERT_LT(obj.eventSize(),
+                             k_PAYLOAD_BIGGER_LEN * msgNum +
+                                 msgProps.totalSize());
         }
 
         // Get blob and use bmqp iterator to test.  Note that bmqp event and
         // bmqp iterators are lower than bmqp builders, and thus, can be used
         // to test them.
-        const bdlbb::Blob& eventBlob = obj.blob();
-        bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+        bmqp::Event rawEvent(obj.blob().get(),
+                             bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(rawEvent.isValid());
         BSLS_ASSERT_OPT(rawEvent.isPutEvent());
 
-        bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+        bmqp::PutMessageIterator putIter(&bufferFactory,
+                                         bmqtst::TestHelperUtil::allocator());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
         BSLS_ASSERT_OPT(putIter.isValid());
-        bdlbb::Blob payloadBlob(s_allocator_p);
+        bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
 
         for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
             const Test&       test = k_DATA[idx];
             bmqt::MessageGUID guid;
             guid.fromHex(test.d_guidHex);
 
-            ASSERT_EQ(1, putIter.next());
-            ASSERT_EQ(test.d_queueId, putIter.header().queueId());
-            ASSERT_EQ(guid, putIter.header().messageGUID());
-            ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
+            BMQTST_ASSERT_EQ(1, putIter.next());
+            BMQTST_ASSERT_EQ(test.d_queueId, putIter.header().queueId());
+            BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
+            BMQTST_ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
             if (idx % 2 == 0) {
-                ASSERT_EQ(bmqt::CompressionAlgorithmType::e_ZLIB,
-                          putIter.header().compressionAlgorithmType());
+                BMQTST_ASSERT_EQ(bmqt::CompressionAlgorithmType::e_ZLIB,
+                                 putIter.header().compressionAlgorithmType());
             }
             else {
-                ASSERT_EQ(bmqt::CompressionAlgorithmType::e_NONE,
-                          putIter.header().compressionAlgorithmType());
+                BMQTST_ASSERT_EQ(bmqt::CompressionAlgorithmType::e_NONE,
+                                 putIter.header().compressionAlgorithmType());
             }
 
             payloadBlob.removeAll();
@@ -811,9 +854,9 @@ static void test1_breathingTest()
                             k_PAYLOAD_BIGGER_LEN);
 
             int res, compareResult;
-            res = mwcu::BlobUtil::compareSection(&compareResult,
+            res = bmqu::BlobUtil::compareSection(&compareResult,
                                                  payloadBlob,
-                                                 mwcu::BlobPosition(),
+                                                 bmqu::BlobPosition(),
                                                  k_PAYLOAD_BIGGER,
                                                  k_PAYLOAD_BIGGER_LEN);
 
@@ -821,48 +864,52 @@ static void test1_breathingTest()
             BSLS_ASSERT_OPT(compareResult == 0);
 
             bmqt::PropertyType::Enum ptype;
-            bmqp::MessageProperties  prop(s_allocator_p);
+            bmqp::MessageProperties  prop(bmqtst::TestHelperUtil::allocator());
 
             if (!test.d_hasProperties) {
-                ASSERT_EQ(false, putIter.hasMessageProperties());
-                ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-                ASSERT_EQ(0, prop.numProperties());
+                BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+                BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+                BMQTST_ASSERT_EQ(0, prop.numProperties());
             }
             else {
-                ASSERT_EQ(putIter.hasMessageProperties(), true);
-                ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
-                ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
-                ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
+                BMQTST_ASSERT_EQ(putIter.hasMessageProperties(), true);
+                BMQTST_ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
+                BMQTST_ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
+                BMQTST_ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
 
-                ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
-                          k_PROPERTY_VAL_ENCODING);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
+                                 k_PROPERTY_VAL_ENCODING);
 
-                ASSERT_EQ(prop.hasProperty("id", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
-                ASSERT_EQ(prop.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
-                ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
-                ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
-                          test.d_timeStamp);
+                BMQTST_ASSERT_EQ(prop.hasProperty("id", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsString("id"),
+                                 k_PROPERTY_VAL_ID);
+                BMQTST_ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
+                                 test.d_timeStamp);
             }
 
-            bmqp::Protocol::MsgGroupId msgGroupId(s_allocator_p);
-            ASSERT_EQ(putIter.hasMsgGroupId(), true);
-            ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
-            ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            bmqp::Protocol::MsgGroupId msgGroupId(
+                bmqtst::TestHelperUtil::allocator());
+            BMQTST_ASSERT_EQ(putIter.hasMsgGroupId(), true);
+            BMQTST_ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
+            BMQTST_ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(putIter.isValid(), true);
+            BMQTST_ASSERT_EQ(putIter.isValid(), true);
         }
 
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
 
         // Reset the builder, pack 1 msg. Test.
         obj.reset();
-        ASSERT_EQ(0, obj.messageCount());
-        ASSERT_EQ(0U, obj.crc32c());
+        BMQTST_ASSERT_EQ(0, obj.messageCount());
+        BMQTST_ASSERT_EQ(0U, obj.crc32c());
 
         obj.startMessage();
 
@@ -877,45 +924,45 @@ static void test1_breathingTest()
             bmqt::CompressionAlgorithmType::e_ZLIB);
         bmqt::EventBuilderResult::Enum rc = obj.packMessage(k_QID);
 
-        ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+        BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
 
         // since mix of ZLIB compression used so expect event to be much
         // smaller than message size.
-        ASSERT_LT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(obj.messageCount(), 1);
+        BMQTST_ASSERT_LT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(obj.messageCount(), 1);
 
-        rawEvent.reset(&obj.blob());
+        rawEvent.reset(obj.blob().get());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
-        ASSERT_EQ(1, putIter.next());
-        ASSERT_EQ(k_QID, putIter.header().queueId());
-        ASSERT_EQ(guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ(1, putIter.next());
+        BMQTST_ASSERT_EQ(k_QID, putIter.header().queueId());
+        BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
 
         payloadBlob.removeAll();
 
-        ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-        ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+        BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
 
-        bmqp::MessageProperties prop(s_allocator_p);
+        bmqp::MessageProperties prop(bmqtst::TestHelperUtil::allocator());
         int                     res, compareResult;
-        res = mwcu::BlobUtil::compareSection(&compareResult,
+        res = bmqu::BlobUtil::compareSection(&compareResult,
                                              payloadBlob,
-                                             mwcu::BlobPosition(),
+                                             bmqu::BlobPosition(),
                                              k_PAYLOAD_BIGGER,
                                              k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(0, res);
-        ASSERT_EQ(0, compareResult);
-        ASSERT_EQ(false, putIter.hasMessageProperties());
-        ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-        ASSERT_EQ(0, prop.numProperties());
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 1 msg
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, res);
+        BMQTST_ASSERT_EQ(0, compareResult);
+        BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+        BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+        BMQTST_ASSERT_EQ(0, prop.numProperties());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
     }
 
     {
         PVV("USE COMPRESSION MIX BUT VERY SMALL MESSAGE: EXPECT NO COMPRESS");
-        bmqp::MessageProperties msgProps(s_allocator_p);
+        bmqp::MessageProperties msgProps(bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(
             0 ==
@@ -928,14 +975,17 @@ static void test1_breathingTest()
         BSLS_ASSERT_OPT(k_NUM_PROPERTIES == msgProps.numProperties());
 
         // Create PutEventBuilder
-        bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+        bmqp::PutEventBuilder obj(blobSpPool.get(),
+                                  bmqtst::TestHelperUtil::allocator());
 
-        ASSERT_EQ(obj.crc32c(), 0U);
+        BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
         obj.startMessage();
         obj.setMessagePayload(k_PAYLOAD, k_PAYLOAD_LEN);
         obj.setMessageProperties(&msgProps);
+#ifdef BMQ_ENABLE_MSG_GROUPID
         obj.setMsgGroupId(k_MSG_GROUP_ID);
+#endif
 
         struct Test {
             int                d_line;
@@ -969,7 +1019,7 @@ static void test1_breathingTest()
             obj.setCrc32c(k_CRC32);
             obj.setMessageGUID(guid);
 
-            ASSERT_EQ(obj.crc32c(), k_CRC32);
+            BMQTST_ASSERT_EQ(obj.crc32c(), k_CRC32);
 
             if (test.d_hasNewTimeStamp) {
                 BSLS_ASSERT_OPT(0 ==
@@ -987,55 +1037,58 @@ static void test1_breathingTest()
                 &msgProps,
                 test.d_hasProperties,
                 &bufferFactory,
-                s_allocator_p,
+                bmqtst::TestHelperUtil::allocator(),
                 bmqt::CompressionAlgorithmType::e_NONE);
 
-            ASSERT_EQ(obj.msgGroupId().isNull(), false);
-            ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), false);
+            BMQTST_ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_LEN);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_LEN);
 
             bmqt::EventBuilderResult::Enum rc = obj.packMessage(
                 test.d_queueId);
 
-            ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-            ASSERT_EQ(obj.messageCount(), msgNum);
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_LEN);
-            ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
-            ASSERT_EQ(obj.crc32c(), 0U);
+            BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+            BMQTST_ASSERT_EQ(obj.messageCount(), msgNum);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_LEN);
+            BMQTST_ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
+            BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
-            ASSERT_GT(obj.eventSize(),
-                      k_PAYLOAD_LEN * msgNum + msgProps.totalSize());
+            BMQTST_ASSERT_GT(obj.eventSize(),
+                             k_PAYLOAD_LEN * msgNum + msgProps.totalSize());
         }
 
         // Get blob and use bmqp iterator to test.  Note that bmqp event and
         // bmqp iterators are lower than bmqp builders, and thus, can be used
         // to test them.
-        const bdlbb::Blob& eventBlob = obj.blob();
-        bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+        bmqp::Event rawEvent(obj.blob().get(),
+                             bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(rawEvent.isValid());
         BSLS_ASSERT_OPT(rawEvent.isPutEvent());
 
-        bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+        bmqp::PutMessageIterator putIter(&bufferFactory,
+                                         bmqtst::TestHelperUtil::allocator());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
         BSLS_ASSERT_OPT(putIter.isValid());
-        bdlbb::Blob payloadBlob(s_allocator_p);
+        bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
 
         for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
             const Test&       test = k_DATA[idx];
             bmqt::MessageGUID guid;
             guid.fromHex(test.d_guidHex);
 
-            ASSERT_EQ(1, putIter.next());
-            ASSERT_EQ(test.d_queueId, putIter.header().queueId());
-            ASSERT_EQ(guid, putIter.header().messageGUID());
-            ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
+            BMQTST_ASSERT_EQ(1, putIter.next());
+            BMQTST_ASSERT_EQ(test.d_queueId, putIter.header().queueId());
+            BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
+            BMQTST_ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
 
             // since test message size is small we dont expect compression
-            ASSERT_EQ(bmqt::CompressionAlgorithmType::e_NONE,
-                      putIter.header().compressionAlgorithmType());
+            BMQTST_ASSERT_EQ(bmqt::CompressionAlgorithmType::e_NONE,
+                             putIter.header().compressionAlgorithmType());
 
             payloadBlob.removeAll();
 
@@ -1043,9 +1096,9 @@ static void test1_breathingTest()
             BSLS_ASSERT_OPT(putIter.messagePayloadSize() == k_PAYLOAD_LEN);
 
             int res, compareResult;
-            res = mwcu::BlobUtil::compareSection(&compareResult,
+            res = bmqu::BlobUtil::compareSection(&compareResult,
                                                  payloadBlob,
-                                                 mwcu::BlobPosition(),
+                                                 bmqu::BlobPosition(),
                                                  k_PAYLOAD,
                                                  k_PAYLOAD_LEN);
 
@@ -1053,48 +1106,52 @@ static void test1_breathingTest()
             BSLS_ASSERT_OPT(compareResult == 0);
 
             bmqt::PropertyType::Enum ptype;
-            bmqp::MessageProperties  prop(s_allocator_p);
+            bmqp::MessageProperties  prop(bmqtst::TestHelperUtil::allocator());
 
             if (!test.d_hasProperties) {
-                ASSERT_EQ(false, putIter.hasMessageProperties());
-                ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-                ASSERT_EQ(0, prop.numProperties());
+                BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+                BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+                BMQTST_ASSERT_EQ(0, prop.numProperties());
             }
             else {
-                ASSERT_EQ(putIter.hasMessageProperties(), true);
-                ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
-                ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
-                ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
+                BMQTST_ASSERT_EQ(putIter.hasMessageProperties(), true);
+                BMQTST_ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
+                BMQTST_ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
+                BMQTST_ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
 
-                ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
-                          k_PROPERTY_VAL_ENCODING);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
+                                 k_PROPERTY_VAL_ENCODING);
 
-                ASSERT_EQ(prop.hasProperty("id", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
-                ASSERT_EQ(prop.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
-                ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
-                ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
-                          test.d_timeStamp);
+                BMQTST_ASSERT_EQ(prop.hasProperty("id", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsString("id"),
+                                 k_PROPERTY_VAL_ID);
+                BMQTST_ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
+                                 test.d_timeStamp);
             }
 
-            bmqp::Protocol::MsgGroupId msgGroupId(s_allocator_p);
-            ASSERT_EQ(putIter.hasMsgGroupId(), true);
-            ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
-            ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            bmqp::Protocol::MsgGroupId msgGroupId(
+                bmqtst::TestHelperUtil::allocator());
+            BMQTST_ASSERT_EQ(putIter.hasMsgGroupId(), true);
+            BMQTST_ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
+            BMQTST_ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(putIter.isValid(), true);
+            BMQTST_ASSERT_EQ(putIter.isValid(), true);
         }
 
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
 
         // Reset the builder, pack 1 msg. Test.
         obj.reset();
-        ASSERT_EQ(0, obj.messageCount());
-        ASSERT_EQ(0U, obj.crc32c());
+        BMQTST_ASSERT_EQ(0, obj.messageCount());
+        BMQTST_ASSERT_EQ(0U, obj.crc32c());
 
         obj.startMessage();
 
@@ -1107,42 +1164,42 @@ static void test1_breathingTest()
         obj.setMessagePayload(k_PAYLOAD, k_PAYLOAD_LEN);
         bmqt::EventBuilderResult::Enum rc = obj.packMessage(k_QID);
 
-        ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-        ASSERT_GT(obj.eventSize(), k_PAYLOAD_LEN);
-        ASSERT_EQ(obj.messageCount(), 1);
+        BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+        BMQTST_ASSERT_GT(obj.eventSize(), k_PAYLOAD_LEN);
+        BMQTST_ASSERT_EQ(obj.messageCount(), 1);
 
-        rawEvent.reset(&obj.blob());
+        rawEvent.reset(obj.blob().get());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
-        ASSERT_EQ(1, putIter.next());
-        ASSERT_EQ(k_QID, putIter.header().queueId());
-        ASSERT_EQ(guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ(1, putIter.next());
+        BMQTST_ASSERT_EQ(k_QID, putIter.header().queueId());
+        BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
 
         payloadBlob.removeAll();
 
-        ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-        ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_LEN);
+        BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+        BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_LEN);
 
-        bmqp::MessageProperties prop(s_allocator_p);
+        bmqp::MessageProperties prop(bmqtst::TestHelperUtil::allocator());
         int                     res, compareResult;
-        res = mwcu::BlobUtil::compareSection(&compareResult,
+        res = bmqu::BlobUtil::compareSection(&compareResult,
                                              payloadBlob,
-                                             mwcu::BlobPosition(),
+                                             bmqu::BlobPosition(),
                                              k_PAYLOAD,
                                              k_PAYLOAD_LEN);
-        ASSERT_EQ(0, res);
-        ASSERT_EQ(0, compareResult);
-        ASSERT_EQ(false, putIter.hasMessageProperties());
-        ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-        ASSERT_EQ(0, prop.numProperties());
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 1 msg
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, res);
+        BMQTST_ASSERT_EQ(0, compareResult);
+        BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+        BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+        BMQTST_ASSERT_EQ(0, prop.numProperties());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
     }
 
     {
         PVV("COMPRESSION USING UNKNOWN ALGORITHM TYPE");
-        bmqp::MessageProperties msgProps(s_allocator_p);
+        bmqp::MessageProperties msgProps(bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(
             0 ==
@@ -1155,14 +1212,17 @@ static void test1_breathingTest()
         BSLS_ASSERT_OPT(k_NUM_PROPERTIES == msgProps.numProperties());
 
         // Create PutEventBuilder
-        bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+        bmqp::PutEventBuilder obj(blobSpPool.get(),
+                                  bmqtst::TestHelperUtil::allocator());
 
-        ASSERT_EQ(obj.crc32c(), 0U);
+        BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
         obj.startMessage();
         obj.setMessagePayload(k_PAYLOAD_BIGGER, k_PAYLOAD_BIGGER_LEN);
         obj.setMessageProperties(&msgProps);
+#ifdef BMQ_ENABLE_MSG_GROUPID
         obj.setMsgGroupId(k_MSG_GROUP_ID);
+#endif
 
         struct Test {
             int                d_line;
@@ -1190,7 +1250,7 @@ static void test1_breathingTest()
             obj.setCompressionAlgorithmType(
                 bmqt::CompressionAlgorithmType::e_UNKNOWN);
 
-            ASSERT_EQ(obj.crc32c(), k_CRC32);
+            BMQTST_ASSERT_EQ(obj.crc32c(), k_CRC32);
 
             if (test.d_hasNewTimeStamp) {
                 BSLS_ASSERT_OPT(0 ==
@@ -1208,53 +1268,57 @@ static void test1_breathingTest()
                 &msgProps,
                 test.d_hasProperties,
                 &bufferFactory,
-                s_allocator_p,
+                bmqtst::TestHelperUtil::allocator(),
                 bmqt::CompressionAlgorithmType::e_NONE);
 
-            ASSERT_EQ(obj.msgGroupId().isNull(), false);
-            ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), false);
+            BMQTST_ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
 
             bmqt::EventBuilderResult::Enum rc = obj.packMessage(
                 test.d_queueId);
 
-            ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-            ASSERT_EQ(obj.messageCount(), msgNum);
-            ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
-            ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
-            ASSERT_EQ(obj.crc32c(), 0U);
+            BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+            BMQTST_ASSERT_EQ(obj.messageCount(), msgNum);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+            BMQTST_ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
+            BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
-            ASSERT_GT(obj.eventSize(),
-                      k_PAYLOAD_BIGGER_LEN * msgNum + msgProps.totalSize());
+            BMQTST_ASSERT_GT(obj.eventSize(),
+                             k_PAYLOAD_BIGGER_LEN * msgNum +
+                                 msgProps.totalSize());
         }
 
         // Get blob and use bmqp iterator to test.  Note that bmqp event and
         // bmqp iterators are lower than bmqp builders, and thus, can be used
         // to test them.
-        const bdlbb::Blob& eventBlob = obj.blob();
-        bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+        bmqp::Event rawEvent(obj.blob().get(),
+                             bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(rawEvent.isValid());
         BSLS_ASSERT_OPT(rawEvent.isPutEvent());
 
-        bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+        bmqp::PutMessageIterator putIter(&bufferFactory,
+                                         bmqtst::TestHelperUtil::allocator());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
         BSLS_ASSERT_OPT(putIter.isValid());
-        bdlbb::Blob payloadBlob(s_allocator_p);
+        bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
 
         for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
             const Test&       test = k_DATA[idx];
             bmqt::MessageGUID guid;
             guid.fromHex(test.d_guidHex);
 
-            ASSERT_EQ(1, putIter.next());
-            ASSERT_EQ(test.d_queueId, putIter.header().queueId());
-            ASSERT_EQ(guid, putIter.header().messageGUID());
-            ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
-            ASSERT_EQ(bmqt::CompressionAlgorithmType::e_NONE,
-                      putIter.header().compressionAlgorithmType());
+            BMQTST_ASSERT_EQ(1, putIter.next());
+            BMQTST_ASSERT_EQ(test.d_queueId, putIter.header().queueId());
+            BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
+            BMQTST_ASSERT_EQ(expectedCrc32[idx], putIter.header().crc32c());
+            BMQTST_ASSERT_EQ(bmqt::CompressionAlgorithmType::e_NONE,
+                             putIter.header().compressionAlgorithmType());
 
             payloadBlob.removeAll();
 
@@ -1263,9 +1327,9 @@ static void test1_breathingTest()
                             k_PAYLOAD_BIGGER_LEN);
 
             int res, compareResult;
-            res = mwcu::BlobUtil::compareSection(&compareResult,
+            res = bmqu::BlobUtil::compareSection(&compareResult,
                                                  payloadBlob,
-                                                 mwcu::BlobPosition(),
+                                                 bmqu::BlobPosition(),
                                                  k_PAYLOAD_BIGGER,
                                                  k_PAYLOAD_BIGGER_LEN);
 
@@ -1273,48 +1337,52 @@ static void test1_breathingTest()
             BSLS_ASSERT_OPT(compareResult == 0);
 
             bmqt::PropertyType::Enum ptype;
-            bmqp::MessageProperties  prop(s_allocator_p);
+            bmqp::MessageProperties  prop(bmqtst::TestHelperUtil::allocator());
 
             if (!test.d_hasProperties) {
-                ASSERT_EQ(false, putIter.hasMessageProperties());
-                ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-                ASSERT_EQ(0, prop.numProperties());
+                BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+                BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+                BMQTST_ASSERT_EQ(0, prop.numProperties());
             }
             else {
-                ASSERT_EQ(putIter.hasMessageProperties(), true);
-                ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
-                ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
-                ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
+                BMQTST_ASSERT_EQ(putIter.hasMessageProperties(), true);
+                BMQTST_ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
+                BMQTST_ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
+                BMQTST_ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
 
-                ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
-                          k_PROPERTY_VAL_ENCODING);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
+                                 k_PROPERTY_VAL_ENCODING);
 
-                ASSERT_EQ(prop.hasProperty("id", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
-                ASSERT_EQ(prop.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
-                ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
-                ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
-                ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
-                          test.d_timeStamp);
+                BMQTST_ASSERT_EQ(prop.hasProperty("id", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsString("id"),
+                                 k_PROPERTY_VAL_ID);
+                BMQTST_ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
+                BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
+                BMQTST_ASSERT_EQ(prop.getPropertyAsInt64("timestamp"),
+                                 test.d_timeStamp);
             }
 
-            bmqp::Protocol::MsgGroupId msgGroupId(s_allocator_p);
-            ASSERT_EQ(putIter.hasMsgGroupId(), true);
-            ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
-            ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            bmqp::Protocol::MsgGroupId msgGroupId(
+                bmqtst::TestHelperUtil::allocator());
+            BMQTST_ASSERT_EQ(putIter.hasMsgGroupId(), true);
+            BMQTST_ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
+            BMQTST_ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(putIter.isValid(), true);
+            BMQTST_ASSERT_EQ(putIter.isValid(), true);
         }
 
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
 
         // Reset the builder, pack 1 msg. Test.
         obj.reset();
-        ASSERT_EQ(0, obj.messageCount());
-        ASSERT_EQ(0U, obj.crc32c());
+        BMQTST_ASSERT_EQ(0, obj.messageCount());
+        BMQTST_ASSERT_EQ(0U, obj.crc32c());
 
         obj.startMessage();
 
@@ -1327,62 +1395,66 @@ static void test1_breathingTest()
         obj.setMessagePayload(k_PAYLOAD_BIGGER, k_PAYLOAD_BIGGER_LEN);
         bmqt::EventBuilderResult::Enum rc = obj.packMessage(k_QID);
 
-        ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-        ASSERT_GT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(obj.messageCount(), 1);
+        BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+        BMQTST_ASSERT_GT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(obj.messageCount(), 1);
 
-        rawEvent.reset(&obj.blob());
+        rawEvent.reset(obj.blob().get());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
-        ASSERT_EQ(1, putIter.next());
-        ASSERT_EQ(k_QID, putIter.header().queueId());
-        ASSERT_EQ(guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ(1, putIter.next());
+        BMQTST_ASSERT_EQ(k_QID, putIter.header().queueId());
+        BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
 
         payloadBlob.removeAll();
 
-        ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-        ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+        BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
 
-        bmqp::MessageProperties prop(s_allocator_p);
+        bmqp::MessageProperties prop(bmqtst::TestHelperUtil::allocator());
         int                     res, compareResult;
-        res = mwcu::BlobUtil::compareSection(&compareResult,
+        res = bmqu::BlobUtil::compareSection(&compareResult,
                                              payloadBlob,
-                                             mwcu::BlobPosition(),
+                                             bmqu::BlobPosition(),
                                              k_PAYLOAD_BIGGER,
                                              k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(0, res);
-        ASSERT_EQ(0, compareResult);
-        ASSERT_EQ(false, putIter.hasMessageProperties());
-        ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-        ASSERT_EQ(0, prop.numProperties());
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 1 msg
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, res);
+        BMQTST_ASSERT_EQ(0, compareResult);
+        BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+        BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+        BMQTST_ASSERT_EQ(0, prop.numProperties());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
     }
 
     {
         PVV("DO NOT USE COMPRESSION FOR RELAYED PUT MESSAGES");
 
         // Create PutEventBuilder
-        bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
-        ASSERT_EQ(obj.crc32c(), 0U);
-        mwcu::MemOutStream error(s_allocator_p);
+        bmqp::PutEventBuilder obj(blobSpPool.get(),
+                                  bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
+        bmqu::MemOutStream error(bmqtst::TestHelperUtil::allocator());
 
         obj.startMessage();
 
         // create payload which has compressed data.
 
-        bdlbb::Blob payload(&bufferFactory, s_allocator_p);
+        bdlbb::Blob payload(&bufferFactory,
+                            bmqtst::TestHelperUtil::allocator());
         bmqp::Compression::compress(&payload,
                                     &bufferFactory,
                                     bmqt::CompressionAlgorithmType::e_ZLIB,
                                     k_PAYLOAD_BIGGER,
                                     k_PAYLOAD_BIGGER_LEN,
                                     &error,
-                                    s_allocator_p);
+                                    bmqtst::TestHelperUtil::allocator());
         obj.setMessagePayload(&payload);
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
         obj.setMsgGroupId(k_MSG_GROUP_ID);
+#endif
 
         struct Test {
             int                d_line;
@@ -1408,51 +1480,54 @@ static void test1_breathingTest()
                     bmqt::CompressionAlgorithmType::e_ZLIB)
                 .setMessageGUID(guid);
 
-            ASSERT_EQ(obj.crc32c(), k_CRC32);
+            BMQTST_ASSERT_EQ(obj.crc32c(), k_CRC32);
 
-            ASSERT_EQ(obj.msgGroupId().isNull(), false);
-            ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), false);
+            BMQTST_ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(obj.unpackedMessageSize(), payload.length());
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), payload.length());
 
             bmqt::EventBuilderResult::Enum rc = obj.packMessageRaw(
                 test.d_queueId);
 
-            ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-            ASSERT_EQ(obj.messageCount(), msgNum);
-            ASSERT_EQ(obj.unpackedMessageSize(), payload.length());
-            ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
-            ASSERT_EQ(obj.crc32c(), 0U);
+            BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+            BMQTST_ASSERT_EQ(obj.messageCount(), msgNum);
+            BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), payload.length());
+            BMQTST_ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
+            BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
-            ASSERT_GT(obj.eventSize(), payload.length() * msgNum);
+            BMQTST_ASSERT_GT(obj.eventSize(), payload.length() * msgNum);
         }
 
         // Get blob and use bmqp iterator to test.  Note that bmqp event and
         // bmqp iterators are lower than bmqp builders, and thus, can be used
         // to test them.
-        const bdlbb::Blob& eventBlob = obj.blob();
-        bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+        bmqp::Event rawEvent(obj.blob().get(),
+                             bmqtst::TestHelperUtil::allocator());
 
         BSLS_ASSERT_OPT(rawEvent.isValid());
         BSLS_ASSERT_OPT(rawEvent.isPutEvent());
 
-        bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+        bmqp::PutMessageIterator putIter(&bufferFactory,
+                                         bmqtst::TestHelperUtil::allocator());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
         BSLS_ASSERT_OPT(putIter.isValid());
-        bdlbb::Blob payloadBlob(s_allocator_p);
+        bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
 
         for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
             const Test&       test = k_DATA[idx];
             bmqt::MessageGUID guid;
             guid.fromHex(test.d_guidHex);
 
-            ASSERT_EQ(1, putIter.next());
-            ASSERT_EQ(test.d_queueId, putIter.header().queueId());
-            ASSERT_EQ(guid, putIter.header().messageGUID());
-            ASSERT_EQ(k_CRC32, putIter.header().crc32c());
-            ASSERT_EQ(bmqt::CompressionAlgorithmType::e_ZLIB,
-                      putIter.header().compressionAlgorithmType());
+            BMQTST_ASSERT_EQ(1, putIter.next());
+            BMQTST_ASSERT_EQ(test.d_queueId, putIter.header().queueId());
+            BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
+            BMQTST_ASSERT_EQ(k_CRC32, putIter.header().crc32c());
+            BMQTST_ASSERT_EQ(bmqt::CompressionAlgorithmType::e_ZLIB,
+                             putIter.header().compressionAlgorithmType());
 
             payloadBlob.removeAll();
 
@@ -1461,37 +1536,40 @@ static void test1_breathingTest()
                             k_PAYLOAD_BIGGER_LEN);
 
             int res, compareResult;
-            res = mwcu::BlobUtil::compareSection(&compareResult,
+            res = bmqu::BlobUtil::compareSection(&compareResult,
                                                  payloadBlob,
-                                                 mwcu::BlobPosition(),
+                                                 bmqu::BlobPosition(),
                                                  k_PAYLOAD_BIGGER,
                                                  k_PAYLOAD_BIGGER_LEN);
 
             BSLS_ASSERT_OPT(res == 0);
             BSLS_ASSERT_OPT(compareResult == 0);
 
-            bmqp::MessageProperties prop(s_allocator_p);
+            bmqp::MessageProperties prop(bmqtst::TestHelperUtil::allocator());
 
-            ASSERT_EQ(false, putIter.hasMessageProperties());
-            ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-            ASSERT_EQ(0, prop.numProperties());
+            BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+            BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+            BMQTST_ASSERT_EQ(0, prop.numProperties());
 
-            bmqp::Protocol::MsgGroupId msgGroupId(s_allocator_p);
-            ASSERT_EQ(putIter.hasMsgGroupId(), true);
-            ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
-            ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+            bmqp::Protocol::MsgGroupId msgGroupId(
+                bmqtst::TestHelperUtil::allocator());
+            BMQTST_ASSERT_EQ(putIter.hasMsgGroupId(), true);
+            BMQTST_ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
+            BMQTST_ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#endif
 
-            ASSERT_EQ(putIter.isValid(), true);
+            BMQTST_ASSERT_EQ(putIter.isValid(), true);
         }
 
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 3 msgs
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
 
         // Reset the builder, pack 1 msg. Test.
         obj.reset();
-        ASSERT_EQ(0, obj.messageCount());
-        ASSERT_EQ(0U, obj.crc32c());
+        BMQTST_ASSERT_EQ(0, obj.messageCount());
+        BMQTST_ASSERT_EQ(0U, obj.crc32c());
 
         obj.startMessage();
 
@@ -1506,37 +1584,37 @@ static void test1_breathingTest()
             bmqt::CompressionAlgorithmType::e_ZLIB);
         bmqt::EventBuilderResult::Enum rc = obj.packMessageRaw(k_QID);
 
-        ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-        ASSERT_GT(obj.eventSize(), payload.length());
-        ASSERT_EQ(obj.messageCount(), 1);
+        BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+        BMQTST_ASSERT_GT(obj.eventSize(), payload.length());
+        BMQTST_ASSERT_EQ(obj.messageCount(), 1);
 
-        rawEvent.reset(&obj.blob());
+        rawEvent.reset(obj.blob().get());
         rawEvent.loadPutMessageIterator(&putIter, true);
 
-        ASSERT_EQ(1, putIter.next());
-        ASSERT_EQ(k_QID, putIter.header().queueId());
-        ASSERT_EQ(guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ(1, putIter.next());
+        BMQTST_ASSERT_EQ(k_QID, putIter.header().queueId());
+        BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
 
         payloadBlob.removeAll();
 
-        ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-        ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+        BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
 
-        bmqp::MessageProperties prop(s_allocator_p);
+        bmqp::MessageProperties prop(bmqtst::TestHelperUtil::allocator());
         int                     res, compareResult;
-        res = mwcu::BlobUtil::compareSection(&compareResult,
+        res = bmqu::BlobUtil::compareSection(&compareResult,
                                              payloadBlob,
-                                             mwcu::BlobPosition(),
+                                             bmqu::BlobPosition(),
                                              k_PAYLOAD_BIGGER,
                                              k_PAYLOAD_BIGGER_LEN);
-        ASSERT_EQ(0, res);
-        ASSERT_EQ(0, compareResult);
-        ASSERT_EQ(false, putIter.hasMessageProperties());
-        ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-        ASSERT_EQ(0, prop.numProperties());
-        ASSERT_EQ(true, putIter.isValid());
-        ASSERT_EQ(0, putIter.next());  // we added only 1 msg
-        ASSERT_EQ(false, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, res);
+        BMQTST_ASSERT_EQ(0, compareResult);
+        BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+        BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+        BMQTST_ASSERT_EQ(0, prop.numProperties());
+        BMQTST_ASSERT_EQ(true, putIter.isValid());
+        BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+        BMQTST_ASSERT_EQ(false, putIter.isValid());
     }
 }
 
@@ -1558,7 +1636,7 @@ static void test2_manipulators_one()
 //   Basic functionality
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("MANIPULATORS - ONE");
+    bmqtst::TestHelper::printTestName("MANIPULATORS - ONE");
 
     struct TestData {
         int          d_line;
@@ -1605,17 +1683,24 @@ static void test2_manipulators_one()
     const int k_NUM_DATA = sizeof(k_DATA) / sizeof(*k_DATA);
 
     // Create PutEventBuilder
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqp::PutEventBuilder          obj(&bufferFactory, s_allocator_p);
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+    bmqp::PutEventBuilder obj(blobSpPool.get(),
+                              bmqtst::TestHelperUtil::allocator());
 
     // Properties.
-    bmqp::MessageProperties msgProps(s_allocator_p);
-    ASSERT_EQ(0, msgProps.setPropertyAsInt32("encoding", 3));
-    ASSERT_EQ(0, msgProps.setPropertyAsString("id", "myCoolId"));
-    ASSERT_EQ(0, msgProps.setPropertyAsInt64("timestamp", 0LL));
+    bmqp::MessageProperties msgProps(bmqtst::TestHelperUtil::allocator());
+    BMQTST_ASSERT_EQ(0, msgProps.setPropertyAsInt32("encoding", 3));
+    BMQTST_ASSERT_EQ(0, msgProps.setPropertyAsString("id", "myCoolId"));
+    BMQTST_ASSERT_EQ(0, msgProps.setPropertyAsInt64("timestamp", 0LL));
 
     const int numProps = 3;
-    ASSERT_EQ(numProps, msgProps.numProperties());
+    BMQTST_ASSERT_EQ(numProps, msgProps.numProperties());
 
     // Set flags
     int phFlags = 0;
@@ -1634,12 +1719,16 @@ static void test2_manipulators_one()
 
         obj.startMessage();
 
-        ASSERT_EQ_D(dataIdx, obj.unpackedMessageSize(), 0);
+        BMQTST_ASSERT_EQ_D(dataIdx, obj.unpackedMessageSize(), 0);
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
         setMsgGroupId(&obj, dataIdx);
+#endif
         obj.setMessagePayload(data.d_payload, data.d_payloadLen);
 
-        ASSERT_EQ(0, msgProps.setPropertyAsInt64("timestamp", dataIdx * 10LL));
+        BMQTST_ASSERT_EQ(0,
+                         msgProps.setPropertyAsInt64("timestamp",
+                                                     dataIdx * 10LL));
 
         obj.setMessageProperties(&msgProps)
             .setMessageGUID(bmqp::MessageGUIDGenerator::testGUID())
@@ -1651,28 +1740,31 @@ static void test2_manipulators_one()
             &msgProps,
             true,  // hasProperties
             &bufferFactory,
-            s_allocator_p,
+            bmqtst::TestHelperUtil::allocator(),
             bmqt::CompressionAlgorithmType::e_NONE);
 
         bmqt::EventBuilderResult::Enum rc = obj.packMessage(data.d_qid);
 
-        ASSERT_EQ_D(dataIdx, rc, bmqt::EventBuilderResult::e_SUCCESS);
+        BMQTST_ASSERT_EQ_D(dataIdx, rc, bmqt::EventBuilderResult::e_SUCCESS);
 
-        ASSERT_LT_D(dataIdx, data.d_payloadLen, obj.eventSize());
-        ASSERT_EQ_D(dataIdx, dataIdx + 1, obj.messageCount());
-        ASSERT_EQ_D(dataIdx, data.d_payloadLen, obj.unpackedMessageSize());
+        BMQTST_ASSERT_LT_D(dataIdx, data.d_payloadLen, obj.eventSize());
+        BMQTST_ASSERT_EQ_D(dataIdx, dataIdx + 1, obj.messageCount());
+        BMQTST_ASSERT_EQ_D(dataIdx,
+                           data.d_payloadLen,
+                           obj.unpackedMessageSize());
     }
 
     // Iterate and check
-    const bdlbb::Blob& eventBlob = obj.blob();
-    bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+    bmqp::Event rawEvent(obj.blob().get(),
+                         bmqtst::TestHelperUtil::allocator());
 
     BSLS_ASSERT_OPT(true == rawEvent.isValid());
     BSLS_ASSERT_OPT(true == rawEvent.isPutEvent());
 
-    bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+    bmqp::PutMessageIterator putIter(&bufferFactory,
+                                     bmqtst::TestHelperUtil::allocator());
     rawEvent.loadPutMessageIterator(&putIter, true);
-    ASSERT_EQ(true, putIter.isValid());
+    BMQTST_ASSERT_EQ(true, putIter.isValid());
 
     int dataIndex = 0;
 
@@ -1681,52 +1773,58 @@ static void test2_manipulators_one()
         bmqt::MessageGUID guid;
         guid.fromHex(data.d_hexGuid);
 
-        ASSERT_EQ_D(dataIndex, true, putIter.isValid());
+        BMQTST_ASSERT_EQ_D(dataIndex, true, putIter.isValid());
 
-        ASSERT_EQ_D(dataIndex, guid, putIter.header().messageGUID());
-        ASSERT_EQ_D(dataIndex, data.d_qid, putIter.header().queueId());
-        ASSERT_EQ_D(dataIndex, data.d_crc32c, putIter.header().crc32c());
-        ASSERT_EQ_D(dataIndex, phFlags, putIter.header().flags());
+        BMQTST_ASSERT_EQ_D(dataIndex, guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ_D(dataIndex, data.d_qid, putIter.header().queueId());
+        BMQTST_ASSERT_EQ_D(dataIndex,
+                           data.d_crc32c,
+                           putIter.header().crc32c());
+        BMQTST_ASSERT_EQ_D(dataIndex, phFlags, putIter.header().flags());
 
-        bdlbb::Blob payloadBlob(s_allocator_p);
-        ASSERT_EQ_D(dataIndex, 0, putIter.loadMessagePayload(&payloadBlob));
+        bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ_D(dataIndex,
+                           0,
+                           putIter.loadMessagePayload(&payloadBlob));
 
-        ASSERT_EQ_D(dataIndex,
-                    data.d_payloadLen,
-                    putIter.messagePayloadSize());
+        BMQTST_ASSERT_EQ_D(dataIndex,
+                           data.d_payloadLen,
+                           putIter.messagePayloadSize());
 
         int res, compareResult;
-        res = mwcu::BlobUtil::compareSection(&compareResult,
+        res = bmqu::BlobUtil::compareSection(&compareResult,
                                              payloadBlob,
-                                             mwcu::BlobPosition(),
+                                             bmqu::BlobPosition(),
                                              data.d_payload,
                                              data.d_payloadLen);
 
-        ASSERT_EQ_D(dataIndex, 0, res);
-        ASSERT_EQ_D(dataIndex, 0, compareResult);
+        BMQTST_ASSERT_EQ_D(dataIndex, 0, res);
+        BMQTST_ASSERT_EQ_D(dataIndex, 0, compareResult);
 
-        bmqp::MessageProperties  p(s_allocator_p);
+        bmqp::MessageProperties  p(bmqtst::TestHelperUtil::allocator());
         bmqt::PropertyType::Enum ptype;
-        ASSERT_EQ(true, putIter.hasMessageProperties());
-        ASSERT_EQ(0, putIter.loadMessageProperties(&p));
-        ASSERT_EQ(numProps, p.numProperties());
-        ASSERT_EQ(true, p.hasProperty("encoding", &ptype));
-        ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
-        ASSERT_EQ(3, p.getPropertyAsInt32("encoding"));
-        ASSERT_EQ(true, p.hasProperty("id", &ptype));
-        ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
-        ASSERT_EQ("myCoolId", p.getPropertyAsString("id"));
-        ASSERT_EQ(true, p.hasProperty("timestamp", &ptype));
-        ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
-        ASSERT_EQ(dataIndex * 10LL, p.getPropertyAsInt64("timestamp"));
+        BMQTST_ASSERT_EQ(true, putIter.hasMessageProperties());
+        BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&p));
+        BMQTST_ASSERT_EQ(numProps, p.numProperties());
+        BMQTST_ASSERT_EQ(true, p.hasProperty("encoding", &ptype));
+        BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
+        BMQTST_ASSERT_EQ(3, p.getPropertyAsInt32("encoding"));
+        BMQTST_ASSERT_EQ(true, p.hasProperty("id", &ptype));
+        BMQTST_ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
+        BMQTST_ASSERT_EQ("myCoolId", p.getPropertyAsString("id"));
+        BMQTST_ASSERT_EQ(true, p.hasProperty("timestamp", &ptype));
+        BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
+        BMQTST_ASSERT_EQ(dataIndex * 10LL, p.getPropertyAsInt64("timestamp"));
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
         validateGroupId(dataIndex, putIter);
+#endif
 
         ++dataIndex;
     }
 
-    ASSERT_EQ(dataIndex, k_NUM_DATA);
-    ASSERT_EQ(false, putIter.isValid());
+    BMQTST_ASSERT_EQ(dataIndex, k_NUM_DATA);
+    BMQTST_ASSERT_EQ(false, putIter.isValid());
 }
 
 static void test3_eventTooBig()
@@ -1743,13 +1841,24 @@ static void test3_eventTooBig()
 //   Basic functionality
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("EVENT TOO BIG");
+    bmqtst::TestHelper::printTestName("EVENT TOO BIG");
 
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bdlbb::Blob                bigMsgPayload(&bufferFactory, s_allocator_p);
-    bmqp::Protocol::MsgGroupId k_MSG_GROUP_ID("gid:0", s_allocator_p);
-    const int                  k_QID = 4321;
-    bmqt::MessageGUID          guid  = bmqp::MessageGUIDGenerator::testGUID();
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+    bdlbb::Blob bigMsgPayload(&bufferFactory,
+                              bmqtst::TestHelperUtil::allocator());
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    bmqp::Protocol::MsgGroupId k_MSG_GROUP_ID(
+        "gid:0",
+        bmqtst::TestHelperUtil::allocator());
+#endif
+    const int         k_QID = 4321;
+    bmqt::MessageGUID guid  = bmqp::MessageGUIDGenerator::testGUID();
 
     bmqp::PutTester::populateBlob(&bigMsgPayload,
                                   bmqp::PutHeader::k_MAX_PAYLOAD_SIZE_SOFT +
@@ -1759,68 +1868,77 @@ static void test3_eventTooBig()
                 bigMsgPayload.length());
 
     // Create PutEventBuilder
-    bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+    bmqp::PutEventBuilder obj(blobSpPool.get(),
+                              bmqtst::TestHelperUtil::allocator());
 
     obj.startMessage();
+#ifdef BMQ_ENABLE_MSG_GROUPID
     obj.setMsgGroupId(k_MSG_GROUP_ID);
+#endif
     obj.setMessageGUID(guid);
     obj.setMessagePayload(&bigMsgPayload);
 
     bmqt::EventBuilderResult::Enum rc = obj.packMessage(k_QID);
-    ASSERT_EQ(rc, bmqt::EventBuilderResult::e_PAYLOAD_TOO_BIG);
+    BMQTST_ASSERT_EQ(rc, bmqt::EventBuilderResult::e_PAYLOAD_TOO_BIG);
 
     // Now append a "regular"-sized message
     const char* k_PAYLOAD     = "abcdefghijklmnopqrstuvwxyz";
     const int   k_PAYLOAD_LEN = bsl::strlen(k_PAYLOAD);
 
     // Now append a "regular"-sized message
+#ifdef BMQ_ENABLE_MSG_GROUPID
     obj.setMsgGroupId(k_MSG_GROUP_ID);
+#endif
     obj.setMessageGUID(guid);
     obj.setMessagePayload(k_PAYLOAD, k_PAYLOAD_LEN);
     rc = obj.packMessage(k_QID);
 
-    ASSERT_EQ(rc, bmqt::EventBuilderResult::e_SUCCESS);
-    ASSERT_LT(k_PAYLOAD_LEN, obj.eventSize());
+    BMQTST_ASSERT_EQ(rc, bmqt::EventBuilderResult::e_SUCCESS);
+    BMQTST_ASSERT_LT(k_PAYLOAD_LEN, obj.eventSize());
 
     // Get blob and use bmqp iterator to test.  Note that bmqp event and bmqp
     // iterators are lower than bmqp builders, and thus, can be used to test
     // them.
-    const bdlbb::Blob& eventBlob = obj.blob();
-    bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+    bmqp::Event rawEvent(obj.blob().get(),
+                         bmqtst::TestHelperUtil::allocator());
 
     BSLS_ASSERT(true == rawEvent.isValid());
     BSLS_ASSERT(true == rawEvent.isPutEvent());
 
-    bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+    bmqp::PutMessageIterator putIter(&bufferFactory,
+                                     bmqtst::TestHelperUtil::allocator());
     rawEvent.loadPutMessageIterator(&putIter, true);
 
-    ASSERT_EQ(true, putIter.isValid());
-    ASSERT_EQ(1, putIter.next());
+    BMQTST_ASSERT_EQ(true, putIter.isValid());
+    BMQTST_ASSERT_EQ(1, putIter.next());
 
-    ASSERT_EQ(putIter.header().queueId(), k_QID);
-    ASSERT_EQ(putIter.header().messageGUID(), guid);
+    BMQTST_ASSERT_EQ(putIter.header().queueId(), k_QID);
+    BMQTST_ASSERT_EQ(putIter.header().messageGUID(), guid);
 
-    bdlbb::Blob payloadBlob(&bufferFactory, s_allocator_p);
-    ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-    ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_LEN);
+    bdlbb::Blob payloadBlob(&bufferFactory,
+                            bmqtst::TestHelperUtil::allocator());
+    BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+    BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_LEN);
 
     int res, compareResult;
-    res = mwcu::BlobUtil::compareSection(&compareResult,
+    res = bmqu::BlobUtil::compareSection(&compareResult,
                                          payloadBlob,
-                                         mwcu::BlobPosition(),
+                                         bmqu::BlobPosition(),
                                          k_PAYLOAD,
                                          k_PAYLOAD_LEN);
 
-    ASSERT_EQ(res, 0);
-    ASSERT_EQ(compareResult, 0);
+    BMQTST_ASSERT_EQ(res, 0);
+    BMQTST_ASSERT_EQ(compareResult, 0);
 
-    ASSERT(putIter.hasMsgGroupId());
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    BMQTST_ASSERT(putIter.hasMsgGroupId());
 
-    bmqp::Protocol::MsgGroupId msgGroupId(s_allocator_p);
-    ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
-    ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+    bmqp::Protocol::MsgGroupId msgGroupId(bmqtst::TestHelperUtil::allocator());
+    BMQTST_ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
+    BMQTST_ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#endif
 
-    ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+    BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
 }
 
 static void test4_manipulators_two()
@@ -1838,12 +1956,19 @@ static void test4_manipulators_two()
 //      setMessagePayload(const char* data, int size)    variant.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("MANIPULATORS - TWO");
+    bmqtst::TestHelper::printTestName("MANIPULATORS - TWO");
 
     // Create PutEventBuilder
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqp::PutEventBuilder          obj(&bufferFactory, s_allocator_p);
-    bsl::vector<Data>              data(s_allocator_p);
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+    bmqp::PutEventBuilder          obj(blobSpPool.get(),
+                              bmqtst::TestHelperUtil::allocator());
+    bsl::vector<Data>              data(bmqtst::TestHelperUtil::allocator());
     const size_t                   k_NUM_MSGS = 1000;
 
     for (size_t dataIdx = 0; dataIdx < k_NUM_MSGS; ++dataIdx) {
@@ -1854,49 +1979,57 @@ static void test4_manipulators_two()
             &bufferFactory,
             false,
             bmqp::MessageGUIDGenerator::testGUID(),
-            s_allocator_p);
+            bmqtst::TestHelperUtil::allocator());
 
-        ASSERT_EQ_D(dataIdx, rc, bmqt::EventBuilderResult::e_SUCCESS);
+        BMQTST_ASSERT_EQ_D(dataIdx, rc, bmqt::EventBuilderResult::e_SUCCESS);
     }
 
     // Iterate and check
-    const bdlbb::Blob& eventBlob = obj.blob();
-    bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+    bmqp::Event rawEvent(obj.blob().get(),
+                         bmqtst::TestHelperUtil::allocator());
 
     BSLS_ASSERT(true == rawEvent.isValid());
     BSLS_ASSERT(true == rawEvent.isPutEvent());
 
-    bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+    bmqp::PutMessageIterator putIter(&bufferFactory,
+                                     bmqtst::TestHelperUtil::allocator());
     rawEvent.loadPutMessageIterator(&putIter, true);
-    ASSERT_EQ(true, putIter.isValid());
+    BMQTST_ASSERT_EQ(true, putIter.isValid());
 
     size_t dataIndex = 0;
 
     while ((putIter.next() == 1) && dataIndex < k_NUM_MSGS) {
         const Data& D = data[dataIndex];
 
-        ASSERT_EQ_D(dataIndex, true, putIter.isValid());
-        ASSERT_EQ_D(dataIndex, D.d_qid, putIter.header().queueId());
-        ASSERT_EQ_D(dataIndex, D.d_guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ_D(dataIndex, true, putIter.isValid());
+        BMQTST_ASSERT_EQ_D(dataIndex, D.d_qid, putIter.header().queueId());
+        BMQTST_ASSERT_EQ_D(dataIndex,
+                           D.d_guid,
+                           putIter.header().messageGUID());
 
-        bdlbb::Blob payloadBlob(&bufferFactory, s_allocator_p);
-        ASSERT_EQ_D(dataIndex, 0, putIter.loadMessagePayload(&payloadBlob));
+        bdlbb::Blob payloadBlob(&bufferFactory,
+                                bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ_D(dataIndex,
+                           0,
+                           putIter.loadMessagePayload(&payloadBlob));
 
-        ASSERT_EQ_D(dataIndex,
-                    payloadBlob.length(),
-                    putIter.messagePayloadSize());
+        BMQTST_ASSERT_EQ_D(dataIndex,
+                           payloadBlob.length(),
+                           putIter.messagePayloadSize());
 
-        ASSERT_EQ_D(dataIndex,
-                    0,
-                    bdlbb::BlobUtil::compare(payloadBlob, D.d_payload));
+        BMQTST_ASSERT_EQ_D(dataIndex,
+                           0,
+                           bdlbb::BlobUtil::compare(payloadBlob, D.d_payload));
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
         validateGroupId(dataIndex, putIter);
+#endif
 
         ++dataIndex;
     }
 
-    ASSERT_EQ(dataIndex, data.size());
-    ASSERT_EQ(false, putIter.isValid());
+    BMQTST_ASSERT_EQ(dataIndex, data.size());
+    BMQTST_ASSERT_EQ(false, putIter.isValid());
 }
 
 static void test5_putEventWithZeroLengthMessage()
@@ -1912,12 +2045,19 @@ static void test5_putEventWithZeroLengthMessage()
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("PUT EVENT WITH ZERO LEGNTH MESSAGE");
+    bmqtst::TestHelper::printTestName("PUT EVENT WITH ZERO LEGNTH MESSAGE");
 
     // Create PutEventBuilder
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqp::PutEventBuilder          obj(&bufferFactory, s_allocator_p);
-    bsl::vector<Data>              data(s_allocator_p);
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+    bmqp::PutEventBuilder obj(blobSpPool.get(),
+                              bmqtst::TestHelperUtil::allocator());
+    bsl::vector<Data>     data(bmqtst::TestHelperUtil::allocator());
 
     bmqt::EventBuilderResult::Enum rc = appendMessage(
         0,
@@ -1926,21 +2066,22 @@ static void test5_putEventWithZeroLengthMessage()
         &bufferFactory,
         true,
         bmqp::MessageGUIDGenerator::testGUID(),
-        s_allocator_p);
-    ASSERT_EQ_D(0, rc, bmqt::EventBuilderResult::e_SUCCESS);
+        bmqtst::TestHelperUtil::allocator());
+    BMQTST_ASSERT_EQ_D(0, rc, bmqt::EventBuilderResult::e_SUCCESS);
 
     // Iterate and check
-    const bdlbb::Blob& eventBlob = obj.blob();
-    bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+    bmqp::Event rawEvent(obj.blob().get(),
+                         bmqtst::TestHelperUtil::allocator());
 
     BSLS_ASSERT(true == rawEvent.isValid());
     BSLS_ASSERT(true == rawEvent.isPutEvent());
 
-    bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+    bmqp::PutMessageIterator putIter(&bufferFactory,
+                                     bmqtst::TestHelperUtil::allocator());
     rawEvent.loadPutMessageIterator(&putIter, true);
-    ASSERT_EQ(true, putIter.isValid());
+    BMQTST_ASSERT_EQ(true, putIter.isValid());
 
-    ASSERT_NE(1, putIter.next());
+    BMQTST_ASSERT_NE(1, putIter.next());
 }
 
 static void test6_emptyBuilder()
@@ -1960,10 +2101,20 @@ static void test6_emptyBuilder()
 //   bmqp::PutEventBuilder setters and getters
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("EMPTY BUILDER");
+    bmqtst::TestHelper::printTestName("EMPTY BUILDER");
 
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bmqp::Protocol::MsgGroupId     k_MSG_GROUP_ID("gid:0", s_allocator_p);
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    bmqp::Protocol::MsgGroupId k_MSG_GROUP_ID(
+        "gid:0",
+        bmqtst::TestHelperUtil::allocator());
+#endif
 
     unsigned char zeroGuidBuf[bmqt::MessageGUID::e_SIZE_BINARY];
     bsl::memset(zeroGuidBuf, 0, bmqt::MessageGUID::e_SIZE_BINARY);
@@ -1977,41 +2128,49 @@ static void test6_emptyBuilder()
 
     const char* k_PAYLOAD = "abcdefghijklmnopqrstuvwxyz";
 
-    bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+    bmqp::PutEventBuilder obj(blobSpPool.get(),
+                              bmqtst::TestHelperUtil::allocator());
 
-    ASSERT_EQ(obj.unpackedMessageSize(), 0);
-    ASSERT_SAFE_FAIL(obj.setFlags(0));
-    ASSERT_SAFE_FAIL(obj.setMsgGroupId(k_MSG_GROUP_ID));
-    ASSERT_SAFE_FAIL(obj.setMessageGUID(zeroGuid));
-    ASSERT_SAFE_FAIL(obj.setCrc32c(0));
-    ASSERT_SAFE_FAIL(obj.setMessagePayload(k_PAYLOAD, bsl::strlen(k_PAYLOAD)));
-    ASSERT_SAFE_FAIL(obj.setMessagePayload(NULL));
+    BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), 0);
+    BMQTST_ASSERT_SAFE_FAIL(obj.setFlags(0));
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    BMQTST_ASSERT_SAFE_FAIL(obj.setMsgGroupId(k_MSG_GROUP_ID));
+#endif
+    BMQTST_ASSERT_SAFE_FAIL(obj.setMessageGUID(zeroGuid));
+    BMQTST_ASSERT_SAFE_FAIL(obj.setCrc32c(0));
+    BMQTST_ASSERT_SAFE_FAIL(
+        obj.setMessagePayload(k_PAYLOAD, bsl::strlen(k_PAYLOAD)));
+    BMQTST_ASSERT_SAFE_FAIL(obj.setMessagePayload(NULL));
 
     obj.startMessage();
 
     const int evtSize = sizeof(bmqp::EventHeader);
 
-    ASSERT_EQ(obj.messageGUID(), zeroGuid);
-    ASSERT_EQ(obj.msgGroupId().isNull(), true);
-    ASSERT_EQ(obj.unpackedMessageSize(), 0);
-    ASSERT_EQ(obj.eventSize(), evtSize);
-    ASSERT_EQ(obj.flags(), 0);
-    ASSERT_EQ(obj.messageCount(), 0);
+    BMQTST_ASSERT_EQ(obj.messageGUID(), zeroGuid);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), true);
+#endif
+    BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), 0);
+    BMQTST_ASSERT_EQ(obj.eventSize(), evtSize);
+    BMQTST_ASSERT_EQ(obj.flags(), 0);
+    BMQTST_ASSERT_EQ(obj.messageCount(), 0);
 
-    ASSERT_SAFE_FAIL(obj.setMessagePayload(k_PAYLOAD, -1));
+    BMQTST_ASSERT_SAFE_FAIL(obj.setMessagePayload(k_PAYLOAD, -1));
 
     obj.setMessageGUID(onesGuid);
 
-    ASSERT_EQ(obj.messageGUID(), onesGuid);
+    BMQTST_ASSERT_EQ(obj.messageGUID(), onesGuid);
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
     obj.setMsgGroupId(k_MSG_GROUP_ID);
 
-    ASSERT_EQ(obj.msgGroupId().isNull(), false);
-    ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+    BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), false);
+    BMQTST_ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
 
     obj.clearMsgGroupId();
 
-    ASSERT_EQ(obj.msgGroupId().isNull(), true);
+    BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), true);
+#endif
 
     static_cast<void>(k_PAYLOAD);  // suppress 'unused-variable' warning in
                                    // prod build
@@ -2037,17 +2196,27 @@ static void test7_multiplePackMessage()
 //   multiple calls to bmqp::PutEventBuilder::packMessage()
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("TEST MULTIPLE CALLS TO PACK MESSAGE");
+    bmqtst::TestHelper::printTestName("TEST MULTIPLE CALLS TO PACK MESSAGE");
 
-    bdlbb::PooledBlobBufferFactory   bufferFactory(1024, s_allocator_p);
-    const bmqp::Protocol::MsgGroupId k_MSG_GROUP_ID("gid:0", s_allocator_p);
-    const int                        k_PROPERTY_VAL_ENCODING = 3;
-    const bsl::string                k_PROPERTY_VAL_ID       = "myCoolId";
-    const unsigned int               k_CRC32                 = 123;
-    const bsls::Types::Int64         k_TIME_STAMP            = 1234567890LL;
-    const int                        k_NUM_PROPERTIES        = 3;
-    const char*                      k_PAYLOAD = "abcdefghijklmnopqrstuvwxyz";
-    const int                        k_PAYLOAD_BIGGER_LEN =
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    const bmqp::Protocol::MsgGroupId k_MSG_GROUP_ID(
+        "gid:0",
+        bmqtst::TestHelperUtil::allocator());
+#endif
+    const int                k_PROPERTY_VAL_ENCODING = 3;
+    const bsl::string        k_PROPERTY_VAL_ID       = "myCoolId";
+    const unsigned int       k_CRC32                 = 123;
+    const bsls::Types::Int64 k_TIME_STAMP            = 1234567890LL;
+    const int                k_NUM_PROPERTIES        = 3;
+    const char*              k_PAYLOAD = "abcdefghijklmnopqrstuvwxyz";
+    const int                k_PAYLOAD_BIGGER_LEN =
         bmqp::Protocol::k_COMPRESSION_MIN_APPDATA_SIZE + 400;
     char        k_PAYLOAD_BIGGER[k_PAYLOAD_BIGGER_LEN];
     const char* k_HEX_GUIDS[] = {"40000000000000000000000000000001",
@@ -2061,26 +2230,30 @@ static void test7_multiplePackMessage()
         k_PAYLOAD_BIGGER[i] = k_PAYLOAD[i % 26];
     }
 
-    bmqp::MessageProperties msgProps(s_allocator_p);
+    bmqp::MessageProperties msgProps(bmqtst::TestHelperUtil::allocator());
 
-    ASSERT_EQ(0,
-              msgProps.setPropertyAsInt32("encoding",
-                                          k_PROPERTY_VAL_ENCODING));
-    ASSERT_EQ(0, msgProps.setPropertyAsString("id", k_PROPERTY_VAL_ID));
-    ASSERT_EQ(0, msgProps.setPropertyAsInt64("timestamp", k_TIME_STAMP));
+    BMQTST_ASSERT_EQ(0,
+                     msgProps.setPropertyAsInt32("encoding",
+                                                 k_PROPERTY_VAL_ENCODING));
+    BMQTST_ASSERT_EQ(0, msgProps.setPropertyAsString("id", k_PROPERTY_VAL_ID));
+    BMQTST_ASSERT_EQ(0,
+                     msgProps.setPropertyAsInt64("timestamp", k_TIME_STAMP));
 
-    ASSERT_EQ(k_NUM_PROPERTIES, msgProps.numProperties());
+    BMQTST_ASSERT_EQ(k_NUM_PROPERTIES, msgProps.numProperties());
 
     // Create PutEventBuilder
-    bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+    bmqp::PutEventBuilder obj(blobSpPool.get(),
+                              bmqtst::TestHelperUtil::allocator());
 
-    ASSERT_EQ(obj.crc32c(), 0U);
+    BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
     obj.startMessage();
     obj.setMessagePayload(k_PAYLOAD_BIGGER, k_PAYLOAD_BIGGER_LEN)
         .setMessageProperties(&msgProps)
         .setMessageGUID(bmqp::MessageGUIDGenerator::testGUID())
+#ifdef BMQ_ENABLE_MSG_GROUPID
         .setMsgGroupId(k_MSG_GROUP_ID)
+#endif
         .setCompressionAlgorithmType(bmqt::CompressionAlgorithmType::e_ZLIB);
 
     int d_q1 = 9876;
@@ -2090,8 +2263,9 @@ static void test7_multiplePackMessage()
 
     obj.setCrc32c(k_CRC32);
 
-    ASSERT_EQ(obj.crc32c(), k_CRC32);
-    ASSERT_EQ(0, msgProps.setPropertyAsInt64("timestamp", k_TIME_STAMP));
+    BMQTST_ASSERT_EQ(obj.crc32c(), k_CRC32);
+    BMQTST_ASSERT_EQ(0,
+                     msgProps.setPropertyAsInt64("timestamp", k_TIME_STAMP));
 
     unsigned int expectedCrc32 = findExpectedCrc32(
         k_PAYLOAD_BIGGER,
@@ -2099,102 +2273,109 @@ static void test7_multiplePackMessage()
         &msgProps,
         true,  // has properties
         &bufferFactory,
-        s_allocator_p,
+        bmqtst::TestHelperUtil::allocator(),
         obj.compressionAlgorithmType());
 
-    ASSERT_EQ(obj.msgGroupId().isNull(), false);
-    ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), false);
+    BMQTST_ASSERT_EQ(obj.msgGroupId().value(), k_MSG_GROUP_ID);
+#endif
 
-    ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+    BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
 
     // 1st pack message call
     bmqt::EventBuilderResult::Enum rc = obj.packMessage(d_q1);
-    ASSERT_EQ(rc, bmqt::EventBuilderResult::e_SUCCESS);
+    BMQTST_ASSERT_EQ(rc, bmqt::EventBuilderResult::e_SUCCESS);
 
     // 2nd pack message call
     obj.setMessageGUID(bmqp::MessageGUIDGenerator::testGUID());
     rc = obj.packMessage(d_q2);
-    ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-    ASSERT_EQ(obj.messageCount(), 2);
-    ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
-    ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
-    ASSERT_EQ(obj.crc32c(), 0U);
+    BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+    BMQTST_ASSERT_EQ(obj.messageCount(), 2);
+    BMQTST_ASSERT_EQ(obj.unpackedMessageSize(), k_PAYLOAD_BIGGER_LEN);
+    BMQTST_ASSERT_EQ(obj.messageGUID(), bmqt::MessageGUID());
+    BMQTST_ASSERT_EQ(obj.crc32c(), 0U);
 
     // since we compress a large size message; expect event to be small
-    ASSERT_LT(obj.eventSize(),
-              2 * (k_PAYLOAD_BIGGER_LEN + msgProps.totalSize()));
+    BMQTST_ASSERT_LT(obj.eventSize(),
+                     2 * (k_PAYLOAD_BIGGER_LEN + msgProps.totalSize()));
 
     // Get blob and use bmqp iterator to test.  Note that bmqp event and
     // bmqp iterators are lower than bmqp builders, and thus, can be used
     // to test them.
-    const bdlbb::Blob& eventBlob = obj.blob();
-    bmqp::Event        rawEvent(&eventBlob, s_allocator_p);
+    bmqp::Event rawEvent(obj.blob().get(),
+                         bmqtst::TestHelperUtil::allocator());
 
-    ASSERT(rawEvent.isValid());
-    ASSERT(rawEvent.isPutEvent());
+    BMQTST_ASSERT(rawEvent.isValid());
+    BMQTST_ASSERT(rawEvent.isPutEvent());
 
-    bmqp::PutMessageIterator putIter(&bufferFactory, s_allocator_p);
+    bmqp::PutMessageIterator putIter(&bufferFactory,
+                                     bmqtst::TestHelperUtil::allocator());
     rawEvent.loadPutMessageIterator(&putIter, true);
 
-    ASSERT(putIter.isValid());
-    bdlbb::Blob payloadBlob(s_allocator_p);
+    BMQTST_ASSERT(putIter.isValid());
+    bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
 
     // check for the 2 packed messages
     for (size_t idx = 0; idx < 2; ++idx) {
         bmqt::MessageGUID guid;
         guid.fromHex(k_HEX_GUIDS[idx]);
 
-        ASSERT_EQ(1, putIter.next());
-        ASSERT_EQ(d_q1 + static_cast<int>(idx), putIter.header().queueId());
-        ASSERT_EQ(expectedCrc32, putIter.header().crc32c());
-        ASSERT_EQ(bmqt::CompressionAlgorithmType::e_ZLIB,
-                  putIter.header().compressionAlgorithmType());
-        ASSERT_EQ(guid, putIter.header().messageGUID());
+        BMQTST_ASSERT_EQ(1, putIter.next());
+        BMQTST_ASSERT_EQ(d_q1 + static_cast<int>(idx),
+                         putIter.header().queueId());
+        BMQTST_ASSERT_EQ(expectedCrc32, putIter.header().crc32c());
+        BMQTST_ASSERT_EQ(bmqt::CompressionAlgorithmType::e_ZLIB,
+                         putIter.header().compressionAlgorithmType());
+        BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
 
         payloadBlob.removeAll();
 
-        ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-        ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
+        BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+        BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
 
         int res, compareResult;
-        res = mwcu::BlobUtil::compareSection(&compareResult,
+        res = bmqu::BlobUtil::compareSection(&compareResult,
                                              payloadBlob,
-                                             mwcu::BlobPosition(),
+                                             bmqu::BlobPosition(),
                                              k_PAYLOAD_BIGGER,
                                              k_PAYLOAD_BIGGER_LEN);
 
-        ASSERT_EQ(res, 0);
-        ASSERT_EQ(compareResult, 0);
+        BMQTST_ASSERT_EQ(res, 0);
+        BMQTST_ASSERT_EQ(compareResult, 0);
 
         bmqt::PropertyType::Enum ptype;
-        bmqp::MessageProperties  prop(s_allocator_p);
+        bmqp::MessageProperties  prop(bmqtst::TestHelperUtil::allocator());
 
-        ASSERT_EQ(putIter.hasMessageProperties(), true);
-        ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
-        ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
-        ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
-        ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
+        BMQTST_ASSERT_EQ(putIter.hasMessageProperties(), true);
+        BMQTST_ASSERT_EQ(putIter.loadMessageProperties(&prop), 0);
+        BMQTST_ASSERT_EQ(prop.numProperties(), k_NUM_PROPERTIES);
+        BMQTST_ASSERT_EQ(prop.hasProperty("encoding", &ptype), true);
+        BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT32, ptype);
 
-        ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
-                  k_PROPERTY_VAL_ENCODING);
+        BMQTST_ASSERT_EQ(prop.getPropertyAsInt32("encoding"),
+                         k_PROPERTY_VAL_ENCODING);
 
-        ASSERT_EQ(prop.hasProperty("id", &ptype), true);
-        ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
-        ASSERT_EQ(prop.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
-        ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
-        ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
-        ASSERT_EQ(prop.getPropertyAsInt64("timestamp"), k_TIME_STAMP);
+        BMQTST_ASSERT_EQ(prop.hasProperty("id", &ptype), true);
+        BMQTST_ASSERT_EQ(bmqt::PropertyType::e_STRING, ptype);
+        BMQTST_ASSERT_EQ(prop.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
+        BMQTST_ASSERT_EQ(prop.hasProperty("timestamp", &ptype), true);
+        BMQTST_ASSERT_EQ(bmqt::PropertyType::e_INT64, ptype);
+        BMQTST_ASSERT_EQ(prop.getPropertyAsInt64("timestamp"), k_TIME_STAMP);
 
-        bmqp::Protocol::MsgGroupId msgGroupId(s_allocator_p);
-        ASSERT_EQ(putIter.hasMsgGroupId(), true);
-        ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
-        ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
-        ASSERT_EQ(putIter.isValid(), true);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+        bmqp::Protocol::MsgGroupId msgGroupId(
+            bmqtst::TestHelperUtil::allocator());
+        BMQTST_ASSERT_EQ(putIter.hasMsgGroupId(), true);
+        BMQTST_ASSERT_EQ(putIter.extractMsgGroupId(&msgGroupId), true);
+        BMQTST_ASSERT_EQ(msgGroupId, k_MSG_GROUP_ID);
+#endif
+        BMQTST_ASSERT_EQ(putIter.isValid(), true);
     }
 
-    ASSERT_EQ(true, putIter.isValid());
-    ASSERT_EQ(0, putIter.next());  // we added only 2 msgs
-    ASSERT_EQ(false, putIter.isValid());
+    BMQTST_ASSERT_EQ(true, putIter.isValid());
+    BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 2 msgs
+    BMQTST_ASSERT_EQ(false, putIter.isValid());
 
     // Start a new message in builder, pack one more message
     obj.startMessage();
@@ -2208,43 +2389,47 @@ static void test7_multiplePackMessage()
         .setMessageGUID(guid);
     rc = obj.packMessage(k_QID);
 
-    ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
-    ASSERT_GT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
-    ASSERT_EQ(obj.messageCount(), 3);
-    ASSERT_EQ(obj.msgGroupId().isNull(), true);
-    ASSERT_EQ(obj.compressionAlgorithmType(),
-              bmqt::CompressionAlgorithmType::e_NONE);
-    rawEvent.reset(&obj.blob());
+    BMQTST_ASSERT_EQ(bmqt::EventBuilderResult::e_SUCCESS, rc);
+    BMQTST_ASSERT_GT(obj.eventSize(), k_PAYLOAD_BIGGER_LEN);
+    BMQTST_ASSERT_EQ(obj.messageCount(), 3);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    BMQTST_ASSERT_EQ(obj.msgGroupId().isNull(), true);
+#endif
+    BMQTST_ASSERT_EQ(obj.compressionAlgorithmType(),
+                     bmqt::CompressionAlgorithmType::e_NONE);
+    rawEvent.reset(obj.blob().get());
     rawEvent.loadPutMessageIterator(&putIter, true);
 
     // we want to test the 3rd message so we call next thrice
-    ASSERT_EQ(1, putIter.next());
-    ASSERT_EQ(1, putIter.next());
-    ASSERT_EQ(1, putIter.next());
-    ASSERT_EQ(k_QID, putIter.header().queueId());
-    ASSERT_EQ(guid, putIter.header().messageGUID());
+    BMQTST_ASSERT_EQ(1, putIter.next());
+    BMQTST_ASSERT_EQ(1, putIter.next());
+    BMQTST_ASSERT_EQ(1, putIter.next());
+    BMQTST_ASSERT_EQ(k_QID, putIter.header().queueId());
+    BMQTST_ASSERT_EQ(guid, putIter.header().messageGUID());
 
     payloadBlob.removeAll();
 
-    ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
-    ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
+    BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+    BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_BIGGER_LEN);
 
-    bmqp::MessageProperties prop(s_allocator_p);
+    bmqp::MessageProperties prop(bmqtst::TestHelperUtil::allocator());
     int                     res, compareResult;
-    res = mwcu::BlobUtil::compareSection(&compareResult,
+    res = bmqu::BlobUtil::compareSection(&compareResult,
                                          payloadBlob,
-                                         mwcu::BlobPosition(),
+                                         bmqu::BlobPosition(),
                                          k_PAYLOAD_BIGGER,
                                          k_PAYLOAD_BIGGER_LEN);
-    ASSERT_EQ(0, res);
-    ASSERT_EQ(0, compareResult);
-    ASSERT_EQ(false, putIter.hasMessageProperties());
-    ASSERT_EQ(false, putIter.hasMsgGroupId());
-    ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
-    ASSERT_EQ(0, prop.numProperties());
-    ASSERT_EQ(true, putIter.isValid());
-    ASSERT_EQ(0, putIter.next());  // we added only 1 msg
-    ASSERT_EQ(false, putIter.isValid());
+    BMQTST_ASSERT_EQ(0, res);
+    BMQTST_ASSERT_EQ(0, compareResult);
+    BMQTST_ASSERT_EQ(false, putIter.hasMessageProperties());
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    BMQTST_ASSERT_EQ(false, putIter.hasMsgGroupId());
+#endif
+    BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&prop));
+    BMQTST_ASSERT_EQ(0, prop.numProperties());
+    BMQTST_ASSERT_EQ(true, putIter.isValid());
+    BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+    BMQTST_ASSERT_EQ(false, putIter.isValid());
 }
 
 static void testN1_decodeFromFile()
@@ -2262,13 +2447,20 @@ static void testN1_decodeFromFile()
 //      with expected properties and payload.
 // --------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("DECODE FROM FILE");
+    bmqtst::TestHelper::printTestName("DECODE FROM FILE");
 
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
-    bdlbb::Blob                    outBlob(&bufferFactory, s_allocator_p);
-    bdlbb::Blob                    payloadBlob(s_allocator_p);
-    mwcu::MemOutStream             os(s_allocator_p);
-    bmqp::PutMessageIterator       putIter(&bufferFactory, s_allocator_p);
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
+    bmqp::BlobPoolUtil::BlobSpPoolSp blobSpPool(
+        bmqp::BlobPoolUtil::createBlobPool(
+            &bufferFactory,
+            bmqtst::TestHelperUtil::allocator()));
+    bdlbb::Blob outBlob(&bufferFactory, bmqtst::TestHelperUtil::allocator());
+    bdlbb::Blob payloadBlob(bmqtst::TestHelperUtil::allocator());
+    bmqu::MemOutStream             os(bmqtst::TestHelperUtil::allocator());
+    bmqp::PutMessageIterator       putIter(&bufferFactory,
+                                     bmqtst::TestHelperUtil::allocator());
     bdlb::Guid                     guid = bdlb::GuidUtil::generate();
 
     const char* k_PAYLOAD     = "abcdefghijklmnopqrstuvwxyz";
@@ -2282,7 +2474,7 @@ static void testN1_decodeFromFile()
     const bsls::Types::Int64 k_TIME_STAMP            = 1234567890LL;
     const int                k_PROPERTY_NUM          = 3;
 
-    bmqp::MessageProperties msgProps(s_allocator_p);
+    bmqp::MessageProperties msgProps(bmqtst::TestHelperUtil::allocator());
     bmqt::MessageGUID       msgGuid = bmqp::MessageGUIDGenerator::testGUID();
 
     msgProps.setPropertyAsInt32("encoding", k_PROPERTY_VAL_ENCODING);
@@ -2304,7 +2496,8 @@ static void testN1_decodeFromFile()
         bmqp::PutHeaderFlags::e_MESSAGE_PROPERTIES);
 
     // Create PutEventBuilder
-    bmqp::PutEventBuilder obj(&bufferFactory, s_allocator_p);
+    bmqp::PutEventBuilder obj(blobSpPool.get(),
+                              bmqtst::TestHelperUtil::allocator());
 
     obj.startMessage();
 
@@ -2320,7 +2513,7 @@ static void testN1_decodeFromFile()
         &msgProps,
         true,
         &bufferFactory,
-        s_allocator_p,
+        bmqtst::TestHelperUtil::allocator(),
         obj.compressionAlgorithmType());
 
     obj.packMessage(k_QID);
@@ -2344,7 +2537,7 @@ static void testN1_decodeFromFile()
 
     BSLS_ASSERT(ofile.good() == true);
 
-    bdlbb::BlobUtil::copy(buf, obj.blob(), 0, obj.blob().length());
+    bdlbb::BlobUtil::copy(buf, *obj.blob(), 0, obj.blob()->length());
     ofile.write(buf, k_SIZE);
     ofile.close();
     bsl::memset(buf, 0, k_SIZE);
@@ -2359,56 +2552,56 @@ static void testN1_decodeFromFile()
 
     bsl::shared_ptr<char> dataBufferSp(buf,
                                        bslstl::SharedPtrNilDeleter(),
-                                       s_allocator_p);
+                                       bmqtst::TestHelperUtil::allocator());
     bdlbb::BlobBuffer     dataBlobBuffer(dataBufferSp, k_SIZE);
 
     outBlob.appendDataBuffer(dataBlobBuffer);
-    outBlob.setLength(obj.blob().length());
+    outBlob.setLength(obj.blob()->length());
 
-    ASSERT_EQ(bdlbb::BlobUtil::compare(obj.blob(), outBlob), 0);
+    BMQTST_ASSERT_EQ(bdlbb::BlobUtil::compare(*obj.blob(), outBlob), 0);
 
     // Decode event
-    bmqp::Event rawEvent(&outBlob, s_allocator_p);
+    bmqp::Event rawEvent(&outBlob, bmqtst::TestHelperUtil::allocator());
 
-    ASSERT_EQ(rawEvent.isPutEvent(), true);
+    BMQTST_ASSERT_EQ(rawEvent.isPutEvent(), true);
 
     rawEvent.loadPutMessageIterator(&putIter, true);
 
-    ASSERT_EQ(1, putIter.next());
-    ASSERT_EQ(k_QID, putIter.header().queueId());
-    ASSERT_EQ(msgGuid, putIter.header().messageGUID());
-    ASSERT_EQ(k_CRC32, putIter.header().crc32c());
-    ASSERT_EQ(phFlags, putIter.header().flags());
+    BMQTST_ASSERT_EQ(1, putIter.next());
+    BMQTST_ASSERT_EQ(k_QID, putIter.header().queueId());
+    BMQTST_ASSERT_EQ(msgGuid, putIter.header().messageGUID());
+    BMQTST_ASSERT_EQ(k_CRC32, putIter.header().crc32c());
+    BMQTST_ASSERT_EQ(phFlags, putIter.header().flags());
 
-    ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
+    BMQTST_ASSERT_EQ(putIter.loadMessagePayload(&payloadBlob), 0);
 
-    ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_LEN);
+    BMQTST_ASSERT_EQ(putIter.messagePayloadSize(), k_PAYLOAD_LEN);
 
     int res, compareResult;
-    res = mwcu::BlobUtil::compareSection(&compareResult,
+    res = bmqu::BlobUtil::compareSection(&compareResult,
                                          payloadBlob,
-                                         mwcu::BlobPosition(),
+                                         bmqu::BlobPosition(),
                                          k_PAYLOAD,
                                          k_PAYLOAD_LEN);
 
-    ASSERT_EQ(0, res);
-    ASSERT_EQ(0, compareResult);
+    BMQTST_ASSERT_EQ(0, res);
+    BMQTST_ASSERT_EQ(0, compareResult);
 
     msgProps.clear();
-    ASSERT_EQ(true, putIter.hasMessageProperties());
-    ASSERT_EQ(0, putIter.loadMessageProperties(&msgProps));
+    BMQTST_ASSERT_EQ(true, putIter.hasMessageProperties());
+    BMQTST_ASSERT_EQ(0, putIter.loadMessageProperties(&msgProps));
 
-    ASSERT_EQ(k_PROPERTY_NUM, msgProps.numProperties());
-    ASSERT_EQ(k_PROPERTY_SIZE, putIter.messagePropertiesSize());
+    BMQTST_ASSERT_EQ(k_PROPERTY_NUM, msgProps.numProperties());
+    BMQTST_ASSERT_EQ(k_PROPERTY_SIZE, putIter.messagePropertiesSize());
 
-    ASSERT_EQ(msgProps.getPropertyAsInt32("encoding"),
-              k_PROPERTY_VAL_ENCODING);
-    ASSERT_EQ(msgProps.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
-    ASSERT_EQ(msgProps.getPropertyAsInt64("timestamp"), k_TIME_STAMP);
+    BMQTST_ASSERT_EQ(msgProps.getPropertyAsInt32("encoding"),
+                     k_PROPERTY_VAL_ENCODING);
+    BMQTST_ASSERT_EQ(msgProps.getPropertyAsString("id"), k_PROPERTY_VAL_ID);
+    BMQTST_ASSERT_EQ(msgProps.getPropertyAsInt64("timestamp"), k_TIME_STAMP);
 
-    ASSERT_EQ(true, putIter.isValid());
-    ASSERT_EQ(0, putIter.next());  // we added only 1 msg
-    ASSERT_EQ(false, putIter.isValid());
+    BMQTST_ASSERT_EQ(true, putIter.isValid());
+    BMQTST_ASSERT_EQ(0, putIter.next());  // we added only 1 msg
+    BMQTST_ASSERT_EQ(false, putIter.isValid());
 }
 
 // ============================================================================
@@ -2422,18 +2615,19 @@ int main(int argc, char* argv[])
     // case where the associated logging infrastructure triggers a default
     // allocation violation for no apparent reason.
 
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     // Temporary workaround to suppress the 'unused operator
     // NestedTraitDeclaration' warning/error generated by clang.  TBD: figure
     // out the right way to "fix" this.
-    Data dummy(static_cast<bdlbb::BlobBufferFactory*>(0), s_allocator_p);
+    Data dummy(static_cast<bdlbb::BlobBufferFactory*>(0),
+               bmqtst::TestHelperUtil::allocator());
     static_cast<void>(
         static_cast<
             bslmf::NestedTraitDeclaration<Data, bslma::UsesBslmaAllocator> >(
             dummy));
 
-    bmqp::ProtocolUtil::initialize(s_allocator_p);
+    bmqp::ProtocolUtil::initialize(bmqtst::TestHelperUtil::allocator());
 
     // Initialize Crc32c
     bmqp::Crc32c::initialize();
@@ -2452,11 +2646,11 @@ int main(int argc, char* argv[])
     case -1: testN1_decodeFromFile(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
     bmqp::ProtocolUtil::shutdown();
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

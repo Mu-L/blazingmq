@@ -20,9 +20,8 @@
 // MQB
 #include <mqbcmd_messages.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
-#include <mwcu_stringutil.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_stringutil.h>
 
 // BDE
 #include <baljsn_decoder.h>
@@ -198,6 +197,7 @@ DEF_FUNC(DomainQueuePurge, QueueCommand);
 DEF_FUNC(DomainQueueList, ListMessages);
 DEF_FUNC(DomainReconfigure, DomainReconfigure);
 DEF_FUNC(DomainResolver, DomainResolverCommand);
+DEF_FUNC(DomainRemove, DomainRemove);
 DEF_FUNC(ConfigProvider, ConfigProviderCommand);
 DEF_FUNC(Stat, StatCommand);
 DEF_FUNC(BrokerConfig, BrokerConfigCommand);
@@ -223,40 +223,64 @@ int parseClearCache(ClearCache*              command,
                     WordGenerator            next,
                     const bslstl::StringRef& commandPrefix);
 
+int parseEncodingFormat(EncodingFormat::Value* format,
+                        bsl::string*           error,
+                        WordGenerator&         next);
+
 /// entry point (i.e. `root`) of the command parsing
 int parseCommand(Command* command, bsl::string* error, WordGenerator next)
 {
-    const bslstl::StringRef word = next();
+    bslstl::StringRef word = next();
     if (word.empty()) {
         *error = "Command must contain at least one word.";
         return -1;  // RETURN
     }
 
+    if (equalCaseless(word, "ENCODING")) {
+        if (0 != parseEncodingFormat(&command->encoding(), error, next)) {
+            return -1;  // RETURN
+        }
+
+        word = next();
+        if (word.empty()) {
+            *error = "Command must contain at least one word.";
+            return -1;  // RETURN
+        }
+    }
+
     if (equalCaseless(word, "HELP")) {
-        return parseHelp(&command->makeHelp(), error, next);  // RETURN
+        return parseHelp(&command->choice().makeHelp(),
+                         error,
+                         next);  // RETURN
     }
     else if (equalCaseless(word, "DOMAINS")) {
-        return parseDomainsCommand(&command->makeDomains(),
+        return parseDomainsCommand(&command->choice().makeDomains(),
                                    error,
                                    next);  // RETURN
     }
     else if (equalCaseless(word, "CONFIGPROVIDER")) {
-        return parseConfigProvider(&command->makeConfigProvider(),
+        return parseConfigProvider(&command->choice().makeConfigProvider(),
                                    error,
                                    next);  // RETURN
     }
     else if (equalCaseless(word, "STAT")) {
-        return parseStat(&command->makeStat(), error, next);  // RETURN
+        return parseStat(&command->choice().makeStat(),
+                         error,
+                         next);  // RETURN
     }
     else if (equalCaseless(word, "CLUSTERS")) {
-        return parseClustersCommand(&command->makeClusters(), error, next);
+        return parseClustersCommand(&command->choice().makeClusters(),
+                                    error,
+                                    next);
         // RETURN
     }
     else if (equalCaseless(word, "DANGER")) {
-        return parseDanger(&command->makeDanger(), error, next);  // RETURN
+        return parseDanger(&command->choice().makeDanger(),
+                           error,
+                           next);  // RETURN
     }
     else if (equalCaseless(word, "BROKERCONFIG")) {
-        return parseBrokerConfig(&command->makeBrokerConfig(),
+        return parseBrokerConfig(&command->choice().makeBrokerConfig(),
                                  error,
                                  next);  // RETURN
     }
@@ -264,6 +288,41 @@ int parseCommand(Command* command, bsl::string* error, WordGenerator next)
     *error = "Invalid command. Send \"HELP\" for list of commands. Invalid "
              "command word: " +
              word;
+    return -1;
+}
+
+// ENCODING ...
+int parseEncodingFormat(EncodingFormat::Value* format,
+                        bsl::string*           error,
+                        WordGenerator&         next)
+{
+    const bslstl::StringRef word = next();
+
+    const char errorCommon[] = "The ENCODING option must be followed by one "
+                               "of the [TEXT, JSON_COMPACT, JSON_PRETTY] "
+                               "settings (default: TEXT)";
+
+    if (word.empty()) {
+        *error += errorCommon;
+        *error += ", but no setting was specified.";
+        return -1;  // RETURN
+    }
+
+    if (equalCaseless(word, "TEXT")) {
+        *format = EncodingFormat::TEXT;
+        return 0;  // RETURN
+    }
+    else if (equalCaseless(word, "JSON_COMPACT")) {
+        *format = EncodingFormat::JSON_COMPACT;
+        return 0;  // RETURN
+    }
+    else if (equalCaseless(word, "JSON_PRETTY")) {
+        *format = EncodingFormat::JSON_PRETTY;
+        return 0;  // RETURN
+    }
+
+    *error = errorCommon;
+    *error += ", but the following was given: " + word;
     return -1;
 }
 
@@ -316,6 +375,11 @@ int parseDomainsCommand(DomainsCommand* domains,
         return parseDomainReconfigure(&domains->makeReconfigure(),
                                       error,
                                       next);  // RETURN
+    }
+    else if (equalCaseless(word, "REMOVE")) {
+        return parseDomainRemove(&domains->makeRemove(),
+                                 error,
+                                 next);  // RETURN
     }
 
     *error = errorCommon;
@@ -378,7 +442,7 @@ int parseDomainQueue(DomainQueue*  queue,
 
     const bslstl::StringRef subcommand = next();
 
-    if (name.empty()) {
+    if (subcommand.empty()) {
         *error = "DOMAINS DOMAIN <name> QUEUE <queue_name> command must have "
                  "a subcommand, such as PURGE, INTERNALS, or LIST.";
         return -1;  // RETURN
@@ -502,6 +566,34 @@ int parseDomainReconfigure(DomainReconfigure* reconfigure,
         return -1;  // RETURN
     }
     reconfigure->makeDomain(domain);
+
+    return expectEnd(error, next);
+}
+
+/// ... REMOVE ...
+int parseDomainRemove(DomainRemove* remove,
+                      bsl::string*  error,
+                      WordGenerator next)
+{
+    const bslstl::StringRef domain   = next();
+    const bslstl::StringRef finalize = next();
+
+    if (domain.empty()) {
+        *error = "DOMAINS REMOVE command must be followed by a "
+                 "domain name.";
+        return -1;  // RETURN
+    }
+
+    remove->domain() = domain;
+
+    if (equalCaseless(finalize, "FINALIZE")) {
+        remove->finalize().makeValue(true);
+    }
+    else if (!finalize.empty()) {
+        *error = "Invalid optional key word '" + finalize +
+                 "' for DOMAINS REMOVE <domain> [FINALIZE]";
+        return -1;
+    }
 
     return expectEnd(error, next);
 }
@@ -873,11 +965,13 @@ int parseElector(ElectorCommand* command,
         return -1;  // RETURN
     }
 
-    if (equalCaseless(subcommand, "SET")) {
+    if (equalCaseless(subcommand, "SET") ||
+        equalCaseless(subcommand, "SET_ALL")) {
         const bslstl::StringRef parameter = next();
 
         if (parameter.empty()) {
-            *error = "The command CLUSTERS CLUSTER <name> STATE ELECTOR SET "
+            *error = "The command CLUSTERS CLUSTER <name> STATE ELECTOR "
+                     "[SET|SET_ALL] "
                      "must be followed by a parameter name.";
             return -1;  // RETURN
         }
@@ -885,7 +979,8 @@ int parseElector(ElectorCommand* command,
         const bslstl::StringRef valueString = next();
 
         if (valueString.empty()) {
-            *error = "The command CLUSTERS CLUSTER <name> STATE ELECTOR SET "
+            *error = "The command CLUSTERS CLUSTER <name> STATE ELECTOR "
+                     "[SET|SET_ALL] "
                      "<parameter> must be followed by a new value for the "
                      "parameter.";
             return -1;  // RETURN
@@ -895,18 +990,35 @@ int parseElector(ElectorCommand* command,
         tunable.name()      = parameter;
         tunable.value()     = parseValue(valueString);
 
+        if (equalCaseless(subcommand, "SET")) {
+            tunable.choice().makeSelf();
+        }
+        else {  // SET_ALL
+            tunable.choice().makeAll();
+        }
         return expectEnd(error, next);  // RETURN
     }
-    else if (equalCaseless(subcommand, "GET")) {
+    else if (equalCaseless(subcommand, "GET") ||
+             equalCaseless(subcommand, "GET_ALL")) {
         const bslstl::StringRef parameter = next();
 
         if (parameter.empty()) {
-            *error = "The command CLUSTERS CLUSTER <name> STATE ELECTOR GET "
+            *error = "The command CLUSTERS CLUSTER <name> STATE ELECTOR "
+                     "[GET|GET_ALL] "
                      "must be followed by a parameter name.";
             return -1;  // RETURN
         }
 
-        command->makeGetTunable(parameter);
+        GetTunable& tunable = command->makeGetTunable();
+        tunable.name()      = parameter;
+
+        if (equalCaseless(subcommand, "GET")) {
+            tunable.choice().makeSelf();
+        }
+        else {  // GET_ALL
+            tunable.choice().makeAll();
+        }
+
         return expectEnd(error, next);  // RETURN
     }
     else if (equalCaseless(subcommand, "LIST_TUNABLES")) {
@@ -956,7 +1068,8 @@ int parseReplication(ReplicationCommand* command,
         return -1;  // RETURN
     }
 
-    if (equalCaseless(subcommand, "SET")) {
+    if (equalCaseless(subcommand, "SET") ||
+        equalCaseless(subcommand, "SET_ALL")) {
         const bslstl::StringRef parameter = next();
 
         if (parameter.empty()) {
@@ -978,9 +1091,17 @@ int parseReplication(ReplicationCommand* command,
         tunable.name()      = parameter;
         tunable.value()     = parseValue(valueString);
 
+        if (equalCaseless(subcommand, "SET")) {
+            tunable.choice().makeSelf();
+        }
+        else {  // SET_ALL
+            tunable.choice().makeAll();
+        }
+
         return expectEnd(error, next);  // RETURN
     }
-    else if (equalCaseless(subcommand, "GET")) {
+    else if (equalCaseless(subcommand, "GET") ||
+             equalCaseless(subcommand, "GET_ALL")) {
         const bslstl::StringRef parameter = next();
 
         if (parameter.empty()) {
@@ -989,7 +1110,16 @@ int parseReplication(ReplicationCommand* command,
             return -1;  // RETURN
         }
 
-        command->makeGetTunable(parameter);
+        GetTunable& tunable = command->makeGetTunable();
+        tunable.name()      = parameter;
+
+        if (equalCaseless(subcommand, "GET")) {
+            tunable.choice().makeSelf();
+        }
+        else {  // GET_ALL
+            tunable.choice().makeAll();
+        }
+
         return expectEnd(error, next);  // RETURN
     }
     else if (equalCaseless(subcommand, "LIST_TUNABLES")) {
@@ -1031,7 +1161,7 @@ int ParseUtil::parse(Command*                 command,
 
         int rc = decoder.decode(&jsonStreamBuf, command, options);
         if (rc != 0) {
-            mwcu::MemOutStream err;
+            bmqu::MemOutStream err;
             err << "Error decoding JSON command "
                 << "[rc: " << rc << ", error: '" << decoder.loggedMessages()
                 << "']";
@@ -1046,10 +1176,10 @@ int ParseUtil::parse(Command*                 command,
     // contiguous spaces so that the resulting split doesn't contain any empty
     // strings.
     bsl::string inputString(input);
-    mwcu::StringUtil::squeeze(&inputString, " ");
+    bmqu::StringUtil::squeeze(&inputString, " ");
 
     const bsl::vector<bslstl::StringRef> words =
-        mwcu::StringUtil::strTokenizeRef(inputString, " ");
+        bmqu::StringUtil::strTokenizeRef(inputString, " ");
 
     return parseCommand(command,
                         error,

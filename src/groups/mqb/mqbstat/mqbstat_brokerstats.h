@@ -30,6 +30,7 @@
 // MQB
 
 // BMQ
+#include <bmqst_statcontext.h>
 #include <bmqt_uri.h>
 
 // BDE
@@ -41,11 +42,6 @@
 #include <bsls_types.h>
 
 namespace BloombergLP {
-
-// FORWARD DECLARATION
-namespace mwcst {
-class StatContext;
-}
 
 namespace mqbstat {
 
@@ -82,7 +78,15 @@ class BrokerStats {
     static BrokerStats s_instance;
 
     // DATA
-    mwcst::StatContext* d_statContext_p;  // StatContext
+    bmqst::StatContext* d_statContext_p;  // StatContext
+
+    // PRIVATE TYPES
+
+    /// Namespace for the constants of stat values that applies to the queues
+    /// from the clients
+    struct BrokerStatsIndex {
+        enum Enum { e_STAT_QUEUE_COUNT, e_STAT_CLIENT_COUNT };
+    };
 
   private:
     // NOT IMPLEMENTED
@@ -109,7 +113,7 @@ class BrokerStats {
     /// ago.
     ///
     /// THREAD: This method can only be invoked from the `snapshot` thread.
-    static bsls::Types::Int64 getValue(const mwcst::StatContext& context,
+    static bsls::Types::Int64 getValue(const bmqst::StatContext& context,
                                        int                       snapshotId,
                                        const Stat::Enum&         stat);
 
@@ -119,15 +123,16 @@ class BrokerStats {
     /// this class, as returned by the `instance()` class method.  Register
     /// a subcontext of the specified `brokerStatContext`.  This method
     /// ought to be called exactly once.
-    void initialize(mwcst::StatContext* brokerStatContext);
+    void initialize(bmqst::StatContext* brokerStatContext);
 
     /// Update statistics for the event of the specified `type` and with the
     /// specified `value` (depending on the `type`, `value` can represent
     /// the number of bytes, a counter, ...
-    void onEvent(EventType::Enum type);
+    template <EventType::Enum type>
+    void onEvent();
 
     /// Return a pointer to the statcontext.
-    mwcst::StatContext* statContext();
+    bmqst::StatContext* statContext();
 };
 
 // ======================
@@ -142,7 +147,7 @@ struct BrokerStatsUtil {
     /// specified `historySize` of history.  Return the created top level
     /// stat context to use for all broker level statistics.  Use the
     /// specified `allocator` for all stat context and stat values.
-    static bsl::shared_ptr<mwcst::StatContext>
+    static bsl::shared_ptr<bmqst::StatContext>
     initializeStatContext(int historySize, bslma::Allocator* allocator);
 };
 
@@ -154,9 +159,41 @@ struct BrokerStatsUtil {
 // class BrokerStats
 // -----------------
 
-inline mwcst::StatContext* BrokerStats::statContext()
+inline bmqst::StatContext* BrokerStats::statContext()
 {
     return d_statContext_p;
+}
+
+template <>
+inline void BrokerStats::onEvent<BrokerStats::EventType::e_CLIENT_CREATED>()
+{
+    BSLS_ASSERT_SAFE(d_statContext_p && "initialize was not called");
+
+    d_statContext_p->adjustValue(BrokerStatsIndex::e_STAT_CLIENT_COUNT, 1);
+}
+
+template <>
+inline void BrokerStats::onEvent<BrokerStats::EventType::e_CLIENT_DESTROYED>()
+{
+    BSLS_ASSERT_SAFE(d_statContext_p && "initialize was not called");
+
+    d_statContext_p->adjustValue(BrokerStatsIndex::e_STAT_CLIENT_COUNT, -1);
+}
+
+template <>
+inline void BrokerStats::onEvent<BrokerStats::EventType::e_QUEUE_CREATED>()
+{
+    BSLS_ASSERT_SAFE(d_statContext_p && "initialize was not called");
+
+    d_statContext_p->adjustValue(BrokerStatsIndex::e_STAT_QUEUE_COUNT, 1);
+}
+
+template <>
+inline void BrokerStats::onEvent<BrokerStats::EventType::e_QUEUE_DESTROYED>()
+{
+    BSLS_ASSERT_SAFE(d_statContext_p && "initialize was not called");
+
+    d_statContext_p->adjustValue(BrokerStatsIndex::e_STAT_QUEUE_COUNT, -1);
 }
 
 }  // close package namespace

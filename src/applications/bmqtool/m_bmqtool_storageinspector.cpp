@@ -30,11 +30,11 @@
 #include <bmqp_optionsview.h>
 #include <bmqp_protocol.h>
 
-// MWC
-#include <mwcu_alignedprinter.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_stringutil.h>
+// BMQ
+#include <bmqu_alignedprinter.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_stringutil.h>
 
 // BDE
 #include <ball_log.h>
@@ -89,7 +89,7 @@ bool resetIterator(mqbs::MappedFileDescriptor* mfd,
     }
 
     // 1) Open
-    mwcu::MemOutStream errorDesc;
+    bmqu::MemOutStream errorDesc;
     int                rc = mqbs::FileSystemUtil::open(
         mfd,
         filename,
@@ -128,16 +128,16 @@ bool resetIterator(mqbs::MappedFileDescriptor* mfd,
 /// opened by the iterator.  Verify that the file and iterator are in a
 /// valid state; reset them if this is not the case.  Pass parameters to
 /// indicate how many records to skip and whether that is forward
-/// or backwards.  Return true on success and false on error.
+/// or backwards.
 template <typename CHOICE, typename ITER>
 void iterateNextPosition(CHOICE&                     choice,
                          mqbs::MappedFileDescriptor* mfd,
                          ITER*                       iter,
                          const char*                 filename)
 {
-    int  skip    = -1;
-    bool reverse = false;
-    bool verbose = false;
+    bsls::Types::Uint64 skip    = 0;
+    bool                reverse = false;
+    bool                verbose = false;
 
     switch (choice.selectionId()) {
     case CHOICE::SELECTION_ID_N: {
@@ -158,12 +158,22 @@ void iterateNextPosition(CHOICE&                     choice,
     } break;
     case CHOICE::SELECTION_ID_RECORD: {
         skip = choice.record();
+
+        if (skip >= iter->recordIndex()) {
+            // If the skip is greater than our current index, than we are
+            // iterating forward to reach the specified index.
+            skip -= iter->recordIndex();
+            reverse = false;
+        }
+        else {
+            skip    = iter->recordIndex() - skip;
+            reverse = true;
+        }
     } break;
     case CHOICE::SELECTION_ID_R: {
-        if (skip == -1) {
-            skip = choice.r();
-        }
-        if (skip >= static_cast<int>(iter->recordIndex())) {
+        skip = choice.r();
+
+        if (skip >= iter->recordIndex()) {
             // If the skip is greater than our current index, than we are
             // iterating forward to reach the specified index.
             skip -= iter->recordIndex();
@@ -175,26 +185,28 @@ void iterateNextPosition(CHOICE&                     choice,
         }
     } break;
     case CHOICE::SELECTION_ID_LIST: {
-        skip    = choice.list();
-        verbose = true;
-        if (skip >= 0) {
+        int list = choice.list();
+        verbose  = true;
+        if (list >= 0) {
             reverse = false;
         }
         else {
             reverse = true;
-            skip *= -1;
+            list *= -1;
         }
+        skip = list;
     } break;
     case CHOICE::SELECTION_ID_L: {
-        skip    = choice.l();
-        verbose = true;
-        if (skip >= 0) {
+        int list = choice.l();
+        verbose  = true;
+        if (list >= 0) {
             reverse = false;
         }
         else {
             reverse = true;
-            skip *= -1;
+            list *= -1;
         }
+        skip = list;
     } break;
     default:
         BALL_LOG_ERROR << "Unsupported choice: " << choice.selectionId();
@@ -214,7 +226,7 @@ void iterateNextPosition(CHOICE&                     choice,
         iter->flipDirection();
     }
 
-    mwcu::MemOutStream oss;
+    bmqu::MemOutStream oss;
     while (skip > 0) {
         if (iter->hasRecordSizeRemaining() == false) {
             if (verbose) {
@@ -348,7 +360,7 @@ void StorageInspector::processCommand(const OpenStorageCommand& command)
                       << d_journalFile << "] Qlist file: [" << d_qlistFile
                       << "]";
     }
-    else if (mwcu::StringUtil::endsWith(
+    else if (bmqu::StringUtil::endsWith(
                  path,
                  mqbs::FileStoreProtocol::k_DATA_FILE_EXTENSION)) {
         if (!resetIterator(&d_dataFd, &d_dataFileIter, path.c_str())) {
@@ -357,7 +369,7 @@ void StorageInspector::processCommand(const OpenStorageCommand& command)
 
         d_dataFile = path;
     }
-    else if (mwcu::StringUtil::endsWith(
+    else if (bmqu::StringUtil::endsWith(
                  path,
                  mqbs::FileStoreProtocol::k_JOURNAL_FILE_EXTENSION)) {
         if (!resetIterator(&d_journalFd, &d_journalFileIter, path.c_str())) {
@@ -366,7 +378,7 @@ void StorageInspector::processCommand(const OpenStorageCommand& command)
 
         d_journalFile = path;
     }
-    else if (mwcu::StringUtil::endsWith(
+    else if (bmqu::StringUtil::endsWith(
                  path,
                  mqbs::FileStoreProtocol::k_QLIST_FILE_EXTENSION)) {
         if (!resetIterator(&d_qlistFd, &d_qlistFileIter, path.c_str())) {
@@ -442,9 +454,12 @@ void StorageInspector::processCommand(
         {
             BALL_LOG_OUTPUT_STREAM << "Details of journal file: \n";
             BALL_LOG_OUTPUT_STREAM << d_journalFd;
-            printHeader(BALL_LOG_OUTPUT_STREAM,
-                        d_journalFileIter.header(),
-                        d_journalFd);
+            BALL_LOG_OUTPUT_STREAM << "Journal File Header: \n";
+            printJournalFileHeader<bmqu::AlignedPrinter>(
+                BALL_LOG_OUTPUT_STREAM,
+                d_journalFileIter.header(),
+                d_journalFd);
+            BALL_LOG_OUTPUT_STREAM << "\n";
 
             // Print journal-specific fields
             BALL_LOG_OUTPUT_STREAM << "Journal SyncPoint:\n";
@@ -462,7 +477,7 @@ void StorageInspector::processCommand(
             fields.push_back("SyncPoint DataFileOffset (DWORDS)");
             fields.push_back("SyncPoint QlistFileOffset (WORDS)");
 
-            mwcu::AlignedPrinter printer(BALL_LOG_OUTPUT_STREAM, &fields);
+            bmqu::AlignedPrinter printer(BALL_LOG_OUTPUT_STREAM, &fields);
             bsls::Types::Uint64  lastRecPos =
                 d_journalFileIter.lastRecordPosition();
             printer << lastRecPos;
@@ -566,7 +581,7 @@ void StorageInspector::processCommand(
             fields.push_back("QueueKey");
             fields.push_back("Number of AppIds");
 
-            mwcu::AlignedPrinter printer(BALL_LOG_OUTPUT_STREAM, &fields);
+            bmqu::AlignedPrinter printer(BALL_LOG_OUTPUT_STREAM, &fields);
             printer << cit->first << qr.d_queueKey << qr.d_appIds.size();
 
             // 'printer' not to be used beyond this point
@@ -580,7 +595,7 @@ void StorageInspector::processCommand(
                 f.push_back("AppKey");
 
                 const int            indent = 8;
-                mwcu::AlignedPrinter p(BALL_LOG_OUTPUT_STREAM, &f, indent);
+                bmqu::AlignedPrinter p(BALL_LOG_OUTPUT_STREAM, &f, indent);
                 p << ar.d_appId << ar.d_appKey;
             }
 

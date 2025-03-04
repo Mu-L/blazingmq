@@ -42,15 +42,11 @@
 
 // BMQ
 
+#include <bmqc_twokeyhashmap.h>
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_protocol.h>
 #include <bmqt_resultcode.h>
-
-// MWC
-#include <mwcu_blob.h>
-
-// MWC
-#include <mwcc_twokeyhashmap.h>
+#include <bmqu_blob.h>
 
 // BDE
 #include <balber_berdecoder.h>
@@ -96,7 +92,7 @@ struct ProtocolUtil {
             StreamInfo(const VALUE& value);
         };
 
-        typedef mwcc::TwoKeyHashMap<bsl::string, unsigned int, StreamInfo>
+        typedef bmqc::TwoKeyHashMap<bsl::string, unsigned int, StreamInfo>
             StreamsMap;
         // Map {appId, subId} to StreamInfo
 
@@ -288,13 +284,6 @@ struct ProtocolUtil {
     /// event.
     static const bdlbb::Blob& heartbeatRspBlob();
 
-    /// Return const reference to the pre-allocated empty blob.  If you need
-    /// an empty blob and not going to modify it use this method instead of
-    /// creating another blob.  Heap allocate it to prevent 'exit-time-
-    /// destructor needed' compiler warning.  Causes valgrind-reported
-    /// memory leak.
-    static const bdlbb::Blob& emptyBlob();
-
     /// Hex/Binary conversion
     ///---------------------
 
@@ -376,13 +365,6 @@ struct ProtocolUtil {
 
     /// Protocol miscellaneous
     ///----------------------
-
-    /// Return a reference not offering modifiable access to the statically
-    /// created default SubQueueInfoArray (a SubQueueInfosArray containing
-    /// the default subQueueId and an unlimited RDA counter).  The behavior
-    /// is undefined unless `initialize` has been called.
-    static const Protocol::SubQueueInfosArray& defaultSubQueueInfoArray();
-
     static int ackResultToCode(bmqt::AckResult::Enum value);
 
     /// Convert the specified `value` between an `AckResult` enum value
@@ -410,12 +392,22 @@ struct ProtocolUtil {
     /// Invoke the specified `action` and if it returns e_EVENT_TOO_BIG then
     /// invoke the specified `overflowCb` and call `action` again.  Return
     /// result code returned from `action`
+    /// DEPRECATED: use `buildEvent` with functors instead, to avoid loss of
+    ///             performance from `bsl::function` on critical paths.
     static bmqt::EventBuilderResult::Enum buildEvent(
         const bsl::function<bmqt::EventBuilderResult::Enum(void)>& action,
         const bsl::function<void(void)>&                           overflowCb);
 
-    /// Encode Receipt into the specified `blob` for the specified
-    /// `partitionId`, `primaryLeaseId`, and `sequenceNumber`.
+    /// Invoke the specified `actionCb` and if it returns e_EVENT_TOO_BIG then
+    /// invoke the specified `overflowCb` and call `actionCb` again.  Return
+    /// result code returned from `action`
+    template <class ACTION_FUNCTOR_TYPE, class OVERFLOW_FUNCTOR_TYPE>
+    static bmqt::EventBuilderResult::Enum
+    buildEvent(ACTION_FUNCTOR_TYPE&   actionCb,
+               OVERFLOW_FUNCTOR_TYPE& overflowCb);
+
+    /// Encode Receipt into the specified `blob` (expected to be empty) for
+    /// the specified `partitionId`, `primaryLeaseId`, and `sequenceNumber`.
     static void buildReceipt(bdlbb::Blob*        blob,
                              int                 partitionId,
                              unsigned int        primaryLeaseId,
@@ -445,7 +437,7 @@ struct ProtocolUtil {
     /// Return `true` on success, `false` otherwise.
     static int readPropertiesSize(int*                      size,
                                   const bdlbb::Blob&        blob,
-                                  const mwcu::BlobPosition& position);
+                                  const bmqu::BlobPosition& position);
 
     /// Parse the specified `input` of the specified `length` starting at
     /// the specified `position` and supporting all styles of
@@ -465,7 +457,7 @@ struct ProtocolUtil {
                      const bdlbb::Blob&        input,
                      int                       length,
                      bool                      decompressFlag,
-                     const mwcu::BlobPosition& position,
+                     const bmqu::BlobPosition& position,
                      bool                      haveMessageProperties,
                      bool                      haveNewMessageProperties,
                      bmqt::CompressionAlgorithmType::Enum cat,
@@ -719,12 +711,29 @@ inline bmqt::EventBuilderResult::Enum ProtocolUtil::buildEvent(
     return rc;
 };
 
+template <class ACTION_FUNCTOR_TYPE, class OVERFLOW_FUNCTOR_TYPE>
+inline bmqt::EventBuilderResult::Enum
+ProtocolUtil::buildEvent(ACTION_FUNCTOR_TYPE&   actionCb,
+                         OVERFLOW_FUNCTOR_TYPE& overflowCb)
+{
+    bmqt::EventBuilderResult::Enum rc = actionCb();
+    if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
+            bmqt::EventBuilderResult::e_EVENT_TOO_BIG == rc)) {
+        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+
+        overflowCb();
+        rc = actionCb();
+    }
+    return rc;
+};
+
 inline void ProtocolUtil::buildReceipt(bdlbb::Blob*        blob,
                                        int                 partitionId,
                                        unsigned int        primaryLeaseId,
                                        bsls::Types::Uint64 sequenceNumber)
 {
-    blob->removeAll();
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(0 == blob->length());
 
     blob->setLength(sizeof(EventHeader) + sizeof(ReplicationReceipt));
 

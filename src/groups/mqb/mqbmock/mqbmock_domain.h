@@ -24,7 +24,7 @@
 //
 //@DESCRIPTION: This component provides a mock implementation,
 // 'mqbmock::Domain', of the 'mqbi::Domain' interface that is used to emulate
-// a a real domain for testing purposes.
+// a real domain for testing purposes.
 //
 /// Notes
 ///------
@@ -39,14 +39,12 @@
 // with a leading underscore ('_').
 
 // MQB
-
 #include <mqbconfm_messages.h>
 #include <mqbi_domain.h>
 #include <mqbstat_domainstats.h>
 #include <mqbu_capacitymeter.h>
 
-// MWC
-#include <mwcst_statcontext.h>
+#include <bmqst_statcontext.h>
 
 // BDE
 #include <bsl_iosfwd.h>
@@ -92,7 +90,7 @@ namespace mqbmock {
 // class Domain
 // ============
 
-/// Mock domain implementation of the `mqbi::Domain` inteface.
+/// Mock domain implementation of the `mqbi::Domain` interface.
 class Domain : public mqbi::Domain {
   private:
     // PRIVATE TYPES
@@ -115,13 +113,13 @@ class Domain : public mqbi::Domain {
     // domain
     mqbi::Cluster* d_cluster_p;
 
-    bsl::shared_ptr<mwcst::StatContext> d_domainsStatContext;
+    bsl::shared_ptr<bmqst::StatContext> d_domainsStatContext;
 
     mqbstat::DomainStats d_domainsStats;
 
     // Stat context dedicated to this domain, to use as the parent stat
     // context for any queue in this domain
-    bsl::shared_ptr<mwcst::StatContext> d_statContext;
+    bsl::shared_ptr<bmqst::StatContext> d_statContext;
 
     // Configuration for the domain
     mqbconfm::Domain d_config;
@@ -166,6 +164,8 @@ class Domain : public mqbi::Domain {
 
     /// Do some logging.
     void teardown(const Domain::TeardownCb& teardownCb) BSLS_KEYWORD_OVERRIDE;
+
+    void teardownRemove(const TeardownCb& teardownCb) BSLS_KEYWORD_OVERRIDE;
 
     /// Create/Open with the specified `handleParameters` the queue having
     /// the specified `uri` for the requester client represented with the
@@ -235,7 +235,7 @@ class Domain : public mqbi::Domain {
     mqbstat::DomainStats* domainStats() BSLS_KEYWORD_OVERRIDE;
 
     /// Return the stat context associated to this Domain.
-    mwcst::StatContext* queueStatContext() BSLS_KEYWORD_OVERRIDE;
+    bmqst::StatContext* queueStatContext() BSLS_KEYWORD_OVERRIDE;
 
     /// Return the cluster associated to this Domain.
     mqbi::Cluster* cluster() const BSLS_KEYWORD_OVERRIDE;
@@ -244,13 +244,21 @@ class Domain : public mqbi::Domain {
     /// should be used by all queues under this domain.
     void loadRoutingConfiguration(bmqp_ctrlmsg::RoutingConfiguration* config)
         const BSLS_KEYWORD_OVERRIDE;
+
+    /// Check the state of the queues in this domain, return false if there's
+    /// queues opened or opening.
+    bool tryRemove() BSLS_KEYWORD_OVERRIDE;
+
+    /// Check the state of the domain, return true if the first round
+    /// of DOMAINS REMOVE is completed
+    bool isRemoveComplete() const BSLS_KEYWORD_OVERRIDE;
 };
 
 // ===================
 // class DomainFactory
 // ===================
 
-/// Mock implementation of the `mqbi::DomainFactory` inteface.
+/// Mock implementation of the `mqbi::DomainFactory` interface.
 class DomainFactory : public mqbi::DomainFactory {
   private:
     // DATA

@@ -39,19 +39,21 @@
 /// Basic Usage Example
 ///-------------------
 //
+// bslma::Allocator* allocator = bmqtst::TestHelperUtil::allocator();
+//
 // SimpleEvaluator evaluator;
 // bsl::string     expression = "foo < 3 | bar > 4";
 //
-// CompilationContext compilationContext(s_allocator_p);
+// CompilationContext compilationContext(allocator);
 //
 // if (int rc = evaluator.compile(expression, compilationContext)) {
 //     bsl::cerr << compilationContext.lastErrorMessage() << "\n";
 //     // don't use evaluator
 // }
 //
-// MockPropertiesReader reader(s_allocator_p);
-// EvaluationContext evaluationContext(&reader, s_allocator_p);
-// bool result = evaluator.evaluate(evaluationContext);
+// MockPropertiesReader reader(allocator);
+// EvaluationContext    evaluationContext(&reader, allocator);
+// bool                 result = evaluator.evaluate(evaluationContext);
 //..
 
 // BDE
@@ -66,8 +68,7 @@
 #include <bslmf_issame.h>
 #include <bsls_types.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 namespace BloombergLP {
 
@@ -79,17 +80,25 @@ class EvaluationContext;
 
 struct ErrorType {
     enum Enum {
-        e_OK = 0  // no error
-        ,
+        /// no error
+        e_OK = 0,
+
         e_COMPILATION_FIRST = -100,
-        e_SYNTAX            = -100  // syntax error
-        ,
-        e_NO_PROPERTIES = -101  // expression does not use any property
-        ,
-        e_TOO_COMPLEX = -102  // too many properties
-                              // or operators in expression
-        ,
-        e_COMPILATION_LAST = -102,
+
+        /// syntax error
+        e_SYNTAX = -100,
+
+        /// expression does not use any property
+        e_NO_PROPERTIES = -101,
+
+        /// too many properties or operators in expression
+        e_TOO_COMPLEX = -102,
+
+        /// expression string is too long
+        e_TOO_LONG = -103,
+
+        e_COMPILATION_LAST = -103,
+
         e_EVALUATION_FIRST = -1,
         e_NAME             = -1,
         e_TYPE             = -2,
@@ -140,7 +149,7 @@ class SimpleEvaluator {
     /// derived.
     class Expression {
       public:
-        virtual ~Expression() {}
+        virtual ~Expression();
 
         /// Evaluate a Expression.
         virtual bdld::Datum evaluate(EvaluationContext& context) const = 0;
@@ -149,7 +158,7 @@ class SimpleEvaluator {
     // Bison generates different code for different available standards:
     // - For C++ >= 11 it generates the 'emplace' with a move constructor, so
     // it's possible to use 'bslma::ManagedPtr'.
-    // - For C++ < 11 (AIX/Solaris) it generates the 'emplace' with a const&
+    // - For C++ < 11 (Solaris) it generates the 'emplace' with a const&
     // copy constructor, but this constructor is deleted for
     // 'bslma::ManagedPtr', so it's impossible to use here. Use
     // 'bsl::shared_ptr' instead.
@@ -492,10 +501,14 @@ class SimpleEvaluator {
   public:
     // PUBLIC CONSTANTS
     enum {
+        /// The maximum length of an expression string.
+        k_MAX_EXPRESSION_LENGTH = 128,
+
         /// The maximum number of operators allowed in a single expression.
-        k_MAX_OPERATORS  = 10,
+        k_MAX_OPERATORS = 10,
+
+        /// The maximum number of properties allowed in a single expression.
         k_MAX_PROPERTIES = 10
-        // The maximum number of properties allowed in a single expression.
     };
 
     // CREATORS
@@ -583,7 +596,7 @@ class CompilationContext {
     ErrorType::Enum d_lastError;
 
     // If `d_lastError` is not zero, contains a description of the error.
-    mwcu::MemOutStream d_os;
+    bmqu::MemOutStream d_os;
 
     // The resulting AST, if `d_validationOnly` is set to `false`.
     ExpressionPtr d_expression;
@@ -706,19 +719,36 @@ class EvaluationContext {
 inline const char* ErrorType::toString(ErrorType::Enum value)
 {
     switch (value) {
-    case 0: return "";                                         // RETURN
-    case bmqeval::ErrorType::e_SYNTAX: return "syntax error";  // RETURN
-    case bmqeval::ErrorType::e_TOO_COMPLEX:
-        return "subscription expression is too complex";  // RETURN
-    case bmqeval::ErrorType::e_NO_PROPERTIES:
+    case bmqeval::ErrorType::e_OK: {
+        return "";  // RETURN
+    }
+    case bmqeval::ErrorType::e_SYNTAX: {
+        return "syntax error";  // RETURN
+    }
+    case bmqeval::ErrorType::e_NO_PROPERTIES: {
         return "expression does not use any property";  // RETURN
-    case bmqeval::ErrorType::e_NAME:
+    }
+    case bmqeval::ErrorType::e_TOO_COMPLEX: {
+        return "subscription expression is too complex";  // RETURN
+    }
+    case bmqeval::ErrorType::e_TOO_LONG: {
+        return "subscription expression is too long";  // RETURN
+    }
+    case bmqeval::ErrorType::e_NAME: {
         return "undefined name in subscription expression";  // RETURN
-    case bmqeval::ErrorType::e_TYPE:
+    }
+    case bmqeval::ErrorType::e_TYPE: {
         return "type error in expression";  // RETURN
-    case bmqeval::ErrorType::e_BINARY:
+    }
+    case bmqeval::ErrorType::e_BINARY: {
         return "binary properties are not supported";  // RETURN
-    default: return "unknown error";                   // RETURN
+    }
+    case bmqeval::ErrorType::e_UNDEFINED: {
+        return "undefined error";  // RETURN
+    }
+    default: {
+        return "unknown error";  // RETURN
+    }
     }
 }
 
@@ -967,10 +997,10 @@ inline int CompilationContext::getPropertyIndex(const bsl::string& property,
     if (iter == d_properties.end()) {
         PropertyInfo info = {type, d_properties.size()};
         d_properties.insert(iter, bsl::make_pair(property, info));
-        return info.d_index;  // RETURN
+        return static_cast<int>(info.d_index);  // RETURN
     }
     if (iter->second.d_type == type) {
-        return iter->second.d_index;  // RETURN
+        return static_cast<int>(iter->second.d_index);  // RETURN
     }
     return -1;
 }

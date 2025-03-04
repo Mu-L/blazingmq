@@ -29,9 +29,8 @@
 #include <bmqt_correlationid.h>
 #include <bmqt_messageguid.h>
 
-// MWC
-#include <mwcu_blob.h>
-#include <mwcu_memoutstream.h>
+#include <bmqu_blob.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlb_chartype.h>
@@ -148,7 +147,7 @@ void MessageDumper::processDumpMessageHelper(
         dumpContext->d_isEnabled  = true;
         dumpContext->d_actionType = static_cast<int>(
             bmqp_ctrlmsg::DumpActionType::E_TIME_IN_SECONDS);
-        dumpContext->d_actionValue = mwcsys::Time::highResolutionTimer() +
+        dumpContext->d_actionValue = bmqsys::Time::highResolutionTimer() +
                                      (dumpMsg.dumpActionValue() *
                                       bdlt::TimeUnitRatio::k_NS_PER_S);
     } break;  // BREAK
@@ -341,13 +340,16 @@ void MessageDumper::dumpPushEvent(bsl::ostream& out, const bmqp::Event& event)
         unsigned int        subscriptionId;
         bmqp::RdaInfo       rdaInfo;
         bmqt::CorrelationId correlationId;
+        unsigned int        subscriptionHandleId;
 
         iter.extractQueueInfo(&qId, &subscriptionId, &rdaInfo);
 
         QueueManager::QueueSp queue =
-            d_queueManager_p->lookupQueueBySubscriptionId(&correlationId,
-                                                          qId,
-                                                          subscriptionId);
+            d_queueManager_p->lookupQueueBySubscriptionId(
+                &correlationId,
+                &subscriptionHandleId,
+                qId,
+                subscriptionId);
         BSLS_ASSERT_SAFE(queue);
 
         out << "PUSH Message #" << ++msgNum << ": "
@@ -369,7 +371,7 @@ void MessageDumper::dumpPushEvent(bsl::ostream& out, const bmqp::Event& event)
 
         bdlbb::Blob payload(d_allocator_p);
         if (iter.loadMessagePayload(&payload) == 0) {
-            out << mwcu::BlobStartHexDumper(&payload,
+            out << bmqu::BlobStartHexDumper(&payload,
                                             e_NUM_BYTES_IN_BLOB_TO_DUMP);
         }
         else {
@@ -468,7 +470,7 @@ void MessageDumper::dumpPutEvent(bsl::ostream&             out,
 
         bdlbb::Blob payload(d_allocator_p);
         if (iter.loadMessagePayload(&payload) == 0) {
-            out << mwcu::BlobStartHexDumper(&payload,
+            out << bmqu::BlobStartHexDumper(&payload,
                                             e_NUM_BYTES_IN_BLOB_TO_DUMP);
         }
         else {

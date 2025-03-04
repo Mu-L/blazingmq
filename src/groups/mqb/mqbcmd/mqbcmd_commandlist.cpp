@@ -73,6 +73,18 @@ struct CommandDefinition {
      "Clear the domain resolution cache entry of the optionally specified "
      "'domain', or clear all domain resolution cache entries if 'ALL' is "
      "specified."},
+    {"DOMAINS REMOVE <domain> [FINALIZE]",
+     "Remove a domain with an optional keyword 'FINALIZE'",
+     "Remove a domain from the cluster.  If the keyword 'FINALIZE' is not "
+     "supplied, perform the first phase of domain deletion, failing if there "
+     "is an open queue on this domain and blocking any open queue requests "
+     "subsequent to the command being issued.  After the first phase of "
+     "domain deletion, it is safe to remove the domain configuration file "
+     "from disk.  If the keyword 'FINALIZE' is specified, perform the second "
+     "phase of domain deletion, failing if the domain has not had the first "
+     "phase of domain deletion performed.  After the second phase of domain "
+     "deletion, it is safe to create a new domain reusing the same name and "
+     "to connect to it."},
     // ConfigProvider
     {"CONFIGPROVIDER CACHE_CLEAR (<domain>|ALL)",
      "Clear domain's cached configuration.",
@@ -122,24 +134,30 @@ struct CommandDefinition {
      "Show status of queues belonging to 'domain_name' in the storage of "
      "cluster 'name'"},
     {
-        "CLUSTERS CLUSTER <name> STORAGE REPLICATION SET <parameter> <value>",
+        "CLUSTERS CLUSTER <name> STORAGE REPLICATION [SET|SET_ALL] "
+        "<parameter> <value>",
         "Set the value of the replication 'parameter' of cluster 'name'",
-        "Set the value of the replication 'parameter' of cluster 'name'",
+        "Set the value of the replication 'parameter' of cluster 'name'. If "
+        "SET_ALL is used then set the parameter for all nodes in the cluster.",
     },
-    {"CLUSTERS CLUSTER <name> STORAGE REPLICATION GET <parameter>",
+    {"CLUSTERS CLUSTER <name> STORAGE REPLICATION [GET|GET_ALL] <parameter>",
      "Get the value of the replication 'parameter' of cluster 'name'",
-     "Get the value of the replication 'parameter' of cluster 'name'"},
+     "Get the value of the replication 'parameter' of cluster 'name'. If "
+     "GET_ALL is used then get the paramter value for all nodes in the "
+     "cluster."},
     {"CLUSTERS CLUSTER <name> STORAGE REPLICATION LIST_TUNABLES",
      "Get the supported settable parameters for the replication of cluster "
      "'name'",
      "Get the supported settable parameters for the replication of cluster "
      "'name'"},
-    {"CLUSTERS CLUSTER <name> STATE ELECTOR SET <parameter> <value>",
+    {"CLUSTERS CLUSTER <name> STATE ELECTOR [SET|SET_ALL] <parameter> <value>",
      "Set the 'parameter' of the elector of cluster 'name' to 'value'",
-     "Set the 'parameter' of the elector of cluster 'name' to 'value'"},
-    {"CLUSTERS CLUSTER <name> STATE ELECTOR GET <parameter>",
+     "Set the 'parameter' of the elector of cluster 'name' to 'value'. If "
+     "SET_ALL is used then set the paramter for all nodes in the cluster."},
+    {"CLUSTERS CLUSTER <name> STATE ELECTOR [GET|GET_ALL] <parameter>",
      "Get the 'parameter' of the elector of cluster 'name'",
-     "Get the 'parameter' of the elector of cluster 'name'"},
+     "Get the 'parameter' of the elector of cluster 'name'. If GET_ALL is "
+     "used then get the parameter value for all nodes in the cluster."},
     {"CLUSTERS CLUSTER <name> STATE ELECTOR LIST_TUNABLES",
      "Get the supported settable parameters for the elector of cluster "
      "'name'",

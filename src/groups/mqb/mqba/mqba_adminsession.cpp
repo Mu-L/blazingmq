@@ -52,11 +52,10 @@
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_event.h>
 
-// MWC
-#include <mwcio_status.h>
-#include <mwcu_blob.h>
-#include <mwcu_printutil.h>
-#include <mwcu_weakmemfn.h>
+#include <bmqio_status.h>
+#include <bmqu_blob.h>
+#include <bmqu_printutil.h>
+#include <bmqu_weakmemfn.h>
 
 // BDE
 #include <ball_log.h>
@@ -107,15 +106,13 @@ bmqp_ctrlmsg::ClientIdentity* extractClientIdentity(
 // struct AdminSessionState
 // -------------------------
 
-AdminSessionState::AdminSessionState(BlobSpPool*               blobSpPool,
-                                     bdlbb::BlobBufferFactory* bufferFactory,
-                                     bmqp::EncodingType::Enum  encodingType,
-                                     bslma::Allocator*         allocator)
+AdminSessionState::AdminSessionState(BlobSpPool*              blobSpPool,
+                                     bmqp::EncodingType::Enum encodingType,
+                                     bslma::Allocator*        allocator)
 : d_allocator_p(allocator)
 , d_dispatcherClientData()
-, d_bufferFactory_p(bufferFactory)
 , d_blobSpPool_p(blobSpPool)
-, d_schemaEventBuilder(bufferFactory, allocator, encodingType)
+, d_schemaEventBuilder(blobSpPool, encodingType, allocator)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(encodingType != bmqp::EncodingType::e_UNKNOWN);
@@ -136,7 +133,7 @@ void AdminSession::sendPacket()
     bdlb::ScopeExitAny resetBlobScopeGuard(
         bdlf::BindUtil::bind(&bmqp::SchemaEventBuilder::reset,
                              &d_state.d_schemaEventBuilder));
-    const bdlbb::Blob& blob = d_state.d_schemaEventBuilder.blob();
+    const bdlbb::Blob& blob = *d_state.d_schemaEventBuilder.blob();
 
     // This method is the centralized *single* place where we should try to
     // send data to the client over the channel.
@@ -147,28 +144,28 @@ void AdminSession::sendPacket()
     }
 
     // Try to send the data, or drop it if we fail due to high watermark limit.
-    mwcio::Status status;
+    bmqio::Status status;
     d_channel_sp->write(&status, blob);
     if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
-            status.category() != mwcio::StatusCategory::e_SUCCESS)) {
+            status.category() != bmqio::StatusCategory::e_SUCCESS)) {
         BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-        if (status.category() == mwcio::StatusCategory::e_CONNECTION) {
+        if (status.category() == bmqio::StatusCategory::e_CONNECTION) {
             // This code relies on the fact that `e_CONNECTION` error cannot be
             // returned without calling `tearDown`.
             return;  // RETURN
         }
-        if (status.category() == mwcio::StatusCategory::e_LIMIT) {
+        if (status.category() == bmqio::StatusCategory::e_LIMIT) {
             BALL_LOG_ERROR
                 << "#ADMCLIENT_SEND_FAILURE " << description()
                 << ": Failed to send data [size: "
-                << mwcu::PrintUtil::prettyNumber(blob.length())
+                << bmqu::PrintUtil::prettyNumber(blob.length())
                 << " bytes] to admin client due to channel watermark limit"
                 << "; dropping.";
         }
         else {
             BALL_LOG_INFO << "#ADMCLIENT_SEND_FAILURE " << description()
                           << ": Failed to send data [size: "
-                          << mwcu::PrintUtil::prettyNumber(blob.length())
+                          << bmqu::PrintUtil::prettyNumber(blob.length())
                           << " bytes] to admin client with status: " << status;
         }
     }
@@ -195,7 +192,7 @@ void AdminSession::finalizeAdminCommand(
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
     BSLS_ASSERT_SAFE(adminCommandCtrlMsg.choice().isAdminCommandValue());
-    BSLS_ASSERT_SAFE(d_state.d_schemaEventBuilder.blob().length() == 0);
+    BSLS_ASSERT_SAFE(d_state.d_schemaEventBuilder.blob()->length() == 0);
 
     // Send success/error response to client
     bdlma::LocalSequentialAllocator<2048> localAllocator(
@@ -206,6 +203,8 @@ void AdminSession::finalizeAdminCommand(
     response.choice().makeAdminCommandResponse();
 
     response.choice().adminCommandResponse().text() = commandExecResults;
+
+    BALL_LOG_INFO << description() << ": Send response message: " << response;
 
     int rc = d_state.d_schemaEventBuilder.setMessage(
         response,
@@ -257,22 +256,22 @@ void AdminSession::enqueueAdminCommand(
     d_adminCb(
         d_channel_sp->peerUri(),
         req.command(),
-        bdlf::BindUtil::bind(mwcu::WeakMemFnUtil::weakMemFn(
+        bdlf::BindUtil::bind(bmqu::WeakMemFnUtil::weakMemFn(
                                  &AdminSession::onProcessedAdminCommand,
                                  d_self.acquireWeak()),
                              adminCommandCtrlMsg,
-                             bdlf::PlaceHolders::_1,    // rc
-                             bdlf::PlaceHolders::_2));  // commandExecResults
+                             bdlf::PlaceHolders::_1,   // rc
+                             bdlf::PlaceHolders::_2),  // commandExecResults
+        false);                                        // fromReroute
 }
 
 // CREATORS
 AdminSession::AdminSession(
-    const bsl::shared_ptr<mwcio::Channel>&        channel,
+    const bsl::shared_ptr<bmqio::Channel>&        channel,
     const bmqp_ctrlmsg::NegotiationMessage&       negotiationMessage,
     const bsl::string&                            sessionDescription,
     mqbi::Dispatcher*                             dispatcher,
     AdminSessionState::BlobSpPool*                blobSpPool,
-    bdlbb::BlobBufferFactory*                     bufferFactory,
     bdlmt::EventScheduler*                        scheduler,
     const mqbnet::Session::AdminCommandEnqueueCb& adminCb,
     bslma::Allocator*                             allocator)
@@ -283,7 +282,6 @@ AdminSession::AdminSession(
 , d_description(sessionDescription, allocator)
 , d_channel_sp(channel)
 , d_state(blobSpPool,
-          bufferFactory,
           bmqp::SchemaEventBuilderUtil::bestEncodingSupported(
               d_clientIdentity_p->features()),
           allocator)
@@ -337,7 +335,7 @@ void AdminSession::processEvent(
         BALL_LOG_ERROR << "#CORRUPTED_EVENT " << description()
                        << ": Received invalid control message from client "
                        << "[reason: 'failed to decode', rc: " << rc << "]:\n"
-                       << mwcu::BlobStartHexDumper(event.blob());
+                       << bmqu::BlobStartHexDumper(event.blob());
         return;  // RETURN
     }
 
@@ -418,10 +416,12 @@ void AdminSession::tearDown(const bsl::shared_ptr<void>& session,
 }
 
 void AdminSession::initiateShutdown(const ShutdownCb&         callback,
-                                    const bsls::TimeInterval& timeout)
+                                    const bsls::TimeInterval& timeout,
+                                    bool supportShutdownV2)
 {
     // executed by the *ANY* thread
     (void)timeout;
+    (void)supportShutdownV2;
 
     dispatcher()->execute(
         bdlf::BindUtil::bind(&AdminSession::initiateShutdownDispatched,

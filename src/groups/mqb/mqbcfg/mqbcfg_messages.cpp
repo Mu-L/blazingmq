@@ -1,4 +1,4 @@
-// Copyright 2018-2023 Bloomberg Finance L.P.
+// Copyright 2025 Bloomberg Finance L.P.
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +12,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 // mqbcfg_messages.cpp            *DO NOT EDIT*            @generated -*-C++-*-
 
 #include <mqbcfg_messages.h>
@@ -155,37 +154,7 @@ BmqconfConfig::BmqconfConfig()
 {
 }
 
-BmqconfConfig::BmqconfConfig(const BmqconfConfig& original)
-: d_cacheTTLSeconds(original.d_cacheTTLSeconds)
-{
-}
-
-BmqconfConfig::~BmqconfConfig()
-{
-}
-
 // MANIPULATORS
-
-BmqconfConfig& BmqconfConfig::operator=(const BmqconfConfig& rhs)
-{
-    if (this != &rhs) {
-        d_cacheTTLSeconds = rhs.d_cacheTTLSeconds;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-BmqconfConfig& BmqconfConfig::operator=(BmqconfConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_cacheTTLSeconds = bsl::move(rhs.d_cacheTTLSeconds);
-    }
-
-    return *this;
-}
-#endif
 
 void BmqconfConfig::reset()
 {
@@ -266,40 +235,7 @@ ClusterAttributes::ClusterAttributes()
 {
 }
 
-ClusterAttributes::ClusterAttributes(const ClusterAttributes& original)
-: d_isCSLModeEnabled(original.d_isCSLModeEnabled)
-, d_isFSMWorkflow(original.d_isFSMWorkflow)
-{
-}
-
-ClusterAttributes::~ClusterAttributes()
-{
-}
-
 // MANIPULATORS
-
-ClusterAttributes& ClusterAttributes::operator=(const ClusterAttributes& rhs)
-{
-    if (this != &rhs) {
-        d_isCSLModeEnabled = rhs.d_isCSLModeEnabled;
-        d_isFSMWorkflow    = rhs.d_isFSMWorkflow;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-ClusterAttributes& ClusterAttributes::operator=(ClusterAttributes&& rhs)
-{
-    if (this != &rhs) {
-        d_isCSLModeEnabled = bsl::move(rhs.d_isCSLModeEnabled);
-        d_isFSMWorkflow    = bsl::move(rhs.d_isFSMWorkflow);
-    }
-
-    return *this;
-}
-#endif
 
 void ClusterAttributes::reset()
 {
@@ -335,7 +271,7 @@ const int ClusterMonitorConfig::DEFAULT_INITIALIZER_MAX_TIME_MASTER = 120;
 
 const int ClusterMonitorConfig::DEFAULT_INITIALIZER_MAX_TIME_NODE = 120;
 
-const int ClusterMonitorConfig::DEFAULT_INITIALIZER_MAX_TIME_FAILOVER = 240;
+const int ClusterMonitorConfig::DEFAULT_INITIALIZER_MAX_TIME_FAILOVER = 600;
 
 const int ClusterMonitorConfig::DEFAULT_INITIALIZER_THRESHOLD_LEADER = 30;
 
@@ -343,7 +279,7 @@ const int ClusterMonitorConfig::DEFAULT_INITIALIZER_THRESHOLD_MASTER = 60;
 
 const int ClusterMonitorConfig::DEFAULT_INITIALIZER_THRESHOLD_NODE = 60;
 
-const int ClusterMonitorConfig::DEFAULT_INITIALIZER_THRESHOLD_FAILOVER = 120;
+const int ClusterMonitorConfig::DEFAULT_INITIALIZER_THRESHOLD_FAILOVER = 300;
 
 const bdlat_AttributeInfo ClusterMonitorConfig::ATTRIBUTE_INFO_ARRAY[] = {
     {ATTRIBUTE_ID_MAX_TIME_LEADER,
@@ -442,61 +378,7 @@ ClusterMonitorConfig::ClusterMonitorConfig()
 {
 }
 
-ClusterMonitorConfig::ClusterMonitorConfig(
-    const ClusterMonitorConfig& original)
-: d_maxTimeLeader(original.d_maxTimeLeader)
-, d_maxTimeMaster(original.d_maxTimeMaster)
-, d_maxTimeNode(original.d_maxTimeNode)
-, d_maxTimeFailover(original.d_maxTimeFailover)
-, d_thresholdLeader(original.d_thresholdLeader)
-, d_thresholdMaster(original.d_thresholdMaster)
-, d_thresholdNode(original.d_thresholdNode)
-, d_thresholdFailover(original.d_thresholdFailover)
-{
-}
-
-ClusterMonitorConfig::~ClusterMonitorConfig()
-{
-}
-
 // MANIPULATORS
-
-ClusterMonitorConfig&
-ClusterMonitorConfig::operator=(const ClusterMonitorConfig& rhs)
-{
-    if (this != &rhs) {
-        d_maxTimeLeader     = rhs.d_maxTimeLeader;
-        d_maxTimeMaster     = rhs.d_maxTimeMaster;
-        d_maxTimeNode       = rhs.d_maxTimeNode;
-        d_maxTimeFailover   = rhs.d_maxTimeFailover;
-        d_thresholdLeader   = rhs.d_thresholdLeader;
-        d_thresholdMaster   = rhs.d_thresholdMaster;
-        d_thresholdNode     = rhs.d_thresholdNode;
-        d_thresholdFailover = rhs.d_thresholdFailover;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-ClusterMonitorConfig&
-ClusterMonitorConfig::operator=(ClusterMonitorConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_maxTimeLeader     = bsl::move(rhs.d_maxTimeLeader);
-        d_maxTimeMaster     = bsl::move(rhs.d_maxTimeMaster);
-        d_maxTimeNode       = bsl::move(rhs.d_maxTimeNode);
-        d_maxTimeFailover   = bsl::move(rhs.d_maxTimeFailover);
-        d_thresholdLeader   = bsl::move(rhs.d_thresholdLeader);
-        d_thresholdMaster   = bsl::move(rhs.d_thresholdMaster);
-        d_thresholdNode     = bsl::move(rhs.d_thresholdNode);
-        d_thresholdFailover = bsl::move(rhs.d_thresholdFailover);
-    }
-
-    return *this;
-}
-#endif
 
 void ClusterMonitorConfig::reset()
 {
@@ -600,46 +482,7 @@ DispatcherProcessorParameters::DispatcherProcessorParameters()
 {
 }
 
-DispatcherProcessorParameters::DispatcherProcessorParameters(
-    const DispatcherProcessorParameters& original)
-: d_queueSize(original.d_queueSize)
-, d_queueSizeLowWatermark(original.d_queueSizeLowWatermark)
-, d_queueSizeHighWatermark(original.d_queueSizeHighWatermark)
-{
-}
-
-DispatcherProcessorParameters::~DispatcherProcessorParameters()
-{
-}
-
 // MANIPULATORS
-
-DispatcherProcessorParameters& DispatcherProcessorParameters::operator=(
-    const DispatcherProcessorParameters& rhs)
-{
-    if (this != &rhs) {
-        d_queueSize              = rhs.d_queueSize;
-        d_queueSizeLowWatermark  = rhs.d_queueSizeLowWatermark;
-        d_queueSizeHighWatermark = rhs.d_queueSizeHighWatermark;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-DispatcherProcessorParameters&
-DispatcherProcessorParameters::operator=(DispatcherProcessorParameters&& rhs)
-{
-    if (this != &rhs) {
-        d_queueSize              = bsl::move(rhs.d_queueSize);
-        d_queueSizeLowWatermark  = bsl::move(rhs.d_queueSizeLowWatermark);
-        d_queueSizeHighWatermark = bsl::move(rhs.d_queueSizeHighWatermark);
-    }
-
-    return *this;
-}
-#endif
 
 void DispatcherProcessorParameters::reset()
 {
@@ -803,62 +646,7 @@ ElectorConfig::ElectorConfig()
 {
 }
 
-ElectorConfig::ElectorConfig(const ElectorConfig& original)
-: d_initialWaitTimeoutMs(original.d_initialWaitTimeoutMs)
-, d_maxRandomWaitTimeoutMs(original.d_maxRandomWaitTimeoutMs)
-, d_scoutingResultTimeoutMs(original.d_scoutingResultTimeoutMs)
-, d_electionResultTimeoutMs(original.d_electionResultTimeoutMs)
-, d_heartbeatBroadcastPeriodMs(original.d_heartbeatBroadcastPeriodMs)
-, d_heartbeatCheckPeriodMs(original.d_heartbeatCheckPeriodMs)
-, d_heartbeatMissCount(original.d_heartbeatMissCount)
-, d_quorum(original.d_quorum)
-, d_leaderSyncDelayMs(original.d_leaderSyncDelayMs)
-{
-}
-
-ElectorConfig::~ElectorConfig()
-{
-}
-
 // MANIPULATORS
-
-ElectorConfig& ElectorConfig::operator=(const ElectorConfig& rhs)
-{
-    if (this != &rhs) {
-        d_initialWaitTimeoutMs       = rhs.d_initialWaitTimeoutMs;
-        d_maxRandomWaitTimeoutMs     = rhs.d_maxRandomWaitTimeoutMs;
-        d_scoutingResultTimeoutMs    = rhs.d_scoutingResultTimeoutMs;
-        d_electionResultTimeoutMs    = rhs.d_electionResultTimeoutMs;
-        d_heartbeatBroadcastPeriodMs = rhs.d_heartbeatBroadcastPeriodMs;
-        d_heartbeatCheckPeriodMs     = rhs.d_heartbeatCheckPeriodMs;
-        d_heartbeatMissCount         = rhs.d_heartbeatMissCount;
-        d_quorum                     = rhs.d_quorum;
-        d_leaderSyncDelayMs          = rhs.d_leaderSyncDelayMs;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-ElectorConfig& ElectorConfig::operator=(ElectorConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_initialWaitTimeoutMs    = bsl::move(rhs.d_initialWaitTimeoutMs);
-        d_maxRandomWaitTimeoutMs  = bsl::move(rhs.d_maxRandomWaitTimeoutMs);
-        d_scoutingResultTimeoutMs = bsl::move(rhs.d_scoutingResultTimeoutMs);
-        d_electionResultTimeoutMs = bsl::move(rhs.d_electionResultTimeoutMs);
-        d_heartbeatBroadcastPeriodMs = bsl::move(
-            rhs.d_heartbeatBroadcastPeriodMs);
-        d_heartbeatCheckPeriodMs = bsl::move(rhs.d_heartbeatCheckPeriodMs);
-        d_heartbeatMissCount     = bsl::move(rhs.d_heartbeatMissCount);
-        d_quorum                 = bsl::move(rhs.d_quorum);
-        d_leaderSyncDelayMs      = bsl::move(rhs.d_leaderSyncDelayMs);
-    }
-
-    return *this;
-}
-#endif
 
 void ElectorConfig::reset()
 {
@@ -898,6 +686,64 @@ ElectorConfig::print(bsl::ostream& stream, int level, int spacesPerLevel) const
     printer.printAttribute("leaderSyncDelayMs", this->leaderSyncDelayMs());
     printer.end();
     return stream;
+}
+
+// ----------------
+// class ExportMode
+// ----------------
+
+// CONSTANTS
+
+const char ExportMode::CLASS_NAME[] = "ExportMode";
+
+const bdlat_EnumeratorInfo ExportMode::ENUMERATOR_INFO_ARRAY[] = {
+    {ExportMode::E_PUSH, "E_PUSH", sizeof("E_PUSH") - 1, ""},
+    {ExportMode::E_PULL, "E_PULL", sizeof("E_PULL") - 1, ""}};
+
+// CLASS METHODS
+
+int ExportMode::fromInt(ExportMode::Value* result, int number)
+{
+    switch (number) {
+    case ExportMode::E_PUSH:
+    case ExportMode::E_PULL:
+        *result = static_cast<ExportMode::Value>(number);
+        return 0;
+    default: return -1;
+    }
+}
+
+int ExportMode::fromString(ExportMode::Value* result,
+                           const char*        string,
+                           int                stringLength)
+{
+    for (int i = 0; i < 2; ++i) {
+        const bdlat_EnumeratorInfo& enumeratorInfo =
+            ExportMode::ENUMERATOR_INFO_ARRAY[i];
+
+        if (stringLength == enumeratorInfo.d_nameLength &&
+            0 == bsl::memcmp(enumeratorInfo.d_name_p, string, stringLength)) {
+            *result = static_cast<ExportMode::Value>(enumeratorInfo.d_value);
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+const char* ExportMode::toString(ExportMode::Value value)
+{
+    switch (value) {
+    case E_PUSH: {
+        return "E_PUSH";
+    }
+    case E_PULL: {
+        return "E_PULL";
+    }
+    }
+
+    BSLS_ASSERT(!"invalid enumerator");
+    return 0;
 }
 
 // ---------------
@@ -981,46 +827,7 @@ Heartbeat::Heartbeat()
 {
 }
 
-Heartbeat::Heartbeat(const Heartbeat& original)
-: d_client(original.d_client)
-, d_downstreamBroker(original.d_downstreamBroker)
-, d_upstreamBroker(original.d_upstreamBroker)
-, d_clusterPeer(original.d_clusterPeer)
-{
-}
-
-Heartbeat::~Heartbeat()
-{
-}
-
 // MANIPULATORS
-
-Heartbeat& Heartbeat::operator=(const Heartbeat& rhs)
-{
-    if (this != &rhs) {
-        d_client           = rhs.d_client;
-        d_downstreamBroker = rhs.d_downstreamBroker;
-        d_upstreamBroker   = rhs.d_upstreamBroker;
-        d_clusterPeer      = rhs.d_clusterPeer;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-Heartbeat& Heartbeat::operator=(Heartbeat&& rhs)
-{
-    if (this != &rhs) {
-        d_client           = bsl::move(rhs.d_client);
-        d_downstreamBroker = bsl::move(rhs.d_downstreamBroker);
-        d_upstreamBroker   = bsl::move(rhs.d_upstreamBroker);
-        d_clusterPeer      = bsl::move(rhs.d_clusterPeer);
-    }
-
-    return *this;
-}
-#endif
 
 void Heartbeat::reset()
 {
@@ -1041,6 +848,155 @@ Heartbeat::print(bsl::ostream& stream, int level, int spacesPerLevel) const
     printer.printAttribute("downstreamBroker", this->downstreamBroker());
     printer.printAttribute("upstreamBroker", this->upstreamBroker());
     printer.printAttribute("clusterPeer", this->clusterPeer());
+    printer.end();
+    return stream;
+}
+
+// -------------------
+// class LogDumpConfig
+// -------------------
+
+// CONSTANTS
+
+const char LogDumpConfig::CLASS_NAME[] = "LogDumpConfig";
+
+const int LogDumpConfig::DEFAULT_INITIALIZER_RECORD_BUFFER_SIZE = 32768;
+
+const char LogDumpConfig::DEFAULT_INITIALIZER_RECORDING_LEVEL[] = "OFF";
+
+const char LogDumpConfig::DEFAULT_INITIALIZER_TRIGGER_LEVEL[] = "OFF";
+
+const bdlat_AttributeInfo LogDumpConfig::ATTRIBUTE_INFO_ARRAY[] = {
+    {ATTRIBUTE_ID_RECORD_BUFFER_SIZE,
+     "recordBufferSize",
+     sizeof("recordBufferSize") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_RECORDING_LEVEL,
+     "recordingLevel",
+     sizeof("recordingLevel") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_TRIGGER_LEVEL,
+     "triggerLevel",
+     sizeof("triggerLevel") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT}};
+
+// CLASS METHODS
+
+const bdlat_AttributeInfo* LogDumpConfig::lookupAttributeInfo(const char* name,
+                                                              int nameLength)
+{
+    for (int i = 0; i < 3; ++i) {
+        const bdlat_AttributeInfo& attributeInfo =
+            LogDumpConfig::ATTRIBUTE_INFO_ARRAY[i];
+
+        if (nameLength == attributeInfo.d_nameLength &&
+            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
+            return &attributeInfo;
+        }
+    }
+
+    return 0;
+}
+
+const bdlat_AttributeInfo* LogDumpConfig::lookupAttributeInfo(int id)
+{
+    switch (id) {
+    case ATTRIBUTE_ID_RECORD_BUFFER_SIZE:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORD_BUFFER_SIZE];
+    case ATTRIBUTE_ID_RECORDING_LEVEL:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_RECORDING_LEVEL];
+    case ATTRIBUTE_ID_TRIGGER_LEVEL:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TRIGGER_LEVEL];
+    default: return 0;
+    }
+}
+
+// CREATORS
+
+LogDumpConfig::LogDumpConfig(bslma::Allocator* basicAllocator)
+: d_recordingLevel(DEFAULT_INITIALIZER_RECORDING_LEVEL, basicAllocator)
+, d_triggerLevel(DEFAULT_INITIALIZER_TRIGGER_LEVEL, basicAllocator)
+, d_recordBufferSize(DEFAULT_INITIALIZER_RECORD_BUFFER_SIZE)
+{
+}
+
+LogDumpConfig::LogDumpConfig(const LogDumpConfig& original,
+                             bslma::Allocator*    basicAllocator)
+: d_recordingLevel(original.d_recordingLevel, basicAllocator)
+, d_triggerLevel(original.d_triggerLevel, basicAllocator)
+, d_recordBufferSize(original.d_recordBufferSize)
+{
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+LogDumpConfig::LogDumpConfig(LogDumpConfig&& original) noexcept
+: d_recordingLevel(bsl::move(original.d_recordingLevel)),
+  d_triggerLevel(bsl::move(original.d_triggerLevel)),
+  d_recordBufferSize(bsl::move(original.d_recordBufferSize))
+{
+}
+
+LogDumpConfig::LogDumpConfig(LogDumpConfig&&   original,
+                             bslma::Allocator* basicAllocator)
+: d_recordingLevel(bsl::move(original.d_recordingLevel), basicAllocator)
+, d_triggerLevel(bsl::move(original.d_triggerLevel), basicAllocator)
+, d_recordBufferSize(bsl::move(original.d_recordBufferSize))
+{
+}
+#endif
+
+LogDumpConfig::~LogDumpConfig()
+{
+}
+
+// MANIPULATORS
+
+LogDumpConfig& LogDumpConfig::operator=(const LogDumpConfig& rhs)
+{
+    if (this != &rhs) {
+        d_recordBufferSize = rhs.d_recordBufferSize;
+        d_recordingLevel   = rhs.d_recordingLevel;
+        d_triggerLevel     = rhs.d_triggerLevel;
+    }
+
+    return *this;
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+LogDumpConfig& LogDumpConfig::operator=(LogDumpConfig&& rhs)
+{
+    if (this != &rhs) {
+        d_recordBufferSize = bsl::move(rhs.d_recordBufferSize);
+        d_recordingLevel   = bsl::move(rhs.d_recordingLevel);
+        d_triggerLevel     = bsl::move(rhs.d_triggerLevel);
+    }
+
+    return *this;
+}
+#endif
+
+void LogDumpConfig::reset()
+{
+    d_recordBufferSize = DEFAULT_INITIALIZER_RECORD_BUFFER_SIZE;
+    d_recordingLevel   = DEFAULT_INITIALIZER_RECORDING_LEVEL;
+    d_triggerLevel     = DEFAULT_INITIALIZER_TRIGGER_LEVEL;
+}
+
+// ACCESSORS
+
+bsl::ostream&
+LogDumpConfig::print(bsl::ostream& stream, int level, int spacesPerLevel) const
+{
+    bslim::Printer printer(&stream, level, spacesPerLevel);
+    printer.start();
+    printer.printAttribute("recordBufferSize", this->recordBufferSize());
+    printer.printAttribute("recordingLevel", this->recordingLevel());
+    printer.printAttribute("triggerLevel", this->triggerLevel());
     printer.end();
     return stream;
 }
@@ -1124,7 +1080,7 @@ MasterAssignmentAlgorithm::toString(MasterAssignmentAlgorithm::Value value)
 const char MessagePropertiesV2::CLASS_NAME[] = "MessagePropertiesV2";
 
 const bool MessagePropertiesV2::DEFAULT_INITIALIZER_ADVERTISE_V2_SUPPORT =
-    false;
+    true;
 
 const int MessagePropertiesV2::DEFAULT_INITIALIZER_MIN_CPP_SDK_VERSION = 11207;
 
@@ -1187,44 +1143,7 @@ MessagePropertiesV2::MessagePropertiesV2()
 {
 }
 
-MessagePropertiesV2::MessagePropertiesV2(const MessagePropertiesV2& original)
-: d_minCppSdkVersion(original.d_minCppSdkVersion)
-, d_minJavaSdkVersion(original.d_minJavaSdkVersion)
-, d_advertiseV2Support(original.d_advertiseV2Support)
-{
-}
-
-MessagePropertiesV2::~MessagePropertiesV2()
-{
-}
-
 // MANIPULATORS
-
-MessagePropertiesV2&
-MessagePropertiesV2::operator=(const MessagePropertiesV2& rhs)
-{
-    if (this != &rhs) {
-        d_advertiseV2Support = rhs.d_advertiseV2Support;
-        d_minCppSdkVersion   = rhs.d_minCppSdkVersion;
-        d_minJavaSdkVersion  = rhs.d_minJavaSdkVersion;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-MessagePropertiesV2& MessagePropertiesV2::operator=(MessagePropertiesV2&& rhs)
-{
-    if (this != &rhs) {
-        d_advertiseV2Support = bsl::move(rhs.d_advertiseV2Support);
-        d_minCppSdkVersion   = bsl::move(rhs.d_minCppSdkVersion);
-        d_minJavaSdkVersion  = bsl::move(rhs.d_minJavaSdkVersion);
-    }
-
-    return *this;
-}
-#endif
 
 void MessagePropertiesV2::reset()
 {
@@ -1333,49 +1252,7 @@ MessageThrottleConfig::MessageThrottleConfig()
 {
 }
 
-MessageThrottleConfig::MessageThrottleConfig(
-    const MessageThrottleConfig& original)
-: d_lowThreshold(original.d_lowThreshold)
-, d_highThreshold(original.d_highThreshold)
-, d_lowInterval(original.d_lowInterval)
-, d_highInterval(original.d_highInterval)
-{
-}
-
-MessageThrottleConfig::~MessageThrottleConfig()
-{
-}
-
 // MANIPULATORS
-
-MessageThrottleConfig&
-MessageThrottleConfig::operator=(const MessageThrottleConfig& rhs)
-{
-    if (this != &rhs) {
-        d_lowThreshold  = rhs.d_lowThreshold;
-        d_highThreshold = rhs.d_highThreshold;
-        d_lowInterval   = rhs.d_lowInterval;
-        d_highInterval  = rhs.d_highInterval;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-MessageThrottleConfig&
-MessageThrottleConfig::operator=(MessageThrottleConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_lowThreshold  = bsl::move(rhs.d_lowThreshold);
-        d_highThreshold = bsl::move(rhs.d_highThreshold);
-        d_lowInterval   = bsl::move(rhs.d_lowInterval);
-        d_highInterval  = bsl::move(rhs.d_highInterval);
-    }
-
-    return *this;
-}
-#endif
 
 void MessageThrottleConfig::reset()
 {
@@ -1698,74 +1575,7 @@ QueueOperationsConfig::QueueOperationsConfig()
 {
 }
 
-QueueOperationsConfig::QueueOperationsConfig(
-    const QueueOperationsConfig& original)
-: d_openTimeoutMs(original.d_openTimeoutMs)
-, d_configureTimeoutMs(original.d_configureTimeoutMs)
-, d_closeTimeoutMs(original.d_closeTimeoutMs)
-, d_reopenTimeoutMs(original.d_reopenTimeoutMs)
-, d_reopenRetryIntervalMs(original.d_reopenRetryIntervalMs)
-, d_reopenMaxAttempts(original.d_reopenMaxAttempts)
-, d_assignmentTimeoutMs(original.d_assignmentTimeoutMs)
-, d_keepaliveDurationMs(original.d_keepaliveDurationMs)
-, d_consumptionMonitorPeriodMs(original.d_consumptionMonitorPeriodMs)
-, d_stopTimeoutMs(original.d_stopTimeoutMs)
-, d_shutdownTimeoutMs(original.d_shutdownTimeoutMs)
-, d_ackWindowSize(original.d_ackWindowSize)
-{
-}
-
-QueueOperationsConfig::~QueueOperationsConfig()
-{
-}
-
 // MANIPULATORS
-
-QueueOperationsConfig&
-QueueOperationsConfig::operator=(const QueueOperationsConfig& rhs)
-{
-    if (this != &rhs) {
-        d_openTimeoutMs              = rhs.d_openTimeoutMs;
-        d_configureTimeoutMs         = rhs.d_configureTimeoutMs;
-        d_closeTimeoutMs             = rhs.d_closeTimeoutMs;
-        d_reopenTimeoutMs            = rhs.d_reopenTimeoutMs;
-        d_reopenRetryIntervalMs      = rhs.d_reopenRetryIntervalMs;
-        d_reopenMaxAttempts          = rhs.d_reopenMaxAttempts;
-        d_assignmentTimeoutMs        = rhs.d_assignmentTimeoutMs;
-        d_keepaliveDurationMs        = rhs.d_keepaliveDurationMs;
-        d_consumptionMonitorPeriodMs = rhs.d_consumptionMonitorPeriodMs;
-        d_stopTimeoutMs              = rhs.d_stopTimeoutMs;
-        d_shutdownTimeoutMs          = rhs.d_shutdownTimeoutMs;
-        d_ackWindowSize              = rhs.d_ackWindowSize;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-QueueOperationsConfig&
-QueueOperationsConfig::operator=(QueueOperationsConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_openTimeoutMs              = bsl::move(rhs.d_openTimeoutMs);
-        d_configureTimeoutMs         = bsl::move(rhs.d_configureTimeoutMs);
-        d_closeTimeoutMs             = bsl::move(rhs.d_closeTimeoutMs);
-        d_reopenTimeoutMs            = bsl::move(rhs.d_reopenTimeoutMs);
-        d_reopenRetryIntervalMs      = bsl::move(rhs.d_reopenRetryIntervalMs);
-        d_reopenMaxAttempts          = bsl::move(rhs.d_reopenMaxAttempts);
-        d_assignmentTimeoutMs        = bsl::move(rhs.d_assignmentTimeoutMs);
-        d_keepaliveDurationMs        = bsl::move(rhs.d_keepaliveDurationMs);
-        d_consumptionMonitorPeriodMs = bsl::move(
-            rhs.d_consumptionMonitorPeriodMs);
-        d_stopTimeoutMs     = bsl::move(rhs.d_stopTimeoutMs);
-        d_shutdownTimeoutMs = bsl::move(rhs.d_shutdownTimeoutMs);
-        d_ackWindowSize     = bsl::move(rhs.d_ackWindowSize);
-    }
-
-    return *this;
-}
-#endif
 
 void QueueOperationsConfig::reset()
 {
@@ -1935,238 +1745,6 @@ bsl::ostream& ResolvedDomain::print(bsl::ostream& stream,
     printer.start();
     printer.printAttribute("resolvedName", this->resolvedName());
     printer.printAttribute("clusterName", this->clusterName());
-    printer.end();
-    return stream;
-}
-
-// ----------------------
-// class StatPluginConfig
-// ----------------------
-
-// CONSTANTS
-
-const char StatPluginConfig::CLASS_NAME[] = "StatPluginConfig";
-
-const char StatPluginConfig::DEFAULT_INITIALIZER_NAME[] = "";
-
-const int StatPluginConfig::DEFAULT_INITIALIZER_QUEUE_SIZE = 10000;
-
-const int StatPluginConfig::DEFAULT_INITIALIZER_QUEUE_HIGH_WATERMARK = 5000;
-
-const int StatPluginConfig::DEFAULT_INITIALIZER_QUEUE_LOW_WATERMARK = 1000;
-
-const int StatPluginConfig::DEFAULT_INITIALIZER_PUBLISH_INTERVAL = 30;
-
-const char StatPluginConfig::DEFAULT_INITIALIZER_NAMESPACE_PREFIX[] = "";
-
-const char StatPluginConfig::DEFAULT_INITIALIZER_INSTANCE_ID[] = "";
-
-const bdlat_AttributeInfo StatPluginConfig::ATTRIBUTE_INFO_ARRAY[] = {
-    {ATTRIBUTE_ID_NAME,
-     "name",
-     sizeof("name") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_QUEUE_SIZE,
-     "queueSize",
-     sizeof("queueSize") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK,
-     "queueHighWatermark",
-     sizeof("queueHighWatermark") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_QUEUE_LOW_WATERMARK,
-     "queueLowWatermark",
-     sizeof("queueLowWatermark") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_PUBLISH_INTERVAL,
-     "publishInterval",
-     sizeof("publishInterval") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_NAMESPACE_PREFIX,
-     "namespacePrefix",
-     sizeof("namespacePrefix") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_HOSTS,
-     "hosts",
-     sizeof("hosts") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_INSTANCE_ID,
-     "instanceId",
-     sizeof("instanceId") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT}};
-
-// CLASS METHODS
-
-const bdlat_AttributeInfo*
-StatPluginConfig::lookupAttributeInfo(const char* name, int nameLength)
-{
-    for (int i = 0; i < 8; ++i) {
-        const bdlat_AttributeInfo& attributeInfo =
-            StatPluginConfig::ATTRIBUTE_INFO_ARRAY[i];
-
-        if (nameLength == attributeInfo.d_nameLength &&
-            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
-            return &attributeInfo;
-        }
-    }
-
-    return 0;
-}
-
-const bdlat_AttributeInfo* StatPluginConfig::lookupAttributeInfo(int id)
-{
-    switch (id) {
-    case ATTRIBUTE_ID_NAME: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME];
-    case ATTRIBUTE_ID_QUEUE_SIZE:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE];
-    case ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK];
-    case ATTRIBUTE_ID_QUEUE_LOW_WATERMARK:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK];
-    case ATTRIBUTE_ID_PUBLISH_INTERVAL:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL];
-    case ATTRIBUTE_ID_NAMESPACE_PREFIX:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX];
-    case ATTRIBUTE_ID_HOSTS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS];
-    case ATTRIBUTE_ID_INSTANCE_ID:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID];
-    default: return 0;
-    }
-}
-
-// CREATORS
-
-StatPluginConfig::StatPluginConfig(bslma::Allocator* basicAllocator)
-: d_hosts(basicAllocator)
-, d_name(DEFAULT_INITIALIZER_NAME, basicAllocator)
-, d_namespacePrefix(DEFAULT_INITIALIZER_NAMESPACE_PREFIX, basicAllocator)
-, d_instanceId(DEFAULT_INITIALIZER_INSTANCE_ID, basicAllocator)
-, d_queueSize(DEFAULT_INITIALIZER_QUEUE_SIZE)
-, d_queueHighWatermark(DEFAULT_INITIALIZER_QUEUE_HIGH_WATERMARK)
-, d_queueLowWatermark(DEFAULT_INITIALIZER_QUEUE_LOW_WATERMARK)
-, d_publishInterval(DEFAULT_INITIALIZER_PUBLISH_INTERVAL)
-{
-}
-
-StatPluginConfig::StatPluginConfig(const StatPluginConfig& original,
-                                   bslma::Allocator*       basicAllocator)
-: d_hosts(original.d_hosts, basicAllocator)
-, d_name(original.d_name, basicAllocator)
-, d_namespacePrefix(original.d_namespacePrefix, basicAllocator)
-, d_instanceId(original.d_instanceId, basicAllocator)
-, d_queueSize(original.d_queueSize)
-, d_queueHighWatermark(original.d_queueHighWatermark)
-, d_queueLowWatermark(original.d_queueLowWatermark)
-, d_publishInterval(original.d_publishInterval)
-{
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-StatPluginConfig::StatPluginConfig(StatPluginConfig&& original) noexcept
-: d_hosts(bsl::move(original.d_hosts)),
-  d_name(bsl::move(original.d_name)),
-  d_namespacePrefix(bsl::move(original.d_namespacePrefix)),
-  d_instanceId(bsl::move(original.d_instanceId)),
-  d_queueSize(bsl::move(original.d_queueSize)),
-  d_queueHighWatermark(bsl::move(original.d_queueHighWatermark)),
-  d_queueLowWatermark(bsl::move(original.d_queueLowWatermark)),
-  d_publishInterval(bsl::move(original.d_publishInterval))
-{
-}
-
-StatPluginConfig::StatPluginConfig(StatPluginConfig&& original,
-                                   bslma::Allocator*  basicAllocator)
-: d_hosts(bsl::move(original.d_hosts), basicAllocator)
-, d_name(bsl::move(original.d_name), basicAllocator)
-, d_namespacePrefix(bsl::move(original.d_namespacePrefix), basicAllocator)
-, d_instanceId(bsl::move(original.d_instanceId), basicAllocator)
-, d_queueSize(bsl::move(original.d_queueSize))
-, d_queueHighWatermark(bsl::move(original.d_queueHighWatermark))
-, d_queueLowWatermark(bsl::move(original.d_queueLowWatermark))
-, d_publishInterval(bsl::move(original.d_publishInterval))
-{
-}
-#endif
-
-StatPluginConfig::~StatPluginConfig()
-{
-}
-
-// MANIPULATORS
-
-StatPluginConfig& StatPluginConfig::operator=(const StatPluginConfig& rhs)
-{
-    if (this != &rhs) {
-        d_name               = rhs.d_name;
-        d_queueSize          = rhs.d_queueSize;
-        d_queueHighWatermark = rhs.d_queueHighWatermark;
-        d_queueLowWatermark  = rhs.d_queueLowWatermark;
-        d_publishInterval    = rhs.d_publishInterval;
-        d_namespacePrefix    = rhs.d_namespacePrefix;
-        d_hosts              = rhs.d_hosts;
-        d_instanceId         = rhs.d_instanceId;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-StatPluginConfig& StatPluginConfig::operator=(StatPluginConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_name               = bsl::move(rhs.d_name);
-        d_queueSize          = bsl::move(rhs.d_queueSize);
-        d_queueHighWatermark = bsl::move(rhs.d_queueHighWatermark);
-        d_queueLowWatermark  = bsl::move(rhs.d_queueLowWatermark);
-        d_publishInterval    = bsl::move(rhs.d_publishInterval);
-        d_namespacePrefix    = bsl::move(rhs.d_namespacePrefix);
-        d_hosts              = bsl::move(rhs.d_hosts);
-        d_instanceId         = bsl::move(rhs.d_instanceId);
-    }
-
-    return *this;
-}
-#endif
-
-void StatPluginConfig::reset()
-{
-    d_name               = DEFAULT_INITIALIZER_NAME;
-    d_queueSize          = DEFAULT_INITIALIZER_QUEUE_SIZE;
-    d_queueHighWatermark = DEFAULT_INITIALIZER_QUEUE_HIGH_WATERMARK;
-    d_queueLowWatermark  = DEFAULT_INITIALIZER_QUEUE_LOW_WATERMARK;
-    d_publishInterval    = DEFAULT_INITIALIZER_PUBLISH_INTERVAL;
-    d_namespacePrefix    = DEFAULT_INITIALIZER_NAMESPACE_PREFIX;
-    bdlat_ValueTypeFunctions::reset(&d_hosts);
-    d_instanceId = DEFAULT_INITIALIZER_INSTANCE_ID;
-}
-
-// ACCESSORS
-
-bsl::ostream& StatPluginConfig::print(bsl::ostream& stream,
-                                      int           level,
-                                      int           spacesPerLevel) const
-{
-    bslim::Printer printer(&stream, level, spacesPerLevel);
-    printer.start();
-    printer.printAttribute("name", this->name());
-    printer.printAttribute("queueSize", this->queueSize());
-    printer.printAttribute("queueHighWatermark", this->queueHighWatermark());
-    printer.printAttribute("queueLowWatermark", this->queueLowWatermark());
-    printer.printAttribute("publishInterval", this->publishInterval());
-    printer.printAttribute("namespacePrefix", this->namespacePrefix());
-    printer.printAttribute("hosts", this->hosts());
-    printer.printAttribute("instanceId", this->instanceId());
     printer.end();
     return stream;
 }
@@ -2501,65 +2079,7 @@ StorageSyncConfig::StorageSyncConfig()
 {
 }
 
-StorageSyncConfig::StorageSyncConfig(const StorageSyncConfig& original)
-: d_startupRecoveryMaxDurationMs(original.d_startupRecoveryMaxDurationMs)
-, d_maxAttemptsStorageSync(original.d_maxAttemptsStorageSync)
-, d_storageSyncReqTimeoutMs(original.d_storageSyncReqTimeoutMs)
-, d_masterSyncMaxDurationMs(original.d_masterSyncMaxDurationMs)
-, d_partitionSyncStateReqTimeoutMs(original.d_partitionSyncStateReqTimeoutMs)
-, d_partitionSyncDataReqTimeoutMs(original.d_partitionSyncDataReqTimeoutMs)
-, d_startupWaitDurationMs(original.d_startupWaitDurationMs)
-, d_fileChunkSize(original.d_fileChunkSize)
-, d_partitionSyncEventSize(original.d_partitionSyncEventSize)
-{
-}
-
-StorageSyncConfig::~StorageSyncConfig()
-{
-}
-
 // MANIPULATORS
-
-StorageSyncConfig& StorageSyncConfig::operator=(const StorageSyncConfig& rhs)
-{
-    if (this != &rhs) {
-        d_startupRecoveryMaxDurationMs = rhs.d_startupRecoveryMaxDurationMs;
-        d_maxAttemptsStorageSync       = rhs.d_maxAttemptsStorageSync;
-        d_storageSyncReqTimeoutMs      = rhs.d_storageSyncReqTimeoutMs;
-        d_masterSyncMaxDurationMs      = rhs.d_masterSyncMaxDurationMs;
-        d_partitionSyncStateReqTimeoutMs =
-            rhs.d_partitionSyncStateReqTimeoutMs;
-        d_partitionSyncDataReqTimeoutMs = rhs.d_partitionSyncDataReqTimeoutMs;
-        d_startupWaitDurationMs         = rhs.d_startupWaitDurationMs;
-        d_fileChunkSize                 = rhs.d_fileChunkSize;
-        d_partitionSyncEventSize        = rhs.d_partitionSyncEventSize;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-StorageSyncConfig& StorageSyncConfig::operator=(StorageSyncConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_startupRecoveryMaxDurationMs = bsl::move(
-            rhs.d_startupRecoveryMaxDurationMs);
-        d_maxAttemptsStorageSync  = bsl::move(rhs.d_maxAttemptsStorageSync);
-        d_storageSyncReqTimeoutMs = bsl::move(rhs.d_storageSyncReqTimeoutMs);
-        d_masterSyncMaxDurationMs = bsl::move(rhs.d_masterSyncMaxDurationMs);
-        d_partitionSyncStateReqTimeoutMs = bsl::move(
-            rhs.d_partitionSyncStateReqTimeoutMs);
-        d_partitionSyncDataReqTimeoutMs = bsl::move(
-            rhs.d_partitionSyncDataReqTimeoutMs);
-        d_startupWaitDurationMs  = bsl::move(rhs.d_startupWaitDurationMs);
-        d_fileChunkSize          = bsl::move(rhs.d_fileChunkSize);
-        d_partitionSyncEventSize = bsl::move(rhs.d_partitionSyncEventSize);
-    }
-
-    return *this;
-}
-#endif
 
 void StorageSyncConfig::reset()
 {
@@ -2889,27 +2409,15 @@ bsl::ostream& TcpClusterNodeConnection::print(bsl::ostream& stream,
     return stream;
 }
 
-// ------------------------
-// class TcpInterfaceConfig
-// ------------------------
+// --------------------------
+// class TcpInterfaceListener
+// --------------------------
 
 // CONSTANTS
 
-const char TcpInterfaceConfig::CLASS_NAME[] = "TcpInterfaceConfig";
+const char TcpInterfaceListener::CLASS_NAME[] = "TcpInterfaceListener";
 
-const int TcpInterfaceConfig::DEFAULT_INITIALIZER_MAX_CONNECTIONS = 10000;
-
-const bsls::Types::Int64
-    TcpInterfaceConfig::DEFAULT_INITIALIZER_NODE_LOW_WATERMARK = 1024;
-
-const bsls::Types::Int64
-    TcpInterfaceConfig::DEFAULT_INITIALIZER_NODE_HIGH_WATERMARK = 2048;
-
-const int TcpInterfaceConfig::DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS = 3000;
-
-const bool TcpInterfaceConfig::DEFAULT_INITIALIZER_USE_NTF = false;
-
-const bdlat_AttributeInfo TcpInterfaceConfig::ATTRIBUTE_INFO_ARRAY[] = {
+const bdlat_AttributeInfo TcpInterfaceListener::ATTRIBUTE_INFO_ARRAY[] = {
     {ATTRIBUTE_ID_NAME,
      "name",
      sizeof("name") - 1,
@@ -2919,56 +2427,16 @@ const bdlat_AttributeInfo TcpInterfaceConfig::ATTRIBUTE_INFO_ARRAY[] = {
      "port",
      sizeof("port") - 1,
      "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_IO_THREADS,
-     "ioThreads",
-     sizeof("ioThreads") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_MAX_CONNECTIONS,
-     "maxConnections",
-     sizeof("maxConnections") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_LOW_WATERMARK,
-     "lowWatermark",
-     sizeof("lowWatermark") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_HIGH_WATERMARK,
-     "highWatermark",
-     sizeof("highWatermark") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_NODE_LOW_WATERMARK,
-     "nodeLowWatermark",
-     sizeof("nodeLowWatermark") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_NODE_HIGH_WATERMARK,
-     "nodeHighWatermark",
-     sizeof("nodeHighWatermark") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS,
-     "heartbeatIntervalMs",
-     sizeof("heartbeatIntervalMs") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_USE_NTF,
-     "useNtf",
-     sizeof("useNtf") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT}};
+     bdlat_FormattingMode::e_DEC}};
 
 // CLASS METHODS
 
 const bdlat_AttributeInfo*
-TcpInterfaceConfig::lookupAttributeInfo(const char* name, int nameLength)
+TcpInterfaceListener::lookupAttributeInfo(const char* name, int nameLength)
 {
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 2; ++i) {
         const bdlat_AttributeInfo& attributeInfo =
-            TcpInterfaceConfig::ATTRIBUTE_INFO_ARRAY[i];
+            TcpInterfaceListener::ATTRIBUTE_INFO_ARRAY[i];
 
         if (nameLength == attributeInfo.d_nameLength &&
             0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
@@ -2979,114 +2447,59 @@ TcpInterfaceConfig::lookupAttributeInfo(const char* name, int nameLength)
     return 0;
 }
 
-const bdlat_AttributeInfo* TcpInterfaceConfig::lookupAttributeInfo(int id)
+const bdlat_AttributeInfo* TcpInterfaceListener::lookupAttributeInfo(int id)
 {
     switch (id) {
     case ATTRIBUTE_ID_NAME: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME];
     case ATTRIBUTE_ID_PORT: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT];
-    case ATTRIBUTE_ID_IO_THREADS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS];
-    case ATTRIBUTE_ID_MAX_CONNECTIONS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS];
-    case ATTRIBUTE_ID_LOW_WATERMARK:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK];
-    case ATTRIBUTE_ID_HIGH_WATERMARK:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK];
-    case ATTRIBUTE_ID_NODE_LOW_WATERMARK:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK];
-    case ATTRIBUTE_ID_NODE_HIGH_WATERMARK:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK];
-    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS];
-    case ATTRIBUTE_ID_USE_NTF:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_USE_NTF];
     default: return 0;
     }
 }
 
 // CREATORS
 
-TcpInterfaceConfig::TcpInterfaceConfig(bslma::Allocator* basicAllocator)
-: d_lowWatermark()
-, d_highWatermark()
-, d_nodeLowWatermark(DEFAULT_INITIALIZER_NODE_LOW_WATERMARK)
-, d_nodeHighWatermark(DEFAULT_INITIALIZER_NODE_HIGH_WATERMARK)
-, d_name(basicAllocator)
+TcpInterfaceListener::TcpInterfaceListener(bslma::Allocator* basicAllocator)
+: d_name(basicAllocator)
 , d_port()
-, d_ioThreads()
-, d_maxConnections(DEFAULT_INITIALIZER_MAX_CONNECTIONS)
-, d_heartbeatIntervalMs(DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS)
-, d_useNtf(DEFAULT_INITIALIZER_USE_NTF)
 {
 }
 
-TcpInterfaceConfig::TcpInterfaceConfig(const TcpInterfaceConfig& original,
-                                       bslma::Allocator* basicAllocator)
-: d_lowWatermark(original.d_lowWatermark)
-, d_highWatermark(original.d_highWatermark)
-, d_nodeLowWatermark(original.d_nodeLowWatermark)
-, d_nodeHighWatermark(original.d_nodeHighWatermark)
-, d_name(original.d_name, basicAllocator)
+TcpInterfaceListener::TcpInterfaceListener(
+    const TcpInterfaceListener& original,
+    bslma::Allocator*           basicAllocator)
+: d_name(original.d_name, basicAllocator)
 , d_port(original.d_port)
-, d_ioThreads(original.d_ioThreads)
-, d_maxConnections(original.d_maxConnections)
-, d_heartbeatIntervalMs(original.d_heartbeatIntervalMs)
-, d_useNtf(original.d_useNtf)
 {
 }
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-TcpInterfaceConfig::TcpInterfaceConfig(TcpInterfaceConfig&& original) noexcept
-: d_lowWatermark(bsl::move(original.d_lowWatermark)),
-  d_highWatermark(bsl::move(original.d_highWatermark)),
-  d_nodeLowWatermark(bsl::move(original.d_nodeLowWatermark)),
-  d_nodeHighWatermark(bsl::move(original.d_nodeHighWatermark)),
-  d_name(bsl::move(original.d_name)),
-  d_port(bsl::move(original.d_port)),
-  d_ioThreads(bsl::move(original.d_ioThreads)),
-  d_maxConnections(bsl::move(original.d_maxConnections)),
-  d_heartbeatIntervalMs(bsl::move(original.d_heartbeatIntervalMs)),
-  d_useNtf(bsl::move(original.d_useNtf))
+TcpInterfaceListener::TcpInterfaceListener(TcpInterfaceListener&& original)
+    noexcept : d_name(bsl::move(original.d_name)),
+               d_port(bsl::move(original.d_port))
 {
 }
 
-TcpInterfaceConfig::TcpInterfaceConfig(TcpInterfaceConfig&& original,
-                                       bslma::Allocator*    basicAllocator)
-: d_lowWatermark(bsl::move(original.d_lowWatermark))
-, d_highWatermark(bsl::move(original.d_highWatermark))
-, d_nodeLowWatermark(bsl::move(original.d_nodeLowWatermark))
-, d_nodeHighWatermark(bsl::move(original.d_nodeHighWatermark))
-, d_name(bsl::move(original.d_name), basicAllocator)
+TcpInterfaceListener::TcpInterfaceListener(TcpInterfaceListener&& original,
+                                           bslma::Allocator* basicAllocator)
+: d_name(bsl::move(original.d_name), basicAllocator)
 , d_port(bsl::move(original.d_port))
-, d_ioThreads(bsl::move(original.d_ioThreads))
-, d_maxConnections(bsl::move(original.d_maxConnections))
-, d_heartbeatIntervalMs(bsl::move(original.d_heartbeatIntervalMs))
-, d_useNtf(bsl::move(original.d_useNtf))
 {
 }
 #endif
 
-TcpInterfaceConfig::~TcpInterfaceConfig()
+TcpInterfaceListener::~TcpInterfaceListener()
 {
 }
 
 // MANIPULATORS
 
-TcpInterfaceConfig&
-TcpInterfaceConfig::operator=(const TcpInterfaceConfig& rhs)
+TcpInterfaceListener&
+TcpInterfaceListener::operator=(const TcpInterfaceListener& rhs)
 {
     if (this != &rhs) {
-        d_name                = rhs.d_name;
-        d_port                = rhs.d_port;
-        d_ioThreads           = rhs.d_ioThreads;
-        d_maxConnections      = rhs.d_maxConnections;
-        d_lowWatermark        = rhs.d_lowWatermark;
-        d_highWatermark       = rhs.d_highWatermark;
-        d_nodeLowWatermark    = rhs.d_nodeLowWatermark;
-        d_nodeHighWatermark   = rhs.d_nodeHighWatermark;
-        d_heartbeatIntervalMs = rhs.d_heartbeatIntervalMs;
-        d_useNtf              = rhs.d_useNtf;
+        d_name = rhs.d_name;
+        d_port = rhs.d_port;
     }
 
     return *this;
@@ -3094,57 +2507,34 @@ TcpInterfaceConfig::operator=(const TcpInterfaceConfig& rhs)
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-TcpInterfaceConfig& TcpInterfaceConfig::operator=(TcpInterfaceConfig&& rhs)
+TcpInterfaceListener&
+TcpInterfaceListener::operator=(TcpInterfaceListener&& rhs)
 {
     if (this != &rhs) {
-        d_name                = bsl::move(rhs.d_name);
-        d_port                = bsl::move(rhs.d_port);
-        d_ioThreads           = bsl::move(rhs.d_ioThreads);
-        d_maxConnections      = bsl::move(rhs.d_maxConnections);
-        d_lowWatermark        = bsl::move(rhs.d_lowWatermark);
-        d_highWatermark       = bsl::move(rhs.d_highWatermark);
-        d_nodeLowWatermark    = bsl::move(rhs.d_nodeLowWatermark);
-        d_nodeHighWatermark   = bsl::move(rhs.d_nodeHighWatermark);
-        d_heartbeatIntervalMs = bsl::move(rhs.d_heartbeatIntervalMs);
-        d_useNtf              = bsl::move(rhs.d_useNtf);
+        d_name = bsl::move(rhs.d_name);
+        d_port = bsl::move(rhs.d_port);
     }
 
     return *this;
 }
 #endif
 
-void TcpInterfaceConfig::reset()
+void TcpInterfaceListener::reset()
 {
     bdlat_ValueTypeFunctions::reset(&d_name);
     bdlat_ValueTypeFunctions::reset(&d_port);
-    bdlat_ValueTypeFunctions::reset(&d_ioThreads);
-    d_maxConnections = DEFAULT_INITIALIZER_MAX_CONNECTIONS;
-    bdlat_ValueTypeFunctions::reset(&d_lowWatermark);
-    bdlat_ValueTypeFunctions::reset(&d_highWatermark);
-    d_nodeLowWatermark    = DEFAULT_INITIALIZER_NODE_LOW_WATERMARK;
-    d_nodeHighWatermark   = DEFAULT_INITIALIZER_NODE_HIGH_WATERMARK;
-    d_heartbeatIntervalMs = DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS;
-    d_useNtf              = DEFAULT_INITIALIZER_USE_NTF;
 }
 
 // ACCESSORS
 
-bsl::ostream& TcpInterfaceConfig::print(bsl::ostream& stream,
-                                        int           level,
-                                        int           spacesPerLevel) const
+bsl::ostream& TcpInterfaceListener::print(bsl::ostream& stream,
+                                          int           level,
+                                          int           spacesPerLevel) const
 {
     bslim::Printer printer(&stream, level, spacesPerLevel);
     printer.start();
     printer.printAttribute("name", this->name());
     printer.printAttribute("port", this->port());
-    printer.printAttribute("ioThreads", this->ioThreads());
-    printer.printAttribute("maxConnections", this->maxConnections());
-    printer.printAttribute("lowWatermark", this->lowWatermark());
-    printer.printAttribute("highWatermark", this->highWatermark());
-    printer.printAttribute("nodeLowWatermark", this->nodeLowWatermark());
-    printer.printAttribute("nodeHighWatermark", this->nodeHighWatermark());
-    printer.printAttribute("heartbeatIntervalMs", this->heartbeatIntervalMs());
-    printer.printAttribute("useNtf", this->useNtf());
     printer.end();
     return stream;
 }
@@ -3589,43 +2979,7 @@ DispatcherProcessorConfig::DispatcherProcessorConfig()
 {
 }
 
-DispatcherProcessorConfig::DispatcherProcessorConfig(
-    const DispatcherProcessorConfig& original)
-: d_processorConfig(original.d_processorConfig)
-, d_numProcessors(original.d_numProcessors)
-{
-}
-
-DispatcherProcessorConfig::~DispatcherProcessorConfig()
-{
-}
-
 // MANIPULATORS
-
-DispatcherProcessorConfig&
-DispatcherProcessorConfig::operator=(const DispatcherProcessorConfig& rhs)
-{
-    if (this != &rhs) {
-        d_numProcessors   = rhs.d_numProcessors;
-        d_processorConfig = rhs.d_processorConfig;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-DispatcherProcessorConfig&
-DispatcherProcessorConfig::operator=(DispatcherProcessorConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_numProcessors   = bsl::move(rhs.d_numProcessors);
-        d_processorConfig = bsl::move(rhs.d_processorConfig);
-    }
-
-    return *this;
-}
-#endif
 
 void DispatcherProcessorConfig::reset()
 {
@@ -3708,6 +3062,11 @@ const bdlat_AttributeInfo LogController::ATTRIBUTE_INFO_ARRAY[] = {
      "syslog",
      sizeof("syslog") - 1,
      "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_LOG_DUMP,
+     "logDump",
+     sizeof("logDump") - 1,
+     "",
      bdlat_FormattingMode::e_DEFAULT}};
 
 // CLASS METHODS
@@ -3715,7 +3074,7 @@ const bdlat_AttributeInfo LogController::ATTRIBUTE_INFO_ARRAY[] = {
 const bdlat_AttributeInfo* LogController::lookupAttributeInfo(const char* name,
                                                               int nameLength)
 {
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 11; ++i) {
         const bdlat_AttributeInfo& attributeInfo =
             LogController::ATTRIBUTE_INFO_ARRAY[i];
 
@@ -3753,6 +3112,8 @@ const bdlat_AttributeInfo* LogController::lookupAttributeInfo(int id)
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CATEGORIES];
     case ATTRIBUTE_ID_SYSLOG:
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SYSLOG];
+    case ATTRIBUTE_ID_LOG_DUMP:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOG_DUMP];
     default: return 0;
     }
 }
@@ -3769,6 +3130,7 @@ LogController::LogController(bslma::Allocator* basicAllocator)
                              basicAllocator)
 , d_consoleSeverityThreshold(basicAllocator)
 , d_syslog(basicAllocator)
+, d_logDump(basicAllocator)
 , d_fileMaxAgeDays()
 , d_rotationBytes()
 {
@@ -3786,6 +3148,7 @@ LogController::LogController(const LogController& original,
 , d_consoleSeverityThreshold(original.d_consoleSeverityThreshold,
                              basicAllocator)
 , d_syslog(original.d_syslog, basicAllocator)
+, d_logDump(original.d_logDump, basicAllocator)
 , d_fileMaxAgeDays(original.d_fileMaxAgeDays)
 , d_rotationBytes(original.d_rotationBytes)
 {
@@ -3802,6 +3165,7 @@ LogController::LogController(LogController&& original) noexcept
   d_bslsLogSeverityThreshold(bsl::move(original.d_bslsLogSeverityThreshold)),
   d_consoleSeverityThreshold(bsl::move(original.d_consoleSeverityThreshold)),
   d_syslog(bsl::move(original.d_syslog)),
+  d_logDump(bsl::move(original.d_logDump)),
   d_fileMaxAgeDays(bsl::move(original.d_fileMaxAgeDays)),
   d_rotationBytes(bsl::move(original.d_rotationBytes))
 {
@@ -3819,6 +3183,7 @@ LogController::LogController(LogController&&   original,
 , d_consoleSeverityThreshold(bsl::move(original.d_consoleSeverityThreshold),
                              basicAllocator)
 , d_syslog(bsl::move(original.d_syslog), basicAllocator)
+, d_logDump(bsl::move(original.d_logDump), basicAllocator)
 , d_fileMaxAgeDays(bsl::move(original.d_fileMaxAgeDays))
 , d_rotationBytes(bsl::move(original.d_rotationBytes))
 {
@@ -3844,6 +3209,7 @@ LogController& LogController::operator=(const LogController& rhs)
         d_consoleSeverityThreshold = rhs.d_consoleSeverityThreshold;
         d_categories               = rhs.d_categories;
         d_syslog                   = rhs.d_syslog;
+        d_logDump                  = rhs.d_logDump;
     }
 
     return *this;
@@ -3864,6 +3230,7 @@ LogController& LogController::operator=(LogController&& rhs)
         d_consoleSeverityThreshold = bsl::move(rhs.d_consoleSeverityThreshold);
         d_categories               = bsl::move(rhs.d_categories);
         d_syslog                   = bsl::move(rhs.d_syslog);
+        d_logDump                  = bsl::move(rhs.d_logDump);
     }
 
     return *this;
@@ -3883,6 +3250,7 @@ void LogController::reset()
     bdlat_ValueTypeFunctions::reset(&d_consoleSeverityThreshold);
     bdlat_ValueTypeFunctions::reset(&d_categories);
     bdlat_ValueTypeFunctions::reset(&d_syslog);
+    bdlat_ValueTypeFunctions::reset(&d_logDump);
 }
 
 // ACCESSORS
@@ -3904,135 +3272,7 @@ LogController::print(bsl::ostream& stream, int level, int spacesPerLevel) const
                            this->consoleSeverityThreshold());
     printer.printAttribute("categories", this->categories());
     printer.printAttribute("syslog", this->syslog());
-    printer.end();
-    return stream;
-}
-
-// -----------------------
-// class NetworkInterfaces
-// -----------------------
-
-// CONSTANTS
-
-const char NetworkInterfaces::CLASS_NAME[] = "NetworkInterfaces";
-
-const bdlat_AttributeInfo NetworkInterfaces::ATTRIBUTE_INFO_ARRAY[] = {
-    {ATTRIBUTE_ID_HEARTBEATS,
-     "heartbeats",
-     sizeof("heartbeats") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT},
-    {ATTRIBUTE_ID_TCP_INTERFACE,
-     "tcpInterface",
-     sizeof("tcpInterface") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT}};
-
-// CLASS METHODS
-
-const bdlat_AttributeInfo*
-NetworkInterfaces::lookupAttributeInfo(const char* name, int nameLength)
-{
-    for (int i = 0; i < 2; ++i) {
-        const bdlat_AttributeInfo& attributeInfo =
-            NetworkInterfaces::ATTRIBUTE_INFO_ARRAY[i];
-
-        if (nameLength == attributeInfo.d_nameLength &&
-            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
-            return &attributeInfo;
-        }
-    }
-
-    return 0;
-}
-
-const bdlat_AttributeInfo* NetworkInterfaces::lookupAttributeInfo(int id)
-{
-    switch (id) {
-    case ATTRIBUTE_ID_HEARTBEATS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS];
-    case ATTRIBUTE_ID_TCP_INTERFACE:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE];
-    default: return 0;
-    }
-}
-
-// CREATORS
-
-NetworkInterfaces::NetworkInterfaces(bslma::Allocator* basicAllocator)
-: d_tcpInterface(basicAllocator)
-, d_heartbeats()
-{
-}
-
-NetworkInterfaces::NetworkInterfaces(const NetworkInterfaces& original,
-                                     bslma::Allocator*        basicAllocator)
-: d_tcpInterface(original.d_tcpInterface, basicAllocator)
-, d_heartbeats(original.d_heartbeats)
-{
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-NetworkInterfaces::NetworkInterfaces(NetworkInterfaces&& original) noexcept
-: d_tcpInterface(bsl::move(original.d_tcpInterface)),
-  d_heartbeats(bsl::move(original.d_heartbeats))
-{
-}
-
-NetworkInterfaces::NetworkInterfaces(NetworkInterfaces&& original,
-                                     bslma::Allocator*   basicAllocator)
-: d_tcpInterface(bsl::move(original.d_tcpInterface), basicAllocator)
-, d_heartbeats(bsl::move(original.d_heartbeats))
-{
-}
-#endif
-
-NetworkInterfaces::~NetworkInterfaces()
-{
-}
-
-// MANIPULATORS
-
-NetworkInterfaces& NetworkInterfaces::operator=(const NetworkInterfaces& rhs)
-{
-    if (this != &rhs) {
-        d_heartbeats   = rhs.d_heartbeats;
-        d_tcpInterface = rhs.d_tcpInterface;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-NetworkInterfaces& NetworkInterfaces::operator=(NetworkInterfaces&& rhs)
-{
-    if (this != &rhs) {
-        d_heartbeats   = bsl::move(rhs.d_heartbeats);
-        d_tcpInterface = bsl::move(rhs.d_tcpInterface);
-    }
-
-    return *this;
-}
-#endif
-
-void NetworkInterfaces::reset()
-{
-    bdlat_ValueTypeFunctions::reset(&d_heartbeats);
-    bdlat_ValueTypeFunctions::reset(&d_tcpInterface);
-}
-
-// ACCESSORS
-
-bsl::ostream& NetworkInterfaces::print(bsl::ostream& stream,
-                                       int           level,
-                                       int           spacesPerLevel) const
-{
-    bslim::Printer printer(&stream, level, spacesPerLevel);
-    printer.start();
-    printer.printAttribute("heartbeats", this->heartbeats());
-    printer.printAttribute("tcpInterface", this->tcpInterface());
+    printer.printAttribute("logDump", this->logDump());
     printer.end();
     return stream;
 }
@@ -4044,6 +3284,9 @@ bsl::ostream& NetworkInterfaces::print(bsl::ostream& stream,
 // CONSTANTS
 
 const char PartitionConfig::CLASS_NAME[] = "PartitionConfig";
+
+const bsls::Types::Uint64
+    PartitionConfig::DEFAULT_INITIALIZER_MAX_C_S_L_FILE_SIZE = 67108864;
 
 const bool PartitionConfig::DEFAULT_INITIALIZER_PREALLOCATE = false;
 
@@ -4082,6 +3325,11 @@ const bdlat_AttributeInfo PartitionConfig::ATTRIBUTE_INFO_ARRAY[] = {
      sizeof("maxQlistFileSize") - 1,
      "",
      bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_MAX_C_S_L_FILE_SIZE,
+     "maxCSLFileSize",
+     sizeof("maxCSLFileSize") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
     {ATTRIBUTE_ID_PREALLOCATE,
      "preallocate",
      sizeof("preallocate") - 1,
@@ -4113,7 +3361,7 @@ const bdlat_AttributeInfo PartitionConfig::ATTRIBUTE_INFO_ARRAY[] = {
 const bdlat_AttributeInfo*
 PartitionConfig::lookupAttributeInfo(const char* name, int nameLength)
 {
-    for (int i = 0; i < 11; ++i) {
+    for (int i = 0; i < 12; ++i) {
         const bdlat_AttributeInfo& attributeInfo =
             PartitionConfig::ATTRIBUTE_INFO_ARRAY[i];
 
@@ -4141,6 +3389,8 @@ const bdlat_AttributeInfo* PartitionConfig::lookupAttributeInfo(int id)
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_JOURNAL_FILE_SIZE];
     case ATTRIBUTE_ID_MAX_QLIST_FILE_SIZE:
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_QLIST_FILE_SIZE];
+    case ATTRIBUTE_ID_MAX_C_S_L_FILE_SIZE:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_C_S_L_FILE_SIZE];
     case ATTRIBUTE_ID_PREALLOCATE:
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PREALLOCATE];
     case ATTRIBUTE_ID_MAX_ARCHIVED_FILE_SETS:
@@ -4161,6 +3411,7 @@ PartitionConfig::PartitionConfig(bslma::Allocator* basicAllocator)
 : d_maxDataFileSize()
 , d_maxJournalFileSize()
 , d_maxQlistFileSize()
+, d_maxCSLFileSize(DEFAULT_INITIALIZER_MAX_C_S_L_FILE_SIZE)
 , d_location(basicAllocator)
 , d_archiveLocation(basicAllocator)
 , d_syncConfig()
@@ -4177,6 +3428,7 @@ PartitionConfig::PartitionConfig(const PartitionConfig& original,
 : d_maxDataFileSize(original.d_maxDataFileSize)
 , d_maxJournalFileSize(original.d_maxJournalFileSize)
 , d_maxQlistFileSize(original.d_maxQlistFileSize)
+, d_maxCSLFileSize(original.d_maxCSLFileSize)
 , d_location(original.d_location, basicAllocator)
 , d_archiveLocation(original.d_archiveLocation, basicAllocator)
 , d_syncConfig(original.d_syncConfig)
@@ -4194,6 +3446,7 @@ PartitionConfig::PartitionConfig(PartitionConfig&& original) noexcept
 : d_maxDataFileSize(bsl::move(original.d_maxDataFileSize)),
   d_maxJournalFileSize(bsl::move(original.d_maxJournalFileSize)),
   d_maxQlistFileSize(bsl::move(original.d_maxQlistFileSize)),
+  d_maxCSLFileSize(bsl::move(original.d_maxCSLFileSize)),
   d_location(bsl::move(original.d_location)),
   d_archiveLocation(bsl::move(original.d_archiveLocation)),
   d_syncConfig(bsl::move(original.d_syncConfig)),
@@ -4210,6 +3463,7 @@ PartitionConfig::PartitionConfig(PartitionConfig&& original,
 : d_maxDataFileSize(bsl::move(original.d_maxDataFileSize))
 , d_maxJournalFileSize(bsl::move(original.d_maxJournalFileSize))
 , d_maxQlistFileSize(bsl::move(original.d_maxQlistFileSize))
+, d_maxCSLFileSize(bsl::move(original.d_maxCSLFileSize))
 , d_location(bsl::move(original.d_location), basicAllocator)
 , d_archiveLocation(bsl::move(original.d_archiveLocation), basicAllocator)
 , d_syncConfig(bsl::move(original.d_syncConfig))
@@ -4237,6 +3491,7 @@ PartitionConfig& PartitionConfig::operator=(const PartitionConfig& rhs)
         d_maxDataFileSize     = rhs.d_maxDataFileSize;
         d_maxJournalFileSize  = rhs.d_maxJournalFileSize;
         d_maxQlistFileSize    = rhs.d_maxQlistFileSize;
+        d_maxCSLFileSize      = rhs.d_maxCSLFileSize;
         d_preallocate         = rhs.d_preallocate;
         d_maxArchivedFileSets = rhs.d_maxArchivedFileSets;
         d_prefaultPages       = rhs.d_prefaultPages;
@@ -4258,6 +3513,7 @@ PartitionConfig& PartitionConfig::operator=(PartitionConfig&& rhs)
         d_maxDataFileSize     = bsl::move(rhs.d_maxDataFileSize);
         d_maxJournalFileSize  = bsl::move(rhs.d_maxJournalFileSize);
         d_maxQlistFileSize    = bsl::move(rhs.d_maxQlistFileSize);
+        d_maxCSLFileSize      = bsl::move(rhs.d_maxCSLFileSize);
         d_preallocate         = bsl::move(rhs.d_preallocate);
         d_maxArchivedFileSets = bsl::move(rhs.d_maxArchivedFileSets);
         d_prefaultPages       = bsl::move(rhs.d_prefaultPages);
@@ -4277,6 +3533,7 @@ void PartitionConfig::reset()
     bdlat_ValueTypeFunctions::reset(&d_maxDataFileSize);
     bdlat_ValueTypeFunctions::reset(&d_maxJournalFileSize);
     bdlat_ValueTypeFunctions::reset(&d_maxQlistFileSize);
+    d_maxCSLFileSize = DEFAULT_INITIALIZER_MAX_C_S_L_FILE_SIZE;
     d_preallocate = DEFAULT_INITIALIZER_PREALLOCATE;
     bdlat_ValueTypeFunctions::reset(&d_maxArchivedFileSets);
     d_prefaultPages   = DEFAULT_INITIALIZER_PREFAULT_PAGES;
@@ -4298,6 +3555,7 @@ bsl::ostream& PartitionConfig::print(bsl::ostream& stream,
     printer.printAttribute("maxDataFileSize", this->maxDataFileSize());
     printer.printAttribute("maxJournalFileSize", this->maxJournalFileSize());
     printer.printAttribute("maxQlistFileSize", this->maxQlistFileSize());
+    printer.printAttribute("maxCSLFileSize", this->maxCSLFileSize());
     printer.printAttribute("preallocate", this->preallocate());
     printer.printAttribute("maxArchivedFileSets", this->maxArchivedFileSets());
     printer.printAttribute("prefaultPages", this->prefaultPages());
@@ -4307,41 +3565,49 @@ bsl::ostream& PartitionConfig::print(bsl::ostream& stream,
     return stream;
 }
 
-// -----------------
-// class StatsConfig
-// -----------------
+// --------------------------------
+// class StatPluginConfigPrometheus
+// --------------------------------
 
 // CONSTANTS
 
-const char StatsConfig::CLASS_NAME[] = "StatsConfig";
+const char StatPluginConfigPrometheus::CLASS_NAME[] =
+    "StatPluginConfigPrometheus";
 
-const int StatsConfig::DEFAULT_INITIALIZER_SNAPSHOT_INTERVAL = 1;
+const ExportMode::Value StatPluginConfigPrometheus::DEFAULT_INITIALIZER_MODE =
+    ExportMode::E_PULL;
 
-const bdlat_AttributeInfo StatsConfig::ATTRIBUTE_INFO_ARRAY[] = {
-    {ATTRIBUTE_ID_SNAPSHOT_INTERVAL,
-     "snapshotInterval",
-     sizeof("snapshotInterval") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_PLUGINS,
-     "plugins",
-     sizeof("plugins") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT},
-    {ATTRIBUTE_ID_PRINTER,
-     "printer",
-     sizeof("printer") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT}};
+const char StatPluginConfigPrometheus::DEFAULT_INITIALIZER_HOST[] =
+    "localhost";
+
+const int StatPluginConfigPrometheus::DEFAULT_INITIALIZER_PORT = 8080;
+
+const bdlat_AttributeInfo StatPluginConfigPrometheus::ATTRIBUTE_INFO_ARRAY[] =
+    {{ATTRIBUTE_ID_MODE,
+      "mode",
+      sizeof("mode") - 1,
+      "",
+      bdlat_FormattingMode::e_DEFAULT},
+     {ATTRIBUTE_ID_HOST,
+      "host",
+      sizeof("host") - 1,
+      "",
+      bdlat_FormattingMode::e_TEXT},
+     {ATTRIBUTE_ID_PORT,
+      "port",
+      sizeof("port") - 1,
+      "",
+      bdlat_FormattingMode::e_DEC}};
 
 // CLASS METHODS
 
-const bdlat_AttributeInfo* StatsConfig::lookupAttributeInfo(const char* name,
-                                                            int nameLength)
+const bdlat_AttributeInfo*
+StatPluginConfigPrometheus::lookupAttributeInfo(const char* name,
+                                                int         nameLength)
 {
     for (int i = 0; i < 3; ++i) {
         const bdlat_AttributeInfo& attributeInfo =
-            StatsConfig::ATTRIBUTE_INFO_ARRAY[i];
+            StatPluginConfigPrometheus::ATTRIBUTE_INFO_ARRAY[i];
 
         if (nameLength == attributeInfo.d_nameLength &&
             0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
@@ -4352,66 +3618,69 @@ const bdlat_AttributeInfo* StatsConfig::lookupAttributeInfo(const char* name,
     return 0;
 }
 
-const bdlat_AttributeInfo* StatsConfig::lookupAttributeInfo(int id)
+const bdlat_AttributeInfo*
+StatPluginConfigPrometheus::lookupAttributeInfo(int id)
 {
     switch (id) {
-    case ATTRIBUTE_ID_SNAPSHOT_INTERVAL:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL];
-    case ATTRIBUTE_ID_PLUGINS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS];
-    case ATTRIBUTE_ID_PRINTER:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER];
+    case ATTRIBUTE_ID_MODE: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MODE];
+    case ATTRIBUTE_ID_HOST: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST];
+    case ATTRIBUTE_ID_PORT: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT];
     default: return 0;
     }
 }
 
 // CREATORS
 
-StatsConfig::StatsConfig(bslma::Allocator* basicAllocator)
-: d_plugins(basicAllocator)
-, d_printer(basicAllocator)
-, d_snapshotInterval(DEFAULT_INITIALIZER_SNAPSHOT_INTERVAL)
+StatPluginConfigPrometheus::StatPluginConfigPrometheus(
+    bslma::Allocator* basicAllocator)
+: d_host(DEFAULT_INITIALIZER_HOST, basicAllocator)
+, d_port(DEFAULT_INITIALIZER_PORT)
+, d_mode(DEFAULT_INITIALIZER_MODE)
 {
 }
 
-StatsConfig::StatsConfig(const StatsConfig& original,
-                         bslma::Allocator*  basicAllocator)
-: d_plugins(original.d_plugins, basicAllocator)
-, d_printer(original.d_printer, basicAllocator)
-, d_snapshotInterval(original.d_snapshotInterval)
+StatPluginConfigPrometheus::StatPluginConfigPrometheus(
+    const StatPluginConfigPrometheus& original,
+    bslma::Allocator*                 basicAllocator)
+: d_host(original.d_host, basicAllocator)
+, d_port(original.d_port)
+, d_mode(original.d_mode)
 {
 }
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-StatsConfig::StatsConfig(StatsConfig&& original) noexcept
-: d_plugins(bsl::move(original.d_plugins)),
-  d_printer(bsl::move(original.d_printer)),
-  d_snapshotInterval(bsl::move(original.d_snapshotInterval))
+StatPluginConfigPrometheus::StatPluginConfigPrometheus(
+    StatPluginConfigPrometheus&& original) noexcept
+: d_host(bsl::move(original.d_host)),
+  d_port(bsl::move(original.d_port)),
+  d_mode(bsl::move(original.d_mode))
 {
 }
 
-StatsConfig::StatsConfig(StatsConfig&&     original,
-                         bslma::Allocator* basicAllocator)
-: d_plugins(bsl::move(original.d_plugins), basicAllocator)
-, d_printer(bsl::move(original.d_printer), basicAllocator)
-, d_snapshotInterval(bsl::move(original.d_snapshotInterval))
+StatPluginConfigPrometheus::StatPluginConfigPrometheus(
+    StatPluginConfigPrometheus&& original,
+    bslma::Allocator*            basicAllocator)
+: d_host(bsl::move(original.d_host), basicAllocator)
+, d_port(bsl::move(original.d_port))
+, d_mode(bsl::move(original.d_mode))
 {
 }
 #endif
 
-StatsConfig::~StatsConfig()
+StatPluginConfigPrometheus::~StatPluginConfigPrometheus()
 {
 }
 
 // MANIPULATORS
 
-StatsConfig& StatsConfig::operator=(const StatsConfig& rhs)
+StatPluginConfigPrometheus&
+StatPluginConfigPrometheus::operator=(const StatPluginConfigPrometheus& rhs)
 {
     if (this != &rhs) {
-        d_snapshotInterval = rhs.d_snapshotInterval;
-        d_plugins          = rhs.d_plugins;
-        d_printer          = rhs.d_printer;
+        d_mode = rhs.d_mode;
+        d_host = rhs.d_host;
+        d_port = rhs.d_port;
     }
 
     return *this;
@@ -4419,35 +3688,295 @@ StatsConfig& StatsConfig::operator=(const StatsConfig& rhs)
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-StatsConfig& StatsConfig::operator=(StatsConfig&& rhs)
+StatPluginConfigPrometheus&
+StatPluginConfigPrometheus::operator=(StatPluginConfigPrometheus&& rhs)
 {
     if (this != &rhs) {
-        d_snapshotInterval = bsl::move(rhs.d_snapshotInterval);
-        d_plugins          = bsl::move(rhs.d_plugins);
-        d_printer          = bsl::move(rhs.d_printer);
+        d_mode = bsl::move(rhs.d_mode);
+        d_host = bsl::move(rhs.d_host);
+        d_port = bsl::move(rhs.d_port);
     }
 
     return *this;
 }
 #endif
 
-void StatsConfig::reset()
+void StatPluginConfigPrometheus::reset()
 {
-    d_snapshotInterval = DEFAULT_INITIALIZER_SNAPSHOT_INTERVAL;
-    bdlat_ValueTypeFunctions::reset(&d_plugins);
-    bdlat_ValueTypeFunctions::reset(&d_printer);
+    d_mode = DEFAULT_INITIALIZER_MODE;
+    d_host = DEFAULT_INITIALIZER_HOST;
+    d_port = DEFAULT_INITIALIZER_PORT;
 }
 
 // ACCESSORS
 
-bsl::ostream&
-StatsConfig::print(bsl::ostream& stream, int level, int spacesPerLevel) const
+bsl::ostream& StatPluginConfigPrometheus::print(bsl::ostream& stream,
+                                                int           level,
+                                                int spacesPerLevel) const
 {
     bslim::Printer printer(&stream, level, spacesPerLevel);
     printer.start();
-    printer.printAttribute("snapshotInterval", this->snapshotInterval());
-    printer.printAttribute("plugins", this->plugins());
-    printer.printAttribute("printer", this->printer());
+    printer.printAttribute("mode", this->mode());
+    printer.printAttribute("host", this->host());
+    printer.printAttribute("port", this->port());
+    printer.end();
+    return stream;
+}
+
+// ------------------------
+// class TcpInterfaceConfig
+// ------------------------
+
+// CONSTANTS
+
+const char TcpInterfaceConfig::CLASS_NAME[] = "TcpInterfaceConfig";
+
+const int TcpInterfaceConfig::DEFAULT_INITIALIZER_MAX_CONNECTIONS = 10000;
+
+const bsls::Types::Int64
+    TcpInterfaceConfig::DEFAULT_INITIALIZER_NODE_LOW_WATERMARK = 1024;
+
+const bsls::Types::Int64
+    TcpInterfaceConfig::DEFAULT_INITIALIZER_NODE_HIGH_WATERMARK = 2048;
+
+const int TcpInterfaceConfig::DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS = 3000;
+
+const bdlat_AttributeInfo TcpInterfaceConfig::ATTRIBUTE_INFO_ARRAY[] = {
+    {ATTRIBUTE_ID_NAME,
+     "name",
+     sizeof("name") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_PORT,
+     "port",
+     sizeof("port") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_IO_THREADS,
+     "ioThreads",
+     sizeof("ioThreads") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_MAX_CONNECTIONS,
+     "maxConnections",
+     sizeof("maxConnections") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_LOW_WATERMARK,
+     "lowWatermark",
+     sizeof("lowWatermark") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_HIGH_WATERMARK,
+     "highWatermark",
+     sizeof("highWatermark") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_NODE_LOW_WATERMARK,
+     "nodeLowWatermark",
+     sizeof("nodeLowWatermark") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_NODE_HIGH_WATERMARK,
+     "nodeHighWatermark",
+     sizeof("nodeHighWatermark") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS,
+     "heartbeatIntervalMs",
+     sizeof("heartbeatIntervalMs") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_LISTENERS,
+     "listeners",
+     sizeof("listeners") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT}};
+
+// CLASS METHODS
+
+const bdlat_AttributeInfo*
+TcpInterfaceConfig::lookupAttributeInfo(const char* name, int nameLength)
+{
+    for (int i = 0; i < 10; ++i) {
+        const bdlat_AttributeInfo& attributeInfo =
+            TcpInterfaceConfig::ATTRIBUTE_INFO_ARRAY[i];
+
+        if (nameLength == attributeInfo.d_nameLength &&
+            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
+            return &attributeInfo;
+        }
+    }
+
+    return 0;
+}
+
+const bdlat_AttributeInfo* TcpInterfaceConfig::lookupAttributeInfo(int id)
+{
+    switch (id) {
+    case ATTRIBUTE_ID_NAME: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME];
+    case ATTRIBUTE_ID_PORT: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PORT];
+    case ATTRIBUTE_ID_IO_THREADS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IO_THREADS];
+    case ATTRIBUTE_ID_MAX_CONNECTIONS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_CONNECTIONS];
+    case ATTRIBUTE_ID_LOW_WATERMARK:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOW_WATERMARK];
+    case ATTRIBUTE_ID_HIGH_WATERMARK:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HIGH_WATERMARK];
+    case ATTRIBUTE_ID_NODE_LOW_WATERMARK:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_LOW_WATERMARK];
+    case ATTRIBUTE_ID_NODE_HIGH_WATERMARK:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NODE_HIGH_WATERMARK];
+    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS];
+    case ATTRIBUTE_ID_LISTENERS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LISTENERS];
+    default: return 0;
+    }
+}
+
+// CREATORS
+
+TcpInterfaceConfig::TcpInterfaceConfig(bslma::Allocator* basicAllocator)
+: d_lowWatermark()
+, d_highWatermark()
+, d_nodeLowWatermark(DEFAULT_INITIALIZER_NODE_LOW_WATERMARK)
+, d_nodeHighWatermark(DEFAULT_INITIALIZER_NODE_HIGH_WATERMARK)
+, d_listeners(basicAllocator)
+, d_name(basicAllocator)
+, d_port()
+, d_ioThreads()
+, d_maxConnections(DEFAULT_INITIALIZER_MAX_CONNECTIONS)
+, d_heartbeatIntervalMs(DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS)
+{
+}
+
+TcpInterfaceConfig::TcpInterfaceConfig(const TcpInterfaceConfig& original,
+                                       bslma::Allocator* basicAllocator)
+: d_lowWatermark(original.d_lowWatermark)
+, d_highWatermark(original.d_highWatermark)
+, d_nodeLowWatermark(original.d_nodeLowWatermark)
+, d_nodeHighWatermark(original.d_nodeHighWatermark)
+, d_listeners(original.d_listeners, basicAllocator)
+, d_name(original.d_name, basicAllocator)
+, d_port(original.d_port)
+, d_ioThreads(original.d_ioThreads)
+, d_maxConnections(original.d_maxConnections)
+, d_heartbeatIntervalMs(original.d_heartbeatIntervalMs)
+{
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+TcpInterfaceConfig::TcpInterfaceConfig(TcpInterfaceConfig&& original) noexcept
+: d_lowWatermark(bsl::move(original.d_lowWatermark)),
+  d_highWatermark(bsl::move(original.d_highWatermark)),
+  d_nodeLowWatermark(bsl::move(original.d_nodeLowWatermark)),
+  d_nodeHighWatermark(bsl::move(original.d_nodeHighWatermark)),
+  d_listeners(bsl::move(original.d_listeners)),
+  d_name(bsl::move(original.d_name)),
+  d_port(bsl::move(original.d_port)),
+  d_ioThreads(bsl::move(original.d_ioThreads)),
+  d_maxConnections(bsl::move(original.d_maxConnections)),
+  d_heartbeatIntervalMs(bsl::move(original.d_heartbeatIntervalMs))
+{
+}
+
+TcpInterfaceConfig::TcpInterfaceConfig(TcpInterfaceConfig&& original,
+                                       bslma::Allocator*    basicAllocator)
+: d_lowWatermark(bsl::move(original.d_lowWatermark))
+, d_highWatermark(bsl::move(original.d_highWatermark))
+, d_nodeLowWatermark(bsl::move(original.d_nodeLowWatermark))
+, d_nodeHighWatermark(bsl::move(original.d_nodeHighWatermark))
+, d_listeners(bsl::move(original.d_listeners), basicAllocator)
+, d_name(bsl::move(original.d_name), basicAllocator)
+, d_port(bsl::move(original.d_port))
+, d_ioThreads(bsl::move(original.d_ioThreads))
+, d_maxConnections(bsl::move(original.d_maxConnections))
+, d_heartbeatIntervalMs(bsl::move(original.d_heartbeatIntervalMs))
+{
+}
+#endif
+
+TcpInterfaceConfig::~TcpInterfaceConfig()
+{
+}
+
+// MANIPULATORS
+
+TcpInterfaceConfig&
+TcpInterfaceConfig::operator=(const TcpInterfaceConfig& rhs)
+{
+    if (this != &rhs) {
+        d_name                = rhs.d_name;
+        d_port                = rhs.d_port;
+        d_ioThreads           = rhs.d_ioThreads;
+        d_maxConnections      = rhs.d_maxConnections;
+        d_lowWatermark        = rhs.d_lowWatermark;
+        d_highWatermark       = rhs.d_highWatermark;
+        d_nodeLowWatermark    = rhs.d_nodeLowWatermark;
+        d_nodeHighWatermark   = rhs.d_nodeHighWatermark;
+        d_heartbeatIntervalMs = rhs.d_heartbeatIntervalMs;
+        d_listeners           = rhs.d_listeners;
+    }
+
+    return *this;
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+TcpInterfaceConfig& TcpInterfaceConfig::operator=(TcpInterfaceConfig&& rhs)
+{
+    if (this != &rhs) {
+        d_name                = bsl::move(rhs.d_name);
+        d_port                = bsl::move(rhs.d_port);
+        d_ioThreads           = bsl::move(rhs.d_ioThreads);
+        d_maxConnections      = bsl::move(rhs.d_maxConnections);
+        d_lowWatermark        = bsl::move(rhs.d_lowWatermark);
+        d_highWatermark       = bsl::move(rhs.d_highWatermark);
+        d_nodeLowWatermark    = bsl::move(rhs.d_nodeLowWatermark);
+        d_nodeHighWatermark   = bsl::move(rhs.d_nodeHighWatermark);
+        d_heartbeatIntervalMs = bsl::move(rhs.d_heartbeatIntervalMs);
+        d_listeners           = bsl::move(rhs.d_listeners);
+    }
+
+    return *this;
+}
+#endif
+
+void TcpInterfaceConfig::reset()
+{
+    bdlat_ValueTypeFunctions::reset(&d_name);
+    bdlat_ValueTypeFunctions::reset(&d_port);
+    bdlat_ValueTypeFunctions::reset(&d_ioThreads);
+    d_maxConnections = DEFAULT_INITIALIZER_MAX_CONNECTIONS;
+    bdlat_ValueTypeFunctions::reset(&d_lowWatermark);
+    bdlat_ValueTypeFunctions::reset(&d_highWatermark);
+    d_nodeLowWatermark    = DEFAULT_INITIALIZER_NODE_LOW_WATERMARK;
+    d_nodeHighWatermark   = DEFAULT_INITIALIZER_NODE_HIGH_WATERMARK;
+    d_heartbeatIntervalMs = DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS;
+    bdlat_ValueTypeFunctions::reset(&d_listeners);
+}
+
+// ACCESSORS
+
+bsl::ostream& TcpInterfaceConfig::print(bsl::ostream& stream,
+                                        int           level,
+                                        int           spacesPerLevel) const
+{
+    bslim::Printer printer(&stream, level, spacesPerLevel);
+    printer.start();
+    printer.printAttribute("name", this->name());
+    printer.printAttribute("port", this->port());
+    printer.printAttribute("ioThreads", this->ioThreads());
+    printer.printAttribute("maxConnections", this->maxConnections());
+    printer.printAttribute("lowWatermark", this->lowWatermark());
+    printer.printAttribute("highWatermark", this->highWatermark());
+    printer.printAttribute("nodeLowWatermark", this->nodeLowWatermark());
+    printer.printAttribute("nodeHighWatermark", this->nodeHighWatermark());
+    printer.printAttribute("heartbeatIntervalMs", this->heartbeatIntervalMs());
+    printer.printAttribute("listeners", this->listeners());
     printer.end();
     return stream;
 }
@@ -4669,43 +4198,7 @@ DispatcherConfig::DispatcherConfig()
 {
 }
 
-DispatcherConfig::DispatcherConfig(const DispatcherConfig& original)
-: d_sessions(original.d_sessions)
-, d_queues(original.d_queues)
-, d_clusters(original.d_clusters)
-{
-}
-
-DispatcherConfig::~DispatcherConfig()
-{
-}
-
 // MANIPULATORS
-
-DispatcherConfig& DispatcherConfig::operator=(const DispatcherConfig& rhs)
-{
-    if (this != &rhs) {
-        d_sessions = rhs.d_sessions;
-        d_queues   = rhs.d_queues;
-        d_clusters = rhs.d_clusters;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-DispatcherConfig& DispatcherConfig::operator=(DispatcherConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_sessions = bsl::move(rhs.d_sessions);
-        d_queues   = bsl::move(rhs.d_queues);
-        d_clusters = bsl::move(rhs.d_clusters);
-    }
-
-    return *this;
-}
-#endif
 
 void DispatcherConfig::reset()
 {
@@ -4725,6 +4218,135 @@ bsl::ostream& DispatcherConfig::print(bsl::ostream& stream,
     printer.printAttribute("sessions", this->sessions());
     printer.printAttribute("queues", this->queues());
     printer.printAttribute("clusters", this->clusters());
+    printer.end();
+    return stream;
+}
+
+// -----------------------
+// class NetworkInterfaces
+// -----------------------
+
+// CONSTANTS
+
+const char NetworkInterfaces::CLASS_NAME[] = "NetworkInterfaces";
+
+const bdlat_AttributeInfo NetworkInterfaces::ATTRIBUTE_INFO_ARRAY[] = {
+    {ATTRIBUTE_ID_HEARTBEATS,
+     "heartbeats",
+     sizeof("heartbeats") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_TCP_INTERFACE,
+     "tcpInterface",
+     sizeof("tcpInterface") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT}};
+
+// CLASS METHODS
+
+const bdlat_AttributeInfo*
+NetworkInterfaces::lookupAttributeInfo(const char* name, int nameLength)
+{
+    for (int i = 0; i < 2; ++i) {
+        const bdlat_AttributeInfo& attributeInfo =
+            NetworkInterfaces::ATTRIBUTE_INFO_ARRAY[i];
+
+        if (nameLength == attributeInfo.d_nameLength &&
+            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
+            return &attributeInfo;
+        }
+    }
+
+    return 0;
+}
+
+const bdlat_AttributeInfo* NetworkInterfaces::lookupAttributeInfo(int id)
+{
+    switch (id) {
+    case ATTRIBUTE_ID_HEARTBEATS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEATS];
+    case ATTRIBUTE_ID_TCP_INTERFACE:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TCP_INTERFACE];
+    default: return 0;
+    }
+}
+
+// CREATORS
+
+NetworkInterfaces::NetworkInterfaces(bslma::Allocator* basicAllocator)
+: d_tcpInterface(basicAllocator)
+, d_heartbeats()
+{
+}
+
+NetworkInterfaces::NetworkInterfaces(const NetworkInterfaces& original,
+                                     bslma::Allocator*        basicAllocator)
+: d_tcpInterface(original.d_tcpInterface, basicAllocator)
+, d_heartbeats(original.d_heartbeats)
+{
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+NetworkInterfaces::NetworkInterfaces(NetworkInterfaces&& original) noexcept
+: d_tcpInterface(bsl::move(original.d_tcpInterface)),
+  d_heartbeats(bsl::move(original.d_heartbeats))
+{
+}
+
+NetworkInterfaces::NetworkInterfaces(NetworkInterfaces&& original,
+                                     bslma::Allocator*   basicAllocator)
+: d_tcpInterface(bsl::move(original.d_tcpInterface), basicAllocator)
+, d_heartbeats(bsl::move(original.d_heartbeats))
+{
+}
+#endif
+
+NetworkInterfaces::~NetworkInterfaces()
+{
+}
+
+// MANIPULATORS
+
+NetworkInterfaces& NetworkInterfaces::operator=(const NetworkInterfaces& rhs)
+{
+    if (this != &rhs) {
+        d_heartbeats   = rhs.d_heartbeats;
+        d_tcpInterface = rhs.d_tcpInterface;
+    }
+
+    return *this;
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+NetworkInterfaces& NetworkInterfaces::operator=(NetworkInterfaces&& rhs)
+{
+    if (this != &rhs) {
+        d_heartbeats   = bsl::move(rhs.d_heartbeats);
+        d_tcpInterface = bsl::move(rhs.d_tcpInterface);
+    }
+
+    return *this;
+}
+#endif
+
+void NetworkInterfaces::reset()
+{
+    bdlat_ValueTypeFunctions::reset(&d_heartbeats);
+    bdlat_ValueTypeFunctions::reset(&d_tcpInterface);
+}
+
+// ACCESSORS
+
+bsl::ostream& NetworkInterfaces::print(bsl::ostream& stream,
+                                       int           level,
+                                       int           spacesPerLevel) const
+{
+    bslim::Printer printer(&stream, level, spacesPerLevel);
+    printer.start();
+    printer.printAttribute("heartbeats", this->heartbeats());
+    printer.printAttribute("tcpInterface", this->tcpInterface());
     printer.end();
     return stream;
 }
@@ -4862,6 +4484,254 @@ bsl::ostream& ReversedClusterConnection::print(bsl::ostream& stream,
     printer.start();
     printer.printAttribute("name", this->name());
     printer.printAttribute("connections", this->connections());
+    printer.end();
+    return stream;
+}
+
+// ----------------------
+// class StatPluginConfig
+// ----------------------
+
+// CONSTANTS
+
+const char StatPluginConfig::CLASS_NAME[] = "StatPluginConfig";
+
+const char StatPluginConfig::DEFAULT_INITIALIZER_NAME[] = "";
+
+const int StatPluginConfig::DEFAULT_INITIALIZER_QUEUE_SIZE = 10000;
+
+const int StatPluginConfig::DEFAULT_INITIALIZER_QUEUE_HIGH_WATERMARK = 5000;
+
+const int StatPluginConfig::DEFAULT_INITIALIZER_QUEUE_LOW_WATERMARK = 1000;
+
+const int StatPluginConfig::DEFAULT_INITIALIZER_PUBLISH_INTERVAL = 30;
+
+const char StatPluginConfig::DEFAULT_INITIALIZER_NAMESPACE_PREFIX[] = "";
+
+const char StatPluginConfig::DEFAULT_INITIALIZER_INSTANCE_ID[] = "";
+
+const bdlat_AttributeInfo StatPluginConfig::ATTRIBUTE_INFO_ARRAY[] = {
+    {ATTRIBUTE_ID_NAME,
+     "name",
+     sizeof("name") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_QUEUE_SIZE,
+     "queueSize",
+     sizeof("queueSize") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK,
+     "queueHighWatermark",
+     sizeof("queueHighWatermark") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_QUEUE_LOW_WATERMARK,
+     "queueLowWatermark",
+     sizeof("queueLowWatermark") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_PUBLISH_INTERVAL,
+     "publishInterval",
+     sizeof("publishInterval") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_NAMESPACE_PREFIX,
+     "namespacePrefix",
+     sizeof("namespacePrefix") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_HOSTS,
+     "hosts",
+     sizeof("hosts") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_INSTANCE_ID,
+     "instanceId",
+     sizeof("instanceId") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_PROMETHEUS_SPECIFIC,
+     "prometheusSpecific",
+     sizeof("prometheusSpecific") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT}};
+
+// CLASS METHODS
+
+const bdlat_AttributeInfo*
+StatPluginConfig::lookupAttributeInfo(const char* name, int nameLength)
+{
+    for (int i = 0; i < 9; ++i) {
+        const bdlat_AttributeInfo& attributeInfo =
+            StatPluginConfig::ATTRIBUTE_INFO_ARRAY[i];
+
+        if (nameLength == attributeInfo.d_nameLength &&
+            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
+            return &attributeInfo;
+        }
+    }
+
+    return 0;
+}
+
+const bdlat_AttributeInfo* StatPluginConfig::lookupAttributeInfo(int id)
+{
+    switch (id) {
+    case ATTRIBUTE_ID_NAME: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAME];
+    case ATTRIBUTE_ID_QUEUE_SIZE:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_SIZE];
+    case ATTRIBUTE_ID_QUEUE_HIGH_WATERMARK:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_HIGH_WATERMARK];
+    case ATTRIBUTE_ID_QUEUE_LOW_WATERMARK:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_QUEUE_LOW_WATERMARK];
+    case ATTRIBUTE_ID_PUBLISH_INTERVAL:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_INTERVAL];
+    case ATTRIBUTE_ID_NAMESPACE_PREFIX:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NAMESPACE_PREFIX];
+    case ATTRIBUTE_ID_HOSTS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOSTS];
+    case ATTRIBUTE_ID_INSTANCE_ID:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_INSTANCE_ID];
+    case ATTRIBUTE_ID_PROMETHEUS_SPECIFIC:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PROMETHEUS_SPECIFIC];
+    default: return 0;
+    }
+}
+
+// CREATORS
+
+StatPluginConfig::StatPluginConfig(bslma::Allocator* basicAllocator)
+: d_hosts(basicAllocator)
+, d_name(DEFAULT_INITIALIZER_NAME, basicAllocator)
+, d_namespacePrefix(DEFAULT_INITIALIZER_NAMESPACE_PREFIX, basicAllocator)
+, d_instanceId(DEFAULT_INITIALIZER_INSTANCE_ID, basicAllocator)
+, d_prometheusSpecific(basicAllocator)
+, d_queueSize(DEFAULT_INITIALIZER_QUEUE_SIZE)
+, d_queueHighWatermark(DEFAULT_INITIALIZER_QUEUE_HIGH_WATERMARK)
+, d_queueLowWatermark(DEFAULT_INITIALIZER_QUEUE_LOW_WATERMARK)
+, d_publishInterval(DEFAULT_INITIALIZER_PUBLISH_INTERVAL)
+{
+}
+
+StatPluginConfig::StatPluginConfig(const StatPluginConfig& original,
+                                   bslma::Allocator*       basicAllocator)
+: d_hosts(original.d_hosts, basicAllocator)
+, d_name(original.d_name, basicAllocator)
+, d_namespacePrefix(original.d_namespacePrefix, basicAllocator)
+, d_instanceId(original.d_instanceId, basicAllocator)
+, d_prometheusSpecific(original.d_prometheusSpecific, basicAllocator)
+, d_queueSize(original.d_queueSize)
+, d_queueHighWatermark(original.d_queueHighWatermark)
+, d_queueLowWatermark(original.d_queueLowWatermark)
+, d_publishInterval(original.d_publishInterval)
+{
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+StatPluginConfig::StatPluginConfig(StatPluginConfig&& original) noexcept
+: d_hosts(bsl::move(original.d_hosts)),
+  d_name(bsl::move(original.d_name)),
+  d_namespacePrefix(bsl::move(original.d_namespacePrefix)),
+  d_instanceId(bsl::move(original.d_instanceId)),
+  d_prometheusSpecific(bsl::move(original.d_prometheusSpecific)),
+  d_queueSize(bsl::move(original.d_queueSize)),
+  d_queueHighWatermark(bsl::move(original.d_queueHighWatermark)),
+  d_queueLowWatermark(bsl::move(original.d_queueLowWatermark)),
+  d_publishInterval(bsl::move(original.d_publishInterval))
+{
+}
+
+StatPluginConfig::StatPluginConfig(StatPluginConfig&& original,
+                                   bslma::Allocator*  basicAllocator)
+: d_hosts(bsl::move(original.d_hosts), basicAllocator)
+, d_name(bsl::move(original.d_name), basicAllocator)
+, d_namespacePrefix(bsl::move(original.d_namespacePrefix), basicAllocator)
+, d_instanceId(bsl::move(original.d_instanceId), basicAllocator)
+, d_prometheusSpecific(bsl::move(original.d_prometheusSpecific),
+                       basicAllocator)
+, d_queueSize(bsl::move(original.d_queueSize))
+, d_queueHighWatermark(bsl::move(original.d_queueHighWatermark))
+, d_queueLowWatermark(bsl::move(original.d_queueLowWatermark))
+, d_publishInterval(bsl::move(original.d_publishInterval))
+{
+}
+#endif
+
+StatPluginConfig::~StatPluginConfig()
+{
+}
+
+// MANIPULATORS
+
+StatPluginConfig& StatPluginConfig::operator=(const StatPluginConfig& rhs)
+{
+    if (this != &rhs) {
+        d_name               = rhs.d_name;
+        d_queueSize          = rhs.d_queueSize;
+        d_queueHighWatermark = rhs.d_queueHighWatermark;
+        d_queueLowWatermark  = rhs.d_queueLowWatermark;
+        d_publishInterval    = rhs.d_publishInterval;
+        d_namespacePrefix    = rhs.d_namespacePrefix;
+        d_hosts              = rhs.d_hosts;
+        d_instanceId         = rhs.d_instanceId;
+        d_prometheusSpecific = rhs.d_prometheusSpecific;
+    }
+
+    return *this;
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+StatPluginConfig& StatPluginConfig::operator=(StatPluginConfig&& rhs)
+{
+    if (this != &rhs) {
+        d_name               = bsl::move(rhs.d_name);
+        d_queueSize          = bsl::move(rhs.d_queueSize);
+        d_queueHighWatermark = bsl::move(rhs.d_queueHighWatermark);
+        d_queueLowWatermark  = bsl::move(rhs.d_queueLowWatermark);
+        d_publishInterval    = bsl::move(rhs.d_publishInterval);
+        d_namespacePrefix    = bsl::move(rhs.d_namespacePrefix);
+        d_hosts              = bsl::move(rhs.d_hosts);
+        d_instanceId         = bsl::move(rhs.d_instanceId);
+        d_prometheusSpecific = bsl::move(rhs.d_prometheusSpecific);
+    }
+
+    return *this;
+}
+#endif
+
+void StatPluginConfig::reset()
+{
+    d_name               = DEFAULT_INITIALIZER_NAME;
+    d_queueSize          = DEFAULT_INITIALIZER_QUEUE_SIZE;
+    d_queueHighWatermark = DEFAULT_INITIALIZER_QUEUE_HIGH_WATERMARK;
+    d_queueLowWatermark  = DEFAULT_INITIALIZER_QUEUE_LOW_WATERMARK;
+    d_publishInterval    = DEFAULT_INITIALIZER_PUBLISH_INTERVAL;
+    d_namespacePrefix    = DEFAULT_INITIALIZER_NAMESPACE_PREFIX;
+    bdlat_ValueTypeFunctions::reset(&d_hosts);
+    d_instanceId = DEFAULT_INITIALIZER_INSTANCE_ID;
+    bdlat_ValueTypeFunctions::reset(&d_prometheusSpecific);
+}
+
+// ACCESSORS
+
+bsl::ostream& StatPluginConfig::print(bsl::ostream& stream,
+                                      int           level,
+                                      int           spacesPerLevel) const
+{
+    bslim::Printer printer(&stream, level, spacesPerLevel);
+    printer.start();
+    printer.printAttribute("name", this->name());
+    printer.printAttribute("queueSize", this->queueSize());
+    printer.printAttribute("queueHighWatermark", this->queueHighWatermark());
+    printer.printAttribute("queueLowWatermark", this->queueLowWatermark());
+    printer.printAttribute("publishInterval", this->publishInterval());
+    printer.printAttribute("namespacePrefix", this->namespacePrefix());
+    printer.printAttribute("hosts", this->hosts());
+    printer.printAttribute("instanceId", this->instanceId());
+    printer.printAttribute("prometheusSpecific", this->prometheusSpecific());
     printer.end();
     return stream;
 }
@@ -5004,350 +4874,6 @@ TaskConfig::print(bsl::ostream& stream, int level, int spacesPerLevel) const
     printer.printAttribute("allocatorType", this->allocatorType());
     printer.printAttribute("allocationLimit", this->allocationLimit());
     printer.printAttribute("logController", this->logController());
-    printer.end();
-    return stream;
-}
-
-// ---------------
-// class AppConfig
-// ---------------
-
-// CONSTANTS
-
-const char AppConfig::CLASS_NAME[] = "AppConfig";
-
-const char AppConfig::DEFAULT_INITIALIZER_LATENCY_MONITOR_DOMAIN[] =
-    "bmq.sys.latemon.latency";
-
-const bdlat_AttributeInfo AppConfig::ATTRIBUTE_INFO_ARRAY[] = {
-    {ATTRIBUTE_ID_BROKER_INSTANCE_NAME,
-     "brokerInstanceName",
-     sizeof("brokerInstanceName") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_BROKER_VERSION,
-     "brokerVersion",
-     sizeof("brokerVersion") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_CONFIG_VERSION,
-     "configVersion",
-     sizeof("configVersion") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_ETC_DIR,
-     "etcDir",
-     sizeof("etcDir") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_HOST_NAME,
-     "hostName",
-     sizeof("hostName") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_HOST_TAGS,
-     "hostTags",
-     sizeof("hostTags") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_HOST_DATA_CENTER,
-     "hostDataCenter",
-     sizeof("hostDataCenter") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_IS_RUNNING_ON_DEV,
-     "isRunningOnDev",
-     sizeof("isRunningOnDev") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE,
-     "logsObserverMaxSize",
-     sizeof("logsObserverMaxSize") - 1,
-     "",
-     bdlat_FormattingMode::e_DEC},
-    {ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN,
-     "latencyMonitorDomain",
-     sizeof("latencyMonitorDomain") - 1,
-     "",
-     bdlat_FormattingMode::e_TEXT},
-    {ATTRIBUTE_ID_DISPATCHER_CONFIG,
-     "dispatcherConfig",
-     sizeof("dispatcherConfig") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT},
-    {ATTRIBUTE_ID_STATS,
-     "stats",
-     sizeof("stats") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT},
-    {ATTRIBUTE_ID_NETWORK_INTERFACES,
-     "networkInterfaces",
-     sizeof("networkInterfaces") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT},
-    {ATTRIBUTE_ID_BMQCONF_CONFIG,
-     "bmqconfConfig",
-     sizeof("bmqconfConfig") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT},
-    {ATTRIBUTE_ID_PLUGINS,
-     "plugins",
-     sizeof("plugins") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT},
-    {ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2,
-     "messagePropertiesV2",
-     sizeof("messagePropertiesV2") - 1,
-     "",
-     bdlat_FormattingMode::e_DEFAULT}};
-
-// CLASS METHODS
-
-const bdlat_AttributeInfo* AppConfig::lookupAttributeInfo(const char* name,
-                                                          int nameLength)
-{
-    for (int i = 0; i < 16; ++i) {
-        const bdlat_AttributeInfo& attributeInfo =
-            AppConfig::ATTRIBUTE_INFO_ARRAY[i];
-
-        if (nameLength == attributeInfo.d_nameLength &&
-            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
-            return &attributeInfo;
-        }
-    }
-
-    return 0;
-}
-
-const bdlat_AttributeInfo* AppConfig::lookupAttributeInfo(int id)
-{
-    switch (id) {
-    case ATTRIBUTE_ID_BROKER_INSTANCE_NAME:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME];
-    case ATTRIBUTE_ID_BROKER_VERSION:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION];
-    case ATTRIBUTE_ID_CONFIG_VERSION:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION];
-    case ATTRIBUTE_ID_ETC_DIR:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR];
-    case ATTRIBUTE_ID_HOST_NAME:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME];
-    case ATTRIBUTE_ID_HOST_TAGS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS];
-    case ATTRIBUTE_ID_HOST_DATA_CENTER:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER];
-    case ATTRIBUTE_ID_IS_RUNNING_ON_DEV:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV];
-    case ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE];
-    case ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN];
-    case ATTRIBUTE_ID_DISPATCHER_CONFIG:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG];
-    case ATTRIBUTE_ID_STATS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS];
-    case ATTRIBUTE_ID_NETWORK_INTERFACES:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES];
-    case ATTRIBUTE_ID_BMQCONF_CONFIG:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG];
-    case ATTRIBUTE_ID_PLUGINS:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS];
-    case ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2:
-        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2];
-    default: return 0;
-    }
-}
-
-// CREATORS
-
-AppConfig::AppConfig(bslma::Allocator* basicAllocator)
-: d_brokerInstanceName(basicAllocator)
-, d_etcDir(basicAllocator)
-, d_hostName(basicAllocator)
-, d_hostTags(basicAllocator)
-, d_hostDataCenter(basicAllocator)
-, d_latencyMonitorDomain(DEFAULT_INITIALIZER_LATENCY_MONITOR_DOMAIN,
-                         basicAllocator)
-, d_stats(basicAllocator)
-, d_plugins(basicAllocator)
-, d_networkInterfaces(basicAllocator)
-, d_messagePropertiesV2()
-, d_dispatcherConfig()
-, d_bmqconfConfig()
-, d_brokerVersion()
-, d_configVersion()
-, d_logsObserverMaxSize()
-, d_isRunningOnDev()
-{
-}
-
-AppConfig::AppConfig(const AppConfig&  original,
-                     bslma::Allocator* basicAllocator)
-: d_brokerInstanceName(original.d_brokerInstanceName, basicAllocator)
-, d_etcDir(original.d_etcDir, basicAllocator)
-, d_hostName(original.d_hostName, basicAllocator)
-, d_hostTags(original.d_hostTags, basicAllocator)
-, d_hostDataCenter(original.d_hostDataCenter, basicAllocator)
-, d_latencyMonitorDomain(original.d_latencyMonitorDomain, basicAllocator)
-, d_stats(original.d_stats, basicAllocator)
-, d_plugins(original.d_plugins, basicAllocator)
-, d_networkInterfaces(original.d_networkInterfaces, basicAllocator)
-, d_messagePropertiesV2(original.d_messagePropertiesV2)
-, d_dispatcherConfig(original.d_dispatcherConfig)
-, d_bmqconfConfig(original.d_bmqconfConfig)
-, d_brokerVersion(original.d_brokerVersion)
-, d_configVersion(original.d_configVersion)
-, d_logsObserverMaxSize(original.d_logsObserverMaxSize)
-, d_isRunningOnDev(original.d_isRunningOnDev)
-{
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-AppConfig::AppConfig(AppConfig&& original) noexcept
-: d_brokerInstanceName(bsl::move(original.d_brokerInstanceName)),
-  d_etcDir(bsl::move(original.d_etcDir)),
-  d_hostName(bsl::move(original.d_hostName)),
-  d_hostTags(bsl::move(original.d_hostTags)),
-  d_hostDataCenter(bsl::move(original.d_hostDataCenter)),
-  d_latencyMonitorDomain(bsl::move(original.d_latencyMonitorDomain)),
-  d_stats(bsl::move(original.d_stats)),
-  d_plugins(bsl::move(original.d_plugins)),
-  d_networkInterfaces(bsl::move(original.d_networkInterfaces)),
-  d_messagePropertiesV2(bsl::move(original.d_messagePropertiesV2)),
-  d_dispatcherConfig(bsl::move(original.d_dispatcherConfig)),
-  d_bmqconfConfig(bsl::move(original.d_bmqconfConfig)),
-  d_brokerVersion(bsl::move(original.d_brokerVersion)),
-  d_configVersion(bsl::move(original.d_configVersion)),
-  d_logsObserverMaxSize(bsl::move(original.d_logsObserverMaxSize)),
-  d_isRunningOnDev(bsl::move(original.d_isRunningOnDev))
-{
-}
-
-AppConfig::AppConfig(AppConfig&& original, bslma::Allocator* basicAllocator)
-: d_brokerInstanceName(bsl::move(original.d_brokerInstanceName),
-                       basicAllocator)
-, d_etcDir(bsl::move(original.d_etcDir), basicAllocator)
-, d_hostName(bsl::move(original.d_hostName), basicAllocator)
-, d_hostTags(bsl::move(original.d_hostTags), basicAllocator)
-, d_hostDataCenter(bsl::move(original.d_hostDataCenter), basicAllocator)
-, d_latencyMonitorDomain(bsl::move(original.d_latencyMonitorDomain),
-                         basicAllocator)
-, d_stats(bsl::move(original.d_stats), basicAllocator)
-, d_plugins(bsl::move(original.d_plugins), basicAllocator)
-, d_networkInterfaces(bsl::move(original.d_networkInterfaces), basicAllocator)
-, d_messagePropertiesV2(bsl::move(original.d_messagePropertiesV2))
-, d_dispatcherConfig(bsl::move(original.d_dispatcherConfig))
-, d_bmqconfConfig(bsl::move(original.d_bmqconfConfig))
-, d_brokerVersion(bsl::move(original.d_brokerVersion))
-, d_configVersion(bsl::move(original.d_configVersion))
-, d_logsObserverMaxSize(bsl::move(original.d_logsObserverMaxSize))
-, d_isRunningOnDev(bsl::move(original.d_isRunningOnDev))
-{
-}
-#endif
-
-AppConfig::~AppConfig()
-{
-}
-
-// MANIPULATORS
-
-AppConfig& AppConfig::operator=(const AppConfig& rhs)
-{
-    if (this != &rhs) {
-        d_brokerInstanceName   = rhs.d_brokerInstanceName;
-        d_brokerVersion        = rhs.d_brokerVersion;
-        d_configVersion        = rhs.d_configVersion;
-        d_etcDir               = rhs.d_etcDir;
-        d_hostName             = rhs.d_hostName;
-        d_hostTags             = rhs.d_hostTags;
-        d_hostDataCenter       = rhs.d_hostDataCenter;
-        d_isRunningOnDev       = rhs.d_isRunningOnDev;
-        d_logsObserverMaxSize  = rhs.d_logsObserverMaxSize;
-        d_latencyMonitorDomain = rhs.d_latencyMonitorDomain;
-        d_dispatcherConfig     = rhs.d_dispatcherConfig;
-        d_stats                = rhs.d_stats;
-        d_networkInterfaces    = rhs.d_networkInterfaces;
-        d_bmqconfConfig        = rhs.d_bmqconfConfig;
-        d_plugins              = rhs.d_plugins;
-        d_messagePropertiesV2  = rhs.d_messagePropertiesV2;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-AppConfig& AppConfig::operator=(AppConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_brokerInstanceName   = bsl::move(rhs.d_brokerInstanceName);
-        d_brokerVersion        = bsl::move(rhs.d_brokerVersion);
-        d_configVersion        = bsl::move(rhs.d_configVersion);
-        d_etcDir               = bsl::move(rhs.d_etcDir);
-        d_hostName             = bsl::move(rhs.d_hostName);
-        d_hostTags             = bsl::move(rhs.d_hostTags);
-        d_hostDataCenter       = bsl::move(rhs.d_hostDataCenter);
-        d_isRunningOnDev       = bsl::move(rhs.d_isRunningOnDev);
-        d_logsObserverMaxSize  = bsl::move(rhs.d_logsObserverMaxSize);
-        d_latencyMonitorDomain = bsl::move(rhs.d_latencyMonitorDomain);
-        d_dispatcherConfig     = bsl::move(rhs.d_dispatcherConfig);
-        d_stats                = bsl::move(rhs.d_stats);
-        d_networkInterfaces    = bsl::move(rhs.d_networkInterfaces);
-        d_bmqconfConfig        = bsl::move(rhs.d_bmqconfConfig);
-        d_plugins              = bsl::move(rhs.d_plugins);
-        d_messagePropertiesV2  = bsl::move(rhs.d_messagePropertiesV2);
-    }
-
-    return *this;
-}
-#endif
-
-void AppConfig::reset()
-{
-    bdlat_ValueTypeFunctions::reset(&d_brokerInstanceName);
-    bdlat_ValueTypeFunctions::reset(&d_brokerVersion);
-    bdlat_ValueTypeFunctions::reset(&d_configVersion);
-    bdlat_ValueTypeFunctions::reset(&d_etcDir);
-    bdlat_ValueTypeFunctions::reset(&d_hostName);
-    bdlat_ValueTypeFunctions::reset(&d_hostTags);
-    bdlat_ValueTypeFunctions::reset(&d_hostDataCenter);
-    bdlat_ValueTypeFunctions::reset(&d_isRunningOnDev);
-    bdlat_ValueTypeFunctions::reset(&d_logsObserverMaxSize);
-    d_latencyMonitorDomain = DEFAULT_INITIALIZER_LATENCY_MONITOR_DOMAIN;
-    bdlat_ValueTypeFunctions::reset(&d_dispatcherConfig);
-    bdlat_ValueTypeFunctions::reset(&d_stats);
-    bdlat_ValueTypeFunctions::reset(&d_networkInterfaces);
-    bdlat_ValueTypeFunctions::reset(&d_bmqconfConfig);
-    bdlat_ValueTypeFunctions::reset(&d_plugins);
-    bdlat_ValueTypeFunctions::reset(&d_messagePropertiesV2);
-}
-
-// ACCESSORS
-
-bsl::ostream&
-AppConfig::print(bsl::ostream& stream, int level, int spacesPerLevel) const
-{
-    bslim::Printer printer(&stream, level, spacesPerLevel);
-    printer.start();
-    printer.printAttribute("brokerInstanceName", this->brokerInstanceName());
-    printer.printAttribute("brokerVersion", this->brokerVersion());
-    printer.printAttribute("configVersion", this->configVersion());
-    printer.printAttribute("etcDir", this->etcDir());
-    printer.printAttribute("hostName", this->hostName());
-    printer.printAttribute("hostTags", this->hostTags());
-    printer.printAttribute("hostDataCenter", this->hostDataCenter());
-    printer.printAttribute("isRunningOnDev", this->isRunningOnDev());
-    printer.printAttribute("logsObserverMaxSize", this->logsObserverMaxSize());
-    printer.printAttribute("latencyMonitorDomain",
-                           this->latencyMonitorDomain());
-    printer.printAttribute("dispatcherConfig", this->dispatcherConfig());
-    printer.printAttribute("stats", this->stats());
-    printer.printAttribute("networkInterfaces", this->networkInterfaces());
-    printer.printAttribute("bmqconfConfig", this->bmqconfConfig());
-    printer.printAttribute("plugins", this->plugins());
-    printer.printAttribute("messagePropertiesV2", this->messagePropertiesV2());
     printer.end();
     return stream;
 }
@@ -5768,6 +5294,548 @@ bsl::ostream& ClusterProxyDefinition::print(bsl::ostream& stream,
     return stream;
 }
 
+// -----------------
+// class StatsConfig
+// -----------------
+
+// CONSTANTS
+
+const char StatsConfig::CLASS_NAME[] = "StatsConfig";
+
+const int StatsConfig::DEFAULT_INITIALIZER_SNAPSHOT_INTERVAL = 1;
+
+const bdlat_AttributeInfo StatsConfig::ATTRIBUTE_INFO_ARRAY[] = {
+    {ATTRIBUTE_ID_SNAPSHOT_INTERVAL,
+     "snapshotInterval",
+     sizeof("snapshotInterval") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_PLUGINS,
+     "plugins",
+     sizeof("plugins") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_PRINTER,
+     "printer",
+     sizeof("printer") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT}};
+
+// CLASS METHODS
+
+const bdlat_AttributeInfo* StatsConfig::lookupAttributeInfo(const char* name,
+                                                            int nameLength)
+{
+    for (int i = 0; i < 3; ++i) {
+        const bdlat_AttributeInfo& attributeInfo =
+            StatsConfig::ATTRIBUTE_INFO_ARRAY[i];
+
+        if (nameLength == attributeInfo.d_nameLength &&
+            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
+            return &attributeInfo;
+        }
+    }
+
+    return 0;
+}
+
+const bdlat_AttributeInfo* StatsConfig::lookupAttributeInfo(int id)
+{
+    switch (id) {
+    case ATTRIBUTE_ID_SNAPSHOT_INTERVAL:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SNAPSHOT_INTERVAL];
+    case ATTRIBUTE_ID_PLUGINS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS];
+    case ATTRIBUTE_ID_PRINTER:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PRINTER];
+    default: return 0;
+    }
+}
+
+// CREATORS
+
+StatsConfig::StatsConfig(bslma::Allocator* basicAllocator)
+: d_plugins(basicAllocator)
+, d_printer(basicAllocator)
+, d_snapshotInterval(DEFAULT_INITIALIZER_SNAPSHOT_INTERVAL)
+{
+}
+
+StatsConfig::StatsConfig(const StatsConfig& original,
+                         bslma::Allocator*  basicAllocator)
+: d_plugins(original.d_plugins, basicAllocator)
+, d_printer(original.d_printer, basicAllocator)
+, d_snapshotInterval(original.d_snapshotInterval)
+{
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+StatsConfig::StatsConfig(StatsConfig&& original) noexcept
+: d_plugins(bsl::move(original.d_plugins)),
+  d_printer(bsl::move(original.d_printer)),
+  d_snapshotInterval(bsl::move(original.d_snapshotInterval))
+{
+}
+
+StatsConfig::StatsConfig(StatsConfig&&     original,
+                         bslma::Allocator* basicAllocator)
+: d_plugins(bsl::move(original.d_plugins), basicAllocator)
+, d_printer(bsl::move(original.d_printer), basicAllocator)
+, d_snapshotInterval(bsl::move(original.d_snapshotInterval))
+{
+}
+#endif
+
+StatsConfig::~StatsConfig()
+{
+}
+
+// MANIPULATORS
+
+StatsConfig& StatsConfig::operator=(const StatsConfig& rhs)
+{
+    if (this != &rhs) {
+        d_snapshotInterval = rhs.d_snapshotInterval;
+        d_plugins          = rhs.d_plugins;
+        d_printer          = rhs.d_printer;
+    }
+
+    return *this;
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+StatsConfig& StatsConfig::operator=(StatsConfig&& rhs)
+{
+    if (this != &rhs) {
+        d_snapshotInterval = bsl::move(rhs.d_snapshotInterval);
+        d_plugins          = bsl::move(rhs.d_plugins);
+        d_printer          = bsl::move(rhs.d_printer);
+    }
+
+    return *this;
+}
+#endif
+
+void StatsConfig::reset()
+{
+    d_snapshotInterval = DEFAULT_INITIALIZER_SNAPSHOT_INTERVAL;
+    bdlat_ValueTypeFunctions::reset(&d_plugins);
+    bdlat_ValueTypeFunctions::reset(&d_printer);
+}
+
+// ACCESSORS
+
+bsl::ostream&
+StatsConfig::print(bsl::ostream& stream, int level, int spacesPerLevel) const
+{
+    bslim::Printer printer(&stream, level, spacesPerLevel);
+    printer.start();
+    printer.printAttribute("snapshotInterval", this->snapshotInterval());
+    printer.printAttribute("plugins", this->plugins());
+    printer.printAttribute("printer", this->printer());
+    printer.end();
+    return stream;
+}
+
+// ---------------
+// class AppConfig
+// ---------------
+
+// CONSTANTS
+
+const char AppConfig::CLASS_NAME[] = "AppConfig";
+
+const char AppConfig::DEFAULT_INITIALIZER_LATENCY_MONITOR_DOMAIN[] =
+    "bmq.sys.latemon.latency";
+
+const bool AppConfig::DEFAULT_INITIALIZER_CONFIGURE_STREAM = false;
+
+const bool AppConfig::DEFAULT_INITIALIZER_ADVERTISE_SUBSCRIPTIONS = false;
+
+const int AppConfig::DEFAULT_INITIALIZER_ROUTE_COMMAND_TIMEOUT_MS = 3000;
+
+const bdlat_AttributeInfo AppConfig::ATTRIBUTE_INFO_ARRAY[] = {
+    {ATTRIBUTE_ID_BROKER_INSTANCE_NAME,
+     "brokerInstanceName",
+     sizeof("brokerInstanceName") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_BROKER_VERSION,
+     "brokerVersion",
+     sizeof("brokerVersion") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_CONFIG_VERSION,
+     "configVersion",
+     sizeof("configVersion") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_ETC_DIR,
+     "etcDir",
+     sizeof("etcDir") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_HOST_NAME,
+     "hostName",
+     sizeof("hostName") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_HOST_TAGS,
+     "hostTags",
+     sizeof("hostTags") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_HOST_DATA_CENTER,
+     "hostDataCenter",
+     sizeof("hostDataCenter") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_IS_RUNNING_ON_DEV,
+     "isRunningOnDev",
+     sizeof("isRunningOnDev") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE,
+     "logsObserverMaxSize",
+     sizeof("logsObserverMaxSize") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN,
+     "latencyMonitorDomain",
+     sizeof("latencyMonitorDomain") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_DISPATCHER_CONFIG,
+     "dispatcherConfig",
+     sizeof("dispatcherConfig") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_STATS,
+     "stats",
+     sizeof("stats") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_NETWORK_INTERFACES,
+     "networkInterfaces",
+     sizeof("networkInterfaces") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_BMQCONF_CONFIG,
+     "bmqconfConfig",
+     sizeof("bmqconfConfig") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_PLUGINS,
+     "plugins",
+     sizeof("plugins") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2,
+     "messagePropertiesV2",
+     sizeof("messagePropertiesV2") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_CONFIGURE_STREAM,
+     "configureStream",
+     sizeof("configureStream") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_ADVERTISE_SUBSCRIPTIONS,
+     "advertiseSubscriptions",
+     sizeof("advertiseSubscriptions") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_ROUTE_COMMAND_TIMEOUT_MS,
+     "routeCommandTimeoutMs",
+     sizeof("routeCommandTimeoutMs") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC}};
+
+// CLASS METHODS
+
+const bdlat_AttributeInfo* AppConfig::lookupAttributeInfo(const char* name,
+                                                          int nameLength)
+{
+    for (int i = 0; i < 19; ++i) {
+        const bdlat_AttributeInfo& attributeInfo =
+            AppConfig::ATTRIBUTE_INFO_ARRAY[i];
+
+        if (nameLength == attributeInfo.d_nameLength &&
+            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
+            return &attributeInfo;
+        }
+    }
+
+    return 0;
+}
+
+const bdlat_AttributeInfo* AppConfig::lookupAttributeInfo(int id)
+{
+    switch (id) {
+    case ATTRIBUTE_ID_BROKER_INSTANCE_NAME:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_INSTANCE_NAME];
+    case ATTRIBUTE_ID_BROKER_VERSION:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_VERSION];
+    case ATTRIBUTE_ID_CONFIG_VERSION:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIG_VERSION];
+    case ATTRIBUTE_ID_ETC_DIR:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ETC_DIR];
+    case ATTRIBUTE_ID_HOST_NAME:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_NAME];
+    case ATTRIBUTE_ID_HOST_TAGS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_TAGS];
+    case ATTRIBUTE_ID_HOST_DATA_CENTER:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HOST_DATA_CENTER];
+    case ATTRIBUTE_ID_IS_RUNNING_ON_DEV:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_RUNNING_ON_DEV];
+    case ATTRIBUTE_ID_LOGS_OBSERVER_MAX_SIZE:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LOGS_OBSERVER_MAX_SIZE];
+    case ATTRIBUTE_ID_LATENCY_MONITOR_DOMAIN:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_LATENCY_MONITOR_DOMAIN];
+    case ATTRIBUTE_ID_DISPATCHER_CONFIG:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DISPATCHER_CONFIG];
+    case ATTRIBUTE_ID_STATS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_STATS];
+    case ATTRIBUTE_ID_NETWORK_INTERFACES:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_NETWORK_INTERFACES];
+    case ATTRIBUTE_ID_BMQCONF_CONFIG:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BMQCONF_CONFIG];
+    case ATTRIBUTE_ID_PLUGINS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PLUGINS];
+    case ATTRIBUTE_ID_MESSAGE_PROPERTIES_V2:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MESSAGE_PROPERTIES_V2];
+    case ATTRIBUTE_ID_CONFIGURE_STREAM:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONFIGURE_STREAM];
+    case ATTRIBUTE_ID_ADVERTISE_SUBSCRIPTIONS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ADVERTISE_SUBSCRIPTIONS];
+    case ATTRIBUTE_ID_ROUTE_COMMAND_TIMEOUT_MS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_ROUTE_COMMAND_TIMEOUT_MS];
+    default: return 0;
+    }
+}
+
+// CREATORS
+
+AppConfig::AppConfig(bslma::Allocator* basicAllocator)
+: d_brokerInstanceName(basicAllocator)
+, d_etcDir(basicAllocator)
+, d_hostName(basicAllocator)
+, d_hostTags(basicAllocator)
+, d_hostDataCenter(basicAllocator)
+, d_latencyMonitorDomain(DEFAULT_INITIALIZER_LATENCY_MONITOR_DOMAIN,
+                         basicAllocator)
+, d_stats(basicAllocator)
+, d_plugins(basicAllocator)
+, d_networkInterfaces(basicAllocator)
+, d_messagePropertiesV2()
+, d_dispatcherConfig()
+, d_bmqconfConfig()
+, d_brokerVersion()
+, d_configVersion()
+, d_logsObserverMaxSize()
+, d_routeCommandTimeoutMs(DEFAULT_INITIALIZER_ROUTE_COMMAND_TIMEOUT_MS)
+, d_isRunningOnDev()
+, d_configureStream(DEFAULT_INITIALIZER_CONFIGURE_STREAM)
+, d_advertiseSubscriptions(DEFAULT_INITIALIZER_ADVERTISE_SUBSCRIPTIONS)
+{
+}
+
+AppConfig::AppConfig(const AppConfig&  original,
+                     bslma::Allocator* basicAllocator)
+: d_brokerInstanceName(original.d_brokerInstanceName, basicAllocator)
+, d_etcDir(original.d_etcDir, basicAllocator)
+, d_hostName(original.d_hostName, basicAllocator)
+, d_hostTags(original.d_hostTags, basicAllocator)
+, d_hostDataCenter(original.d_hostDataCenter, basicAllocator)
+, d_latencyMonitorDomain(original.d_latencyMonitorDomain, basicAllocator)
+, d_stats(original.d_stats, basicAllocator)
+, d_plugins(original.d_plugins, basicAllocator)
+, d_networkInterfaces(original.d_networkInterfaces, basicAllocator)
+, d_messagePropertiesV2(original.d_messagePropertiesV2)
+, d_dispatcherConfig(original.d_dispatcherConfig)
+, d_bmqconfConfig(original.d_bmqconfConfig)
+, d_brokerVersion(original.d_brokerVersion)
+, d_configVersion(original.d_configVersion)
+, d_logsObserverMaxSize(original.d_logsObserverMaxSize)
+, d_routeCommandTimeoutMs(original.d_routeCommandTimeoutMs)
+, d_isRunningOnDev(original.d_isRunningOnDev)
+, d_configureStream(original.d_configureStream)
+, d_advertiseSubscriptions(original.d_advertiseSubscriptions)
+{
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+AppConfig::AppConfig(AppConfig&& original) noexcept
+: d_brokerInstanceName(bsl::move(original.d_brokerInstanceName)),
+  d_etcDir(bsl::move(original.d_etcDir)),
+  d_hostName(bsl::move(original.d_hostName)),
+  d_hostTags(bsl::move(original.d_hostTags)),
+  d_hostDataCenter(bsl::move(original.d_hostDataCenter)),
+  d_latencyMonitorDomain(bsl::move(original.d_latencyMonitorDomain)),
+  d_stats(bsl::move(original.d_stats)),
+  d_plugins(bsl::move(original.d_plugins)),
+  d_networkInterfaces(bsl::move(original.d_networkInterfaces)),
+  d_messagePropertiesV2(bsl::move(original.d_messagePropertiesV2)),
+  d_dispatcherConfig(bsl::move(original.d_dispatcherConfig)),
+  d_bmqconfConfig(bsl::move(original.d_bmqconfConfig)),
+  d_brokerVersion(bsl::move(original.d_brokerVersion)),
+  d_configVersion(bsl::move(original.d_configVersion)),
+  d_logsObserverMaxSize(bsl::move(original.d_logsObserverMaxSize)),
+  d_routeCommandTimeoutMs(bsl::move(original.d_routeCommandTimeoutMs)),
+  d_isRunningOnDev(bsl::move(original.d_isRunningOnDev)),
+  d_configureStream(bsl::move(original.d_configureStream)),
+  d_advertiseSubscriptions(bsl::move(original.d_advertiseSubscriptions))
+{
+}
+
+AppConfig::AppConfig(AppConfig&& original, bslma::Allocator* basicAllocator)
+: d_brokerInstanceName(bsl::move(original.d_brokerInstanceName),
+                       basicAllocator)
+, d_etcDir(bsl::move(original.d_etcDir), basicAllocator)
+, d_hostName(bsl::move(original.d_hostName), basicAllocator)
+, d_hostTags(bsl::move(original.d_hostTags), basicAllocator)
+, d_hostDataCenter(bsl::move(original.d_hostDataCenter), basicAllocator)
+, d_latencyMonitorDomain(bsl::move(original.d_latencyMonitorDomain),
+                         basicAllocator)
+, d_stats(bsl::move(original.d_stats), basicAllocator)
+, d_plugins(bsl::move(original.d_plugins), basicAllocator)
+, d_networkInterfaces(bsl::move(original.d_networkInterfaces), basicAllocator)
+, d_messagePropertiesV2(bsl::move(original.d_messagePropertiesV2))
+, d_dispatcherConfig(bsl::move(original.d_dispatcherConfig))
+, d_bmqconfConfig(bsl::move(original.d_bmqconfConfig))
+, d_brokerVersion(bsl::move(original.d_brokerVersion))
+, d_configVersion(bsl::move(original.d_configVersion))
+, d_logsObserverMaxSize(bsl::move(original.d_logsObserverMaxSize))
+, d_routeCommandTimeoutMs(bsl::move(original.d_routeCommandTimeoutMs))
+, d_isRunningOnDev(bsl::move(original.d_isRunningOnDev))
+, d_configureStream(bsl::move(original.d_configureStream))
+, d_advertiseSubscriptions(bsl::move(original.d_advertiseSubscriptions))
+{
+}
+#endif
+
+AppConfig::~AppConfig()
+{
+}
+
+// MANIPULATORS
+
+AppConfig& AppConfig::operator=(const AppConfig& rhs)
+{
+    if (this != &rhs) {
+        d_brokerInstanceName     = rhs.d_brokerInstanceName;
+        d_brokerVersion          = rhs.d_brokerVersion;
+        d_configVersion          = rhs.d_configVersion;
+        d_etcDir                 = rhs.d_etcDir;
+        d_hostName               = rhs.d_hostName;
+        d_hostTags               = rhs.d_hostTags;
+        d_hostDataCenter         = rhs.d_hostDataCenter;
+        d_isRunningOnDev         = rhs.d_isRunningOnDev;
+        d_logsObserverMaxSize    = rhs.d_logsObserverMaxSize;
+        d_latencyMonitorDomain   = rhs.d_latencyMonitorDomain;
+        d_dispatcherConfig       = rhs.d_dispatcherConfig;
+        d_stats                  = rhs.d_stats;
+        d_networkInterfaces      = rhs.d_networkInterfaces;
+        d_bmqconfConfig          = rhs.d_bmqconfConfig;
+        d_plugins                = rhs.d_plugins;
+        d_messagePropertiesV2    = rhs.d_messagePropertiesV2;
+        d_configureStream        = rhs.d_configureStream;
+        d_advertiseSubscriptions = rhs.d_advertiseSubscriptions;
+        d_routeCommandTimeoutMs  = rhs.d_routeCommandTimeoutMs;
+    }
+
+    return *this;
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+AppConfig& AppConfig::operator=(AppConfig&& rhs)
+{
+    if (this != &rhs) {
+        d_brokerInstanceName     = bsl::move(rhs.d_brokerInstanceName);
+        d_brokerVersion          = bsl::move(rhs.d_brokerVersion);
+        d_configVersion          = bsl::move(rhs.d_configVersion);
+        d_etcDir                 = bsl::move(rhs.d_etcDir);
+        d_hostName               = bsl::move(rhs.d_hostName);
+        d_hostTags               = bsl::move(rhs.d_hostTags);
+        d_hostDataCenter         = bsl::move(rhs.d_hostDataCenter);
+        d_isRunningOnDev         = bsl::move(rhs.d_isRunningOnDev);
+        d_logsObserverMaxSize    = bsl::move(rhs.d_logsObserverMaxSize);
+        d_latencyMonitorDomain   = bsl::move(rhs.d_latencyMonitorDomain);
+        d_dispatcherConfig       = bsl::move(rhs.d_dispatcherConfig);
+        d_stats                  = bsl::move(rhs.d_stats);
+        d_networkInterfaces      = bsl::move(rhs.d_networkInterfaces);
+        d_bmqconfConfig          = bsl::move(rhs.d_bmqconfConfig);
+        d_plugins                = bsl::move(rhs.d_plugins);
+        d_messagePropertiesV2    = bsl::move(rhs.d_messagePropertiesV2);
+        d_configureStream        = bsl::move(rhs.d_configureStream);
+        d_advertiseSubscriptions = bsl::move(rhs.d_advertiseSubscriptions);
+        d_routeCommandTimeoutMs  = bsl::move(rhs.d_routeCommandTimeoutMs);
+    }
+
+    return *this;
+}
+#endif
+
+void AppConfig::reset()
+{
+    bdlat_ValueTypeFunctions::reset(&d_brokerInstanceName);
+    bdlat_ValueTypeFunctions::reset(&d_brokerVersion);
+    bdlat_ValueTypeFunctions::reset(&d_configVersion);
+    bdlat_ValueTypeFunctions::reset(&d_etcDir);
+    bdlat_ValueTypeFunctions::reset(&d_hostName);
+    bdlat_ValueTypeFunctions::reset(&d_hostTags);
+    bdlat_ValueTypeFunctions::reset(&d_hostDataCenter);
+    bdlat_ValueTypeFunctions::reset(&d_isRunningOnDev);
+    bdlat_ValueTypeFunctions::reset(&d_logsObserverMaxSize);
+    d_latencyMonitorDomain = DEFAULT_INITIALIZER_LATENCY_MONITOR_DOMAIN;
+    bdlat_ValueTypeFunctions::reset(&d_dispatcherConfig);
+    bdlat_ValueTypeFunctions::reset(&d_stats);
+    bdlat_ValueTypeFunctions::reset(&d_networkInterfaces);
+    bdlat_ValueTypeFunctions::reset(&d_bmqconfConfig);
+    bdlat_ValueTypeFunctions::reset(&d_plugins);
+    bdlat_ValueTypeFunctions::reset(&d_messagePropertiesV2);
+    d_configureStream        = DEFAULT_INITIALIZER_CONFIGURE_STREAM;
+    d_advertiseSubscriptions = DEFAULT_INITIALIZER_ADVERTISE_SUBSCRIPTIONS;
+    d_routeCommandTimeoutMs  = DEFAULT_INITIALIZER_ROUTE_COMMAND_TIMEOUT_MS;
+}
+
+// ACCESSORS
+
+bsl::ostream&
+AppConfig::print(bsl::ostream& stream, int level, int spacesPerLevel) const
+{
+    bslim::Printer printer(&stream, level, spacesPerLevel);
+    printer.start();
+    printer.printAttribute("brokerInstanceName", this->brokerInstanceName());
+    printer.printAttribute("brokerVersion", this->brokerVersion());
+    printer.printAttribute("configVersion", this->configVersion());
+    printer.printAttribute("etcDir", this->etcDir());
+    printer.printAttribute("hostName", this->hostName());
+    printer.printAttribute("hostTags", this->hostTags());
+    printer.printAttribute("hostDataCenter", this->hostDataCenter());
+    printer.printAttribute("isRunningOnDev", this->isRunningOnDev());
+    printer.printAttribute("logsObserverMaxSize", this->logsObserverMaxSize());
+    printer.printAttribute("latencyMonitorDomain",
+                           this->latencyMonitorDomain());
+    printer.printAttribute("dispatcherConfig", this->dispatcherConfig());
+    printer.printAttribute("stats", this->stats());
+    printer.printAttribute("networkInterfaces", this->networkInterfaces());
+    printer.printAttribute("bmqconfConfig", this->bmqconfConfig());
+    printer.printAttribute("plugins", this->plugins());
+    printer.printAttribute("messagePropertiesV2", this->messagePropertiesV2());
+    printer.printAttribute("configureStream", this->configureStream());
+    printer.printAttribute("advertiseSubscriptions",
+                           this->advertiseSubscriptions());
+    printer.printAttribute("routeCommandTimeoutMs",
+                           this->routeCommandTimeoutMs());
+    printer.end();
+    return stream;
+}
+
 // ------------------------
 // class ClustersDefinition
 // ------------------------
@@ -6081,14 +6149,7 @@ Configuration::print(bsl::ostream& stream, int level, int spacesPerLevel) const
 }  // close package namespace
 }  // close enterprise namespace
 
-// GENERATED BY BLP_BAS_CODEGEN_2023.06.11
+// GENERATED BY @BLP_BAS_CODEGEN_VERSION@
 // USING bas_codegen.pl -m msg --noAggregateConversion --noExternalization
-// --noIdent --package mqbcfg --msgComponent messages
-// src/groups/mqb/mqbcfg/mqbcfg.xsd
+// --noIdent --package mqbcfg --msgComponent messages mqbcfg.xsd
 // ----------------------------------------------------------------------------
-// NOTICE:
-//      Copyright 2023 Bloomberg Finance L.P. All rights reserved.
-//      Property of Bloomberg Finance L.P. (BFLP)
-//      This software is made available solely pursuant to the
-//      terms of a BFLP license agreement which governs its use.
-// ------------------------------- END-OF-FILE --------------------------------

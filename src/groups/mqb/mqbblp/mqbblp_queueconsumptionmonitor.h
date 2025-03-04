@@ -17,95 +17,96 @@
 #ifndef INCLUDED_MQBBLP_QUEUECONSUMPTIONMONITOR
 #define INCLUDED_MQBBLP_QUEUECONSUMPTIONMONITOR
 
-//@PURPOSE: Provide a component that alerts if a queue is not read for a while.
-//
-//@CLASSES:
-//  mqbblp::QueueConsumptionMonitor: mechanism monitoring queue consumption
-//
-//@DESCRIPTION: 'mqbblp::QueueConsumptionMonitor' provides a mechanism that
-// monitors a queue and alerts if the queue has not been consumed for a
-// configurable amount of time.  Monitoring does not happen until a "maximum
-// idle time" has been set (using 'setMaxIdleTime').  Monitoring can be
-// disabled by setting the maximum idle time to zero.
-//
-// Once in monitoring mode, the component is operated by a series of calls to
-// 'onMessageSent' and 'onTimer(currentTime)', in arbitrary order.  Each time
-// that 'onTimer(currentTime)' is called, the component first checks whether
-// the queue is in 'alive' state.  It is the case if:
-//: o this the first call to 'onTimer' since monitoring was switched on
-//: o 'onMessageSent' was called since 'onTimer' was last called
-//: o the queue is empty
-//
-// Then the component checks how much "time" has elapsed since the queue was
-// last seen in 'active' state (this may be zero, if one of the aforementioned
-// condition was met).  If that period exceeds the value specified via
-// 'setMaxIdleTime', then the queue is in 'idle' state.  Otherwise it is in
-// 'active' state.  If the state changes to 'idle', an alarm is written to the
-// log.  If the state changes to 'active', an INFO record is written to the
-// log.
-//
-// The 'maxIdleTime' represents the minimum time before an alarm will be
-// emitted would the queue be stale, but the alarm may be emitted anytime
-// between '[maxIdleTime, maxIdleTime + frequency[', where 'frequency'
-// represents the time period used between two consecutive calls to 'onTimer'.
-//
-// NOTE: the component does not assume any specific units for "time" - the sole
-// constraint is that the values passed to 'onTimer' monotonically (but not
-// strictly) increase.  Typically, these values are obtained from
-// 'bsls::TimeUtil::getTimer()', which returns a number of nanoseconds elapsed
-// from an arbitrary but fixed point in time.
-//
-/// Thread safety
-///-------------
-// This component is *not* thread safe.  Its functions *must* be called from
-// the queue's dispatcher thread.
-//
-/// Usage Example
-///-------------
-// This example shows how to use this component.
-//..
-//  mqbblp::QueueConsumptionMonitor monitor;
-//  monitor.setMaxIdleTime(20 * bdlt::TimeUnitRatio::k_NS_PER_S);
-//  put 2 messages in queue
-//
-//  some time later, at time T:
-//  monitor.onTimer(bsls::TimeUtil::getTimer()); // nothing is logged
-//
-//  // 15 seconds later - T + 15s
-//  monitor.onTimer(bsls::TimeUtil::getTimer()); // nothing is logged
-//
-//  // 15 seconds later - T + 30s
-//  monitor.onTimer(bsls::TimeUtil::getTimer()); // log ALARM
-//
-//  // 15 seconds later - T + 45s
-//  monitor.onTimer(bsls::TimeUtil::getTimer()); // nothing is logged
-//
-//  // 15 seconds later - T + 60s
-//  // consume first message
-//  monitor.onMessageSent(mqbu::StorageKey::k_NULL_KEY);
-//
-//  // 15 seconds later - T + 75s
-//  monitor.onTimer(bsls::TimeUtil::getTimer()); // log INFO: back to active
-//
-//  // 15 seconds later - T + 90s
-//  monitor.onTimer(bsls::TimeUtil::getTimer()); // nothing is logged
-//
-//  // 15 seconds later - T + 105s
-//  monitor.onTimer(bsls::TimeUtil::getTimer()); // log ALARM
-//
-//  // 15 seconds later - T + 120s
-//  // consume second message
-//  monitor.onMessageSent(mqbu::StorageKey::k_NULL_KEY);
-//
-//  // 15 seconds later - T + 135s
-//  monitor.onTimer(bsls::TimeUtil::getTimer()); // log INFO: back to active
-//..
+/// @file mqbblp_queueconsumptionmonitor.h
+///
+/// @brief Provide a component that alerts if a queue is not read for a while.
+///
+/// @brief{mqbblp::QueueConsumptionMonitor} provides a mechanism that
+/// monitors a queue and alerts if the queue has not been consumed for a
+/// configurable amount of time.  Monitoring does not happen until a "maximum
+/// idle time" has been set (using `setMaxIdleTime`).  Monitoring can be
+/// disabled by setting the maximum idle time to zero.
+///
+/// Once in monitoring mode, the component is operated by a series of calls to
+/// `onMessageSent` and `onTimer(currentTime)`, in arbitrary order.  Each time
+/// that `onTimer(currentTime)` is called, the component first checks whether
+/// the queue is in 'alive' state.  It is the case if:
+///
+///   * this the first call to `onTimer` since monitoring was switched on;
+///   * `onMessageSent` was called since `onTimer` was last called; or
+///   * the queue is empty.
+///
+/// Then the component checks how much "time" has elapsed since the queue was
+/// last seen in `active` state (this may be zero, if one of the aforementioned
+/// condition was met).  If that period exceeds the value specified via
+/// `setMaxIdleTime`, then the queue is in `idle` state.  Otherwise it is in
+/// `active` state.  If the state changes to `idle`, an alarm is written to the
+/// log.  If the state changes to `active`, an INFO record is written to the
+/// log.
+///
+/// The `maxIdleTime` represents the minimum time before an alarm will be
+/// emitted would the queue be stale, but the alarm may be emitted anytime
+/// between `[maxIdleTime, maxIdleTime + frequency[`, where `frequency`
+/// represents the time period used between two consecutive calls to `onTimer`.
+///
+/// NOTE: the component does not assume any specific units for "time" - the
+/// sole constraint is that the values passed to `onTimer` monotonically (but
+/// not strictly) increase.  Typically, these values are obtained from
+/// @bbref{bsls::TimeUtil::getTimer()}, which returns a number of nanoseconds
+/// elapsed from an arbitrary but fixed point in time.
+///
+/// Thread safety                      {#mqbblp_queueconsumptionmonitor_thread}
+/// =============
+///
+/// This component is *not* thread safe.  Its functions *must* be called from
+/// the queue's dispatcher thread.
+///
+/// Usage Example                       {#mqbblp_queueconsumptionmonitor_usage}
+/// =============
+///
+/// This example shows how to use this component.
+///
+/// ```
+/// mqbblp::QueueConsumptionMonitor monitor;
+/// monitor.setMaxIdleTime(20 * bdlt::TimeUnitRatio::k_NS_PER_S);
+/// // put 2 messages in queue
+///
+/// // some time later, at time T:
+/// monitor.onTimer(bsls::TimeUtil::getTimer()); // nothing is logged
+///
+/// // 15 seconds later - T + 15s
+/// monitor.onTimer(bsls::TimeUtil::getTimer()); // nothing is logged
+///
+/// // 15 seconds later - T + 30s
+/// monitor.onTimer(bsls::TimeUtil::getTimer()); // log ALARM
+///
+/// // 15 seconds later - T + 45s
+/// monitor.onTimer(bsls::TimeUtil::getTimer()); // nothing is logged
+///
+/// // 15 seconds later - T + 60s
+/// // consume first message
+/// monitor.onMessageSent(id);
+///
+/// // 15 seconds later - T + 75s
+/// monitor.onTimer(bsls::TimeUtil::getTimer()); // log INFO: back to active
+///
+/// // 15 seconds later - T + 90s
+/// monitor.onTimer(bsls::TimeUtil::getTimer()); // nothing is logged
+///
+/// // 15 seconds later - T + 105s
+/// monitor.onTimer(bsls::TimeUtil::getTimer()); // log ALARM
+///
+/// // 15 seconds later - T + 120s
+/// // consume second message
+/// monitor.onMessageSent(id);
+///
+/// // 15 seconds later - T + 135s
+/// monitor.onTimer(bsls::TimeUtil::getTimer()); // log INFO: back to active
+/// ```
 
 // MQB
-
 #include <mqbblp_queuestate.h>
 #include <mqbi_queue.h>
-#include <mqbu_storagekey.h>
 
 // BDE
 #include <ball_log.h>
@@ -210,8 +211,12 @@ class QueueConsumptionMonitor {
         static const char* toAscii(Transition::Enum value);
     };
 
-    typedef bsl::function<bslma::ManagedPtr<mqbi::StorageIterator>(void)>
-        HeadCb;
+    /// Callback function to log alarm info when queue state transitions to
+    /// idle. First argument is the app id, second argument is a boolean flag
+    /// to enable logging. If `enableLog` is `false`, logging is skipped.
+    /// Return `true` if there are un-delivered messages and `false` otherwise.
+    typedef bsl::function<bool(const bsl::string& id, bool enableLog)>
+        LoggingCb;
 
   private:
     // PRIVATE TYPES
@@ -220,50 +225,44 @@ class QueueConsumptionMonitor {
     struct SubStreamInfo {
         // CREATORS
 
-        SubStreamInfo(const HeadCb& headCb);
-        SubStreamInfo(const SubStreamInfo& other);
+        SubStreamInfo();
 
         // PUBLIC DATA
+
+        // Timer value, in arbitrary unit, of the last time the substream was
+        // in a good state.
         bsls::Types::Int64 d_lastKnownGoodTimer;
-        // Timer value, in arbitrary unit, of
-        // the last time the substream was in
-        // good state.
 
+        /// Whether a message was sent during the last time slice.
         bool d_messageSent;
-        // Whether a message was sent during
-        // the last time slice
 
-        State::Enum d_state;  // The current state.
-
-        HeadCb d_headCb;
-        // Returns storage iterator to the 1st
-        // un-delivered message including
-        // 'put-aside' messages (those without
-        // matching Subscriptions).
+        /// The current state.
+        State::Enum d_state;
     };
 
-    typedef bsl::unordered_map<mqbu::StorageKey,
-                               SubStreamInfo,
-                               bslh::Hash<mqbu::StorageKeyHashAlgo> >
-        SubStreamInfoMap;
+    typedef bsl::unordered_map<bsl::string, SubStreamInfo> SubStreamInfoMap;
 
     typedef SubStreamInfoMap::iterator SubStreamInfoMapIter;
 
     typedef SubStreamInfoMap::const_iterator SubStreamInfoMapConstIter;
 
     // DATA
+
+    /// Object representing the state of the queue associated with this object.
+    /// Held but not owned.
     QueueState* d_queueState_p;
-    // Object representing the state of the queue
-    // associated with this object, held but not owned.
 
+    /// Maximum time, in arbitrary units, before the queue is declared idle.
     bsls::Types::Int64 d_maxIdleTime;
-    // Maximum time, in arbitrary units, before the queue
-    // is declared idle.
 
+    /// Timer, in arbitrary unit, of the current time.
     bsls::Types::Int64 d_currentTimer;
-    // Timer, in arbitrary unit, of the current time.
 
     SubStreamInfoMap d_subStreamInfos;
+
+    /// Callback to log alarm info if there are undelivered messages.  Return
+    /// `true` if there are undelivered messages, `false` otherwise.
+    LoggingCb d_loggingCb;
 
     // NOT IMPLEMENTED
     QueueConsumptionMonitor(const QueueConsumptionMonitor&) BSLS_CPP11_DELETED;
@@ -272,27 +271,20 @@ class QueueConsumptionMonitor {
 
     // ACCESSORS
 
-    /// Return the `SubStreamInfo` corresponding to the specified `key`.
-    const SubStreamInfo& subStreamInfo(const mqbu::StorageKey& key) const;
+    /// Return the `SubStreamInfo` corresponding to the specified `id`.
+    const SubStreamInfo& subStreamInfo(const bsl::string& id) const;
 
-    /// Return the `SubStreamInfo` corresponding to the specified `key`.  It
-    /// is an error to specify a `key` that has not been previously
+    /// Return the `SubStreamInfo` corresponding to the specified `id`.  It
+    /// is an error to specify an `id` that has not been previously
     /// registered via `registerSubStream`.
-    SubStreamInfo& subStreamInfo(const mqbu::StorageKey& key);
+    SubStreamInfo& subStreamInfo(const bsl::string& id);
 
     // MANIPULATORS
-    void onTransitionToAlive(SubStreamInfo*          subStreamInfo,
-                             const mqbu::StorageKey& appKey);
-
-    // Update the specified 'subStreamInfo', associated to the specified
-    // 'appKey', and write log, upon transition to alive state.
 
     /// Update the specified `subStreamInfo`, associated to the specified
-    /// `appKey`, and write log, upon transition to idle state.
-    void
-    onTransitionToIdle(SubStreamInfo*          subStreamInfo,
-                       const mqbu::StorageKey& appKey,
-                       const bslma::ManagedPtr<mqbi::StorageIterator>& head);
+    /// `id`, and write log, upon transition to alive state.
+    void onTransitionToAlive(SubStreamInfo*     subStreamInfo,
+                             const bsl::string& id);
 
   public:
     // TRAITS
@@ -302,10 +294,12 @@ class QueueConsumptionMonitor {
     // CREATORS
 
     /// Create a `QueueConsumptionMonitor` object that monitors the queue
-    /// specified by `queueState`.  Use the optionally specified
-    /// `basicAllocator` to supply memory.  If `basicAllocator` is 0, the
-    /// currently installed default allocator is used.
+    /// specified by `queueState`. Use the specified `loggingCb` callback for
+    /// logging alarm data. Use the optionally specified `allocator` to supply
+    /// memory.  If `allocator` is 0, the currently installed default allocator
+    /// is used.
     QueueConsumptionMonitor(QueueState*       queueState,
+                            const LoggingCb&  loggingCb,
                             bslma::Allocator* allocator);
 
     // MANIPULATORS
@@ -321,16 +315,12 @@ class QueueConsumptionMonitor {
     /// this object.
     QueueConsumptionMonitor& setMaxIdleTime(bsls::Types::Int64 value);
 
-    /// Register the substream identified by the specified `key` and
-    /// consuming from the specified `storageIter` for monitoring.  `key`
-    /// may be `StorageKey::k_NULL_KEY`, in which case no other key may be
-    /// registered via this function. It is illegal to register the same
-    /// substream more than once.
-    void registerSubStream(const mqbu::StorageKey& key, const HeadCb& headCb);
+    /// Register the substream identified by the specified `id`.
+    void registerSubStream(const bsl::string& id);
 
-    /// Stop monitoring the substream identified by the specified `key`.
-    /// `key` must have been previously registered via `registerSubStream`.
-    void unregisterSubStream(const mqbu::StorageKey& key);
+    /// Stop monitoring the substream identified by the specified `id`.
+    /// `id` must have been previously registered via `registerSubStream`.
+    void unregisterSubStream(const bsl::string& id);
 
     /// Put the object back in construction state.
     void reset();
@@ -342,17 +332,17 @@ class QueueConsumptionMonitor {
     void onTimer(bsls::Types::Int64 currentTimer);
 
     /// Notify the monitor that one or more messages were sent during the
-    /// current time period for the substream specified by `key`.  It is an
-    /// error to specify a `key` that has not been previously registered via
+    /// current time period for the substream specified by `id`.  It is an
+    /// error to specify an `id` that has not been previously registered via
     /// `registerSubStream`.
-    void onMessageSent(const mqbu::StorageKey& key);
+    void onMessageSent(const bsl::string& id);
 
     // ACCESSORS
 
     /// Return the current activity status for the monitored queue for the
-    /// substream specified by `key`.  It is an error to specify a `key`
+    /// substream specified by `id`.  It is an error to specify a `id`
     /// that has not been previously registered via `registerSubStream`.
-    State::Enum state(const mqbu::StorageKey& key) const;
+    State::Enum state(const bsl::string& id) const;
 };
 
 // FREE OPERATORS
@@ -388,7 +378,7 @@ bsl::ostream& operator<<(bsl::ostream&                             stream,
 // -----------------------------
 
 inline QueueConsumptionMonitor::SubStreamInfo&
-QueueConsumptionMonitor::subStreamInfo(const mqbu::StorageKey& key)
+QueueConsumptionMonitor::subStreamInfo(const bsl::string& id)
 {
     // executed by the *QUEUE DISPATCHER* thread
 
@@ -396,13 +386,13 @@ QueueConsumptionMonitor::subStreamInfo(const mqbu::StorageKey& key)
     BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
         d_queueState_p->queue()));
 
-    SubStreamInfoMapIter iter = d_subStreamInfos.find(key);
+    SubStreamInfoMapIter iter = d_subStreamInfos.find(id);
     BSLS_ASSERT_SAFE(iter != d_subStreamInfos.end());
     return iter->second;
 }
 
 inline const QueueConsumptionMonitor::SubStreamInfo&
-QueueConsumptionMonitor::subStreamInfo(const mqbu::StorageKey& key) const
+QueueConsumptionMonitor::subStreamInfo(const bsl::string& id) const
 {
     // executed by the *QUEUE DISPATCHER* thread
 
@@ -410,12 +400,12 @@ QueueConsumptionMonitor::subStreamInfo(const mqbu::StorageKey& key) const
     BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
         d_queueState_p->queue()));
 
-    SubStreamInfoMapConstIter iter = d_subStreamInfos.find(key);
+    SubStreamInfoMapConstIter iter = d_subStreamInfos.find(id);
     BSLS_ASSERT_SAFE(iter != d_subStreamInfos.end());
     return iter->second;
 }
 
-inline void QueueConsumptionMonitor::onMessageSent(const mqbu::StorageKey& key)
+inline void QueueConsumptionMonitor::onMessageSent(const bsl::string& id)
 {
     // executed by the *QUEUE DISPATCHER* thread
 
@@ -429,11 +419,11 @@ inline void QueueConsumptionMonitor::onMessageSent(const mqbu::StorageKey& key)
         return;  // RETURN
     }
 
-    subStreamInfo(key).d_messageSent = true;
+    subStreamInfo(id).d_messageSent = true;
 }
 
 inline QueueConsumptionMonitor::State::Enum
-QueueConsumptionMonitor::state(const mqbu::StorageKey& key) const
+QueueConsumptionMonitor::state(const bsl::string& id) const
 {
     // executed by the *QUEUE DISPATCHER* thread
 
@@ -441,7 +431,7 @@ QueueConsumptionMonitor::state(const mqbu::StorageKey& key) const
     BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
         d_queueState_p->queue()));
 
-    return subStreamInfo(key).d_state;
+    return subStreamInfo(id).d_state;
 }
 
 }  // close package namespace

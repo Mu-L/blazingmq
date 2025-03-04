@@ -18,7 +18,7 @@
 
 #include <bmqscm_version.h>
 // BMQ
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlb_print.h>
@@ -55,7 +55,7 @@ bsls::ObjectBuffer<bdlpcre::RegEx> s_regex;
 // 'random' ordering for creation of static
 // objects by the compiler.
 
-int s_initialized = 0;
+bsls::Types::Int64 s_initialized = 0;
 // Integer to keep track of the number of
 // calls to 'initialize' for the
 // 'UriParser'.  If the value is non-zero,
@@ -192,6 +192,8 @@ void UriParser::initialize(bslma::Allocator* allocator)
     //       conditional check below because the post-increment of an int does
     //       not work correctly with versions of IBM xlc12 released following
     //       the 'Dec 2015 PTF'.
+    BSLS_ASSERT(s_initialized <
+                bsl::numeric_limits<bsls::Types::Int64>::max());
     ++s_initialized;
     if (s_initialized > 1) {
         return;  // RETURN
@@ -241,8 +243,8 @@ void UriParser::initialize(bslma::Allocator* allocator)
 void UriParser::shutdown()
 {
     bslmt::QLockGuard qlockGuard(&s_initLock);
-    BSLS_ASSERT_SAFE(s_initialized > 0);
 
+    BSLS_ASSERT(s_initialized > 0);
     if (--s_initialized != 0) {
         return;  // RETURN
     }
@@ -291,7 +293,7 @@ int UriParser::parse(Uri*                     result,
                                     result->d_uri.length());
     if (rc != 0) {
         if (errorDescription) {
-            mwcu::MemOutStream os(&localAllocator);
+            bmqu::MemOutStream os(&localAllocator);
             os << "invalid format (" << rc << ")";
             errorDescription->assign(os.str().data(), os.str().length());
         }
@@ -381,7 +383,7 @@ int UriParser::parse(Uri*                     result,
         //      in the test driver.
         BSLMT_ONCE_DO
         {
-            mwcu::MemOutStream os;
+            bmqu::MemOutStream os;
             os << "The queue name part of '" << uriString << "' is exceeding "
                << "the maximum size limit of " << Uri::k_QUEUENAME_MAX_LENGTH
                << ".  This is only a warning at the moment, but this limit "
@@ -443,7 +445,7 @@ int UriBuilder::uri(Uri* result, bsl::string* errorDescription) const
         bslma::Default::allocator());
 
     // Build the string
-    mwcu::MemOutStream os(&localAllocator);
+    bmqu::MemOutStream os(&localAllocator);
     os << d_uri.d_scheme << "://" << d_uri.d_domain;
     if (!d_uri.d_tier.empty()) {
         os << k_TIER_PREFIX << d_uri.d_tier;

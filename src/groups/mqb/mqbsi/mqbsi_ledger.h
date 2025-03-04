@@ -39,12 +39,12 @@
 #include <mqbsi_log.h>
 #include <mqbu_storagekey.h>
 
-// MWC
-#include <mwcu_blob.h>
+#include <bmqu_blob.h>
 
 // BDE
 #include <bdlb_nullablevalue.h>
 #include <bdlbb_blob.h>
+#include <bdlmt_eventscheduler.h>
 #include <bsl_functional.h>
 #include <bsl_memory.h>
 #include <bsl_string.h>
@@ -56,6 +56,12 @@
 #include <bsls_types.h>
 
 namespace BloombergLP {
+
+// FORWARD DECLARATIONS
+namespace bdlmt {
+class EventScheduler;
+}
+
 namespace mqbsi {
 
 // =====================
@@ -79,19 +85,20 @@ struct LedgerOpResult {
         // File specific
         // - - - - - - - - - - - - - - - - - - - - - -
         ,
-        e_LEDGER_READ_ONLY     = -6,
-        e_LOG_CREATE_FAILURE   = -7,
-        e_LOG_OPEN_FAILURE     = -8,
-        e_LOG_CLOSE_FAILURE    = -9,
-        e_LOG_FLUSH_FAILURE    = -10,
-        e_LOG_CLEANUP_FAILURE  = -11,
-        e_LOG_NOT_FOUND        = -12,
-        e_LOG_INVALID          = -13,
-        e_RECORD_WRITE_FAILURE = -14,
-        e_RECORD_READ_FAILURE  = -15,
-        e_RECORD_ALIAS_FAILURE = -16,
-        e_ALIAS_NOT_SUPPORTED  = -17,
-        e_INVALID_BLOB_SECTION = -18
+        e_LEDGER_READ_ONLY        = -6,
+        e_LOG_CREATE_FAILURE      = -7,
+        e_LOG_OPEN_FAILURE        = -8,
+        e_LOG_CLOSE_FAILURE       = -9,
+        e_LOG_FLUSH_FAILURE       = -10,
+        e_LOG_ROLLOVER_CB_FAILURE = -11,
+        e_LOG_CLEANUP_FAILURE     = -12,
+        e_LOG_NOT_FOUND           = -13,
+        e_LOG_INVALID             = -14,
+        e_RECORD_WRITE_FAILURE    = -15,
+        e_RECORD_READ_FAILURE     = -16,
+        e_RECORD_ALIAS_FAILURE    = -17,
+        e_ALIAS_NOT_SUPPORTED     = -18,
+        e_INVALID_BLOB_SECTION    = -19
     };
 
     // CLASS METHODS
@@ -243,7 +250,7 @@ class LedgerConfig {
     /// use the log in earnest and populate the specified `offset` with the
     /// current offset of the log.  Return 0 on success and non-zero error
     /// value otherwise.
-    typedef bsl::function<int(mqbsi::Log::Offset*                offset,
+    typedef bsl::function<int(Log::Offset*                       offset,
                               const bsl::shared_ptr<mqbsi::Log>& log)>
         ValidateLogCb;
 
@@ -295,6 +302,8 @@ class LedgerConfig {
     bsl::shared_ptr<mqbsi::LogIdGenerator> d_logIdGenerator_sp;
     // Pointer to generator of log ids.
 
+    bdlmt::EventScheduler* d_scheduler_p;
+
     ExtractLogIdCb d_extractLogIdCallback;
     // Callback invoked to extract the ID
     // of a log.
@@ -336,6 +345,7 @@ class LedgerConfig {
     setLogFactory(const bsl::shared_ptr<mqbsi::LogFactory>& value);
     LedgerConfig&
     setLogIdGenerator(const bsl::shared_ptr<mqbsi::LogIdGenerator>& value);
+    LedgerConfig& setScheduler(bdlmt::EventScheduler* value);
     LedgerConfig& setExtractLogIdCallback(const ExtractLogIdCb& value);
     LedgerConfig& setValidateLogCallback(const ValidateLogCb& value);
     LedgerConfig& setRolloverCallback(const OnRolloverCb& value);
@@ -353,6 +363,7 @@ class LedgerConfig {
     bool                   keepOldLogs() const;
     mqbsi::LogFactory*     logFactory() const;
     mqbsi::LogIdGenerator* logIdGenerator() const;
+    bdlmt::EventScheduler* scheduler() const;
     const ExtractLogIdCb&  extractLogIdCallback() const;
     const ValidateLogCb&   validateLogCallback() const;
     const OnRolloverCb&    rolloverCallback() const;
@@ -438,20 +449,19 @@ class Ledger {
     virtual int setOutstandingNumBytes(const mqbu::StorageKey& logId,
                                        bsls::Types::Int64      value) = 0;
 
-    /// Write the specified `record` starting at the specified `offset` and
-    /// of the specified `length` into this ledger and load into `recordId`
-    /// an identifier which can be used to retrieve the record later.
-    /// Return 0 on success and a non zero value otherwise.  The
-    /// implementation must also adjust outstanding num bytes of the
-    /// corresponding log.
+    /// Write the specified `record` starting at the specified `offset` and of
+    /// the specified `length` into this ledger and load into `recordId` an
+    /// identifier which can be used to retrieve the record later.  Return 0 on
+    /// success and a non zero value otherwise.  The implementation must also
+    /// adjust outstanding num bytes of the corresponding log.
     virtual int writeRecord(LedgerRecordId* recordId,
                             const void*     record,
                             int             offset,
                             int             length) = 0;
     virtual int writeRecord(LedgerRecordId*           recordId,
                             const bdlbb::Blob&        record,
-                            const mwcu::BlobPosition& offset,
-                            int                       length) = 0;
+                            const bmqu::BlobPosition& offset,
+                            int                       length)             = 0;
 
     /// Write the specified `section` of the specified `record` into this
     /// ledger and load into `recordId` an identifier which can be used to
@@ -460,7 +470,7 @@ class Ledger {
     /// adjust the total outstanding number of bytes if successful.
     virtual int writeRecord(LedgerRecordId*          recordId,
                             const bdlbb::Blob&       record,
-                            const mwcu::BlobSection& section) = 0;
+                            const bmqu::BlobSection& section) = 0;
 
     /// Flush any cached data in this ledger to the underlying storage
     /// mechanism, and return 0 on success, or a non-zero value on error.

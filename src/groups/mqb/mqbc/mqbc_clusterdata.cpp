@@ -26,8 +26,7 @@
 #include <bmqp_protocol.h>
 #include <bmqscm_version.h>
 
-// MWC
-#include <mwcsys_threadutil.h>
+#include <bmqsys_threadutil.h>
 
 // BDE
 #include <bdls_processutil.h>
@@ -42,37 +41,48 @@ namespace mqbc {
 namespace {
 
 mqbc::ClusterDataIdentity clusterIdentity(const bslstl::StringRef& name,
-                                          const mqbnet::Cluster*   netCluster)
+                                          const mqbnet::Cluster*   netCluster,
+                                          bool                     isRemote,
+                                          bslma::Allocator*        allocator)
 {
-    // Create client identity
-    bmqp_ctrlmsg::ClientIdentity identity;
-    identity.protocolVersion() = bmqp::Protocol::k_VERSION;
-    identity.sdkVersion()      = bmqscm::Version::versionAsInt();
-    identity.clientType()      = bmqp_ctrlmsg::ClientType::E_TCPBROKER;
-    identity.pid()             = bdls::ProcessUtil::getProcessId();
-    identity.sessionId()       = 1;
-    identity.clusterName()     = name;
-    identity.clusterNodeId()   = netCluster->selfNodeId();
-    identity.hostName()        = netCluster->selfNode()->nodeDescription();
-    if (bdls::ProcessUtil::getProcessName(&(identity.processName())) != 0) {
-        identity.processName() = "** UNKNOWN **";
-    }
-    identity.sdkLanguage() = bmqp_ctrlmsg::ClientLanguage::E_CPP;
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(allocator);
+    BSLS_ASSERT_SAFE(isRemote != static_cast<bool>(netCluster));
 
-    // Create cluster identity
-    mqbc::ClusterDataIdentity clusterIdentity(name, identity);
+    // Create client identity
+    bmqp_ctrlmsg::ClientIdentity identity(allocator);
+    if (!isRemote) {
+        BSLS_ASSERT_SAFE(netCluster->selfNode());
+
+        identity.protocolVersion() = bmqp::Protocol::k_VERSION;
+        identity.sdkVersion()      = bmqscm::Version::versionAsInt();
+        identity.clientType()      = bmqp_ctrlmsg::ClientType::E_TCPBROKER;
+        identity.pid()             = bdls::ProcessUtil::getProcessId();
+        identity.sessionId()       = 1;
+        identity.clusterName()     = name;
+        identity.clusterNodeId()   = netCluster->selfNodeId();
+        identity.hostName()        = netCluster->selfNode()->nodeDescription();
+        if (bdls::ProcessUtil::getProcessName(&(identity.processName())) !=
+            0) {
+            identity.processName() = "** UNKNOWN **";
+        }
+        identity.sdkLanguage() = bmqp_ctrlmsg::ClientLanguage::E_CPP;
+    }
 
     // Create and set description
     bdlma::LocalSequentialAllocator<256> localAllocator;
-    mwcu::MemOutStream                   os(&localAllocator);
-    os << "Cluster (" << name << ")";
+    bmqu::MemOutStream                   os(&localAllocator);
+    if (isRemote) {
+        os << "ClusterProxy (" << name << ")";
+    }
+    else {
+        os << "Cluster (" << name << ")";
+    }
 
     bsl::string description;
     description.assign(os.str().data(), os.str().length());
 
-    clusterIdentity.setDescription(description);
-
-    return clusterIdentity;
+    return mqbc::ClusterDataIdentity(name, description, identity);
 }
 
 }  // close unnamed namespace
@@ -82,36 +92,38 @@ mqbc::ClusterDataIdentity clusterIdentity(const bslstl::StringRef& name,
 // -----------------
 
 // CREATORS
-ClusterData::ClusterData(const bslstl::StringRef&           name,
-                         bdlmt::EventScheduler*             scheduler,
-                         bdlbb::BlobBufferFactory*          bufferFactory,
-                         BlobSpPool*                        blobSpPool,
-                         const mqbcfg::ClusterDefinition&   clusterConfig,
-                         bslma::ManagedPtr<mqbnet::Cluster> netCluster,
-                         mqbi::Cluster*                     cluster,
-                         mqbi::DomainFactory*               domainFactory,
-                         mqbnet::TransportManager*          transportManager,
-                         mwcst::StatContext*    clustersStatContext,
-                         const StatContextsMap& statContexts,
-                         bslma::Allocator*      allocator)
+ClusterData::ClusterData(
+    const bslstl::StringRef&              name,
+    const mqbi::ClusterResources&         resources,
+    const mqbcfg::ClusterDefinition&      clusterConfig,
+    const mqbcfg::ClusterProxyDefinition& clusterProxyConfig,
+    bslma::ManagedPtr<mqbnet::Cluster>    netCluster,
+    mqbi::Cluster*                        cluster,
+    mqbi::DomainFactory*                  domainFactory,
+    mqbnet::TransportManager*             transportManager,
+    bmqst::StatContext*                   clustersStatContext,
+    const StatContextsMap&                statContexts,
+    bslma::Allocator*                     allocator)
 : d_allocator_p(allocator)
-, d_scheduler_p(scheduler)
-, d_bufferFactory_p(bufferFactory)
-, d_blobSpPool_p(blobSpPool)
+, d_resources(resources)
 , d_dispatcherClientData()
 , d_clusterConfig(clusterConfig)
+, d_clusterProxyConfig(clusterProxyConfig)
 , d_electorInfo(cluster)
 , d_membership(netCluster, allocator)
-, d_identity(cluster->isRemote()
-                 ? ClusterDataIdentity(name,
-                                       bmqp_ctrlmsg::ClientIdentity(allocator),
-                                       allocator)
-                 : clusterIdentity(name, d_membership.netCluster()))
+, d_identity(
+      clusterIdentity(name,
+                      cluster->isRemote() ? 0 : d_membership.netCluster(),
+                      cluster->isRemote(),
+                      allocator))
 , d_cluster_p(cluster)
-, d_messageTransmitter(bufferFactory, cluster, transportManager, allocator)
+, d_messageTransmitter(resources.blobSpPool(),
+                       cluster,
+                       transportManager,
+                       allocator)
 , d_requestManager(bmqp::EventType::e_CONTROL,
-                   bufferFactory,
-                   scheduler,
+                   resources.blobSpPool(),
+                   resources.scheduler(),
                    false,  // lateResponseMode
                    allocator)
 , d_multiRequestManager(&d_requestManager, allocator)
@@ -121,11 +133,11 @@ ClusterData::ClusterData(const bslstl::StringRef&           name,
 , d_clusterNodesStatContext_mp(
       statContexts.find("clusterNodes")
           ->second->addSubcontext(
-              mwcst::StatContextConfiguration(d_identity.name(),
+              bmqst::StatContextConfiguration(d_identity.name(),
                                               d_allocator_p)))
 , d_stateSpPool(8192, allocator)
 , d_miscWorkThreadPool(
-      mwcsys::ThreadUtil::defaultAttributes().setThreadName("bmqMiscWorkTP"),
+      bmqsys::ThreadUtil::defaultAttributes().setThreadName("bmqMiscWorkTP"),
       3,      // numThreads
       10000,  // maxNumPendingJobs
       allocator)
@@ -133,12 +145,14 @@ ClusterData::ClusterData(const bslstl::StringRef&           name,
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(d_allocator_p);
     BSLS_ASSERT_SAFE(d_cluster_p);
-    BSLS_ASSERT(scheduler->clockType() == bsls::SystemClockType::e_MONOTONIC);
+    BSLS_ASSERT_SAFE(d_transportManager_p);
+    BSLS_ASSERT(resources.scheduler()->clockType() ==
+                bsls::SystemClockType::e_MONOTONIC);
 
     // Initialize the clusterStats object - under the hood this creates a new
     // subcontext to be held by this object to be used by all lower level
     // components created here.
-    d_stats.initialize(cluster->name(),
+    d_stats.initialize(name,
                        clusterConfig.partitionConfig().numPartitions(),
                        clustersStatContext,
                        d_allocator_p);

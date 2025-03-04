@@ -28,6 +28,7 @@
 // exposing methods to initialize the stat contexts.
 
 // MQB
+#include <bmqst_statcontext.h>
 
 // BDE
 #include <bsl_memory.h>
@@ -43,10 +44,6 @@ namespace BloombergLP {
 namespace mqbi {
 class Domain;
 }
-namespace mwcst {
-class StatContext;
-}
-
 namespace mqbstat {
 
 // =================
@@ -74,8 +71,16 @@ class DomainStats {
 
   private:
     // DATA
-    bslma::ManagedPtr<mwcst::StatContext> d_statContext_mp;
+    bslma::ManagedPtr<bmqst::StatContext> d_statContext_mp;
     // StatContext
+
+    // PRIVATE TYPES
+
+    /// Namespace for the constants of stat values that applies to the queues
+    /// from the clients
+    struct DomainStatsIndex {
+        enum Enum { e_STAT_CFG_MSGS, e_STAT_CFG_BYTES, e_STAT_QUEUE_COUNT };
+    };
 
   private:
     // NOT IMPLEMENTED
@@ -94,7 +99,7 @@ class DomainStats {
     /// ago.
     ///
     /// THREAD: This method can only be invoked from the `snapshot` thread.
-    static bsls::Types::Int64 getValue(const mwcst::StatContext& context,
+    static bsls::Types::Int64 getValue(const bmqst::StatContext& context,
                                        int                       snapshotId,
                                        const Stat::Enum&         stat);
 
@@ -109,16 +114,17 @@ class DomainStats {
     /// register it as a subcontext of the specified `domainStatContext` and
     /// using the specified `allocator`.
     void initialize(mqbi::Domain*       domain,
-                    mwcst::StatContext* domainStatContext,
+                    bmqst::StatContext* domainStatContext,
                     bslma::Allocator*   allocator);
 
     /// Update statistics for the event of the specified `type` and with the
     /// specified `value` (depending on the `type`, `value` can represent
     /// the number of bytes, a counter, ...
-    void onEvent(EventType::Enum type, bsls::Types::Int64 value);
+    template <EventType::Enum type>
+    void onEvent(bsls::Types::Int64 value);
 
     /// Return a pointer to the statcontext.
-    mwcst::StatContext* statContext();
+    bmqst::StatContext* statContext();
 };
 
 // ======================
@@ -133,7 +139,7 @@ struct DomainStatsUtil {
     /// specified `historySize` of history.  Return the created top level
     /// stat context to use for all domain level statistics.  Use the
     /// specified `allocator` for all stat context and stat values.
-    static bsl::shared_ptr<mwcst::StatContext>
+    static bsl::shared_ptr<bmqst::StatContext>
     initializeStatContext(int historySize, bslma::Allocator* allocator);
 };
 
@@ -145,9 +151,33 @@ struct DomainStatsUtil {
 // class DomainStats
 // ------------------
 
-inline mwcst::StatContext* DomainStats::statContext()
+inline bmqst::StatContext* DomainStats::statContext()
 {
     return d_statContext_mp.get();
+}
+
+template <>
+inline void DomainStats::onEvent<DomainStats::EventType::e_CFG_MSGS>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->setValue(DomainStatsIndex::e_STAT_CFG_MSGS, value);
+}
+
+template <>
+inline void DomainStats::onEvent<DomainStats::EventType::e_CFG_BYTES>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->setValue(DomainStatsIndex::e_STAT_CFG_BYTES, value);
+}
+
+template <>
+inline void DomainStats::onEvent<DomainStats::EventType::e_QUEUE_COUNT>(
+    bsls::Types::Int64 value)
+{
+    BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
+    d_statContext_mp->setValue(DomainStatsIndex::e_STAT_QUEUE_COUNT, value);
 }
 
 }  // close package namespace

@@ -17,29 +17,28 @@
 #ifndef INCLUDED_MQBC_INCORECLUSTERSTATELEDGERITERATOR
 #define INCLUDED_MQBC_INCORECLUSTERSTATELEDGERITERATOR
 
-//@PURPOSE: Provide an iterator through an 'mqbc::IncoreClusterStateLedger'
-//
-//@CLASSES:
-//  mqbc::IncoreClusterStateLedgerIterator: Iterator through an
-//                                          'mqbc::IncoreClusterStateLedger'
-//
-//@SEE_ALSO:
-//  mqbc::ClusterStateLedgerIterator
-//  mqbc::IncoreClusterStateLedger
-//
-//@DESCRIPTION: The 'mqbc::IncoreClusterStateLedgerIterator' class is a
-// concrete implementation of the 'mqbc::ClusterStateLedgerIterator' interface
-// to iterate through an 'mqbc::IncoreClusterStateLedger'.  Note that any
-// ledger iterated by this component *must* support aliasing.
-//
-/// Thread Safety
-///-------------
-// The 'mqbc::IncoreClusterStateLedgerIterator' object is not thread safe and
-// should always be manipulated from the associated cluster's dispatcher
-// thread, unless explicitly documented in a method's contract.
+/// @file mqbc_incoreclusterstateledgeriterator.h
+///
+/// @brief Provide an iterator through an
+/// @bbref{mqbc::IncoreClusterStateLedger}.
+///
+/// The @bbref{mqbc::IncoreClusterStateLedgerIterator} class is a
+/// concrete implementation of the @bbref{mqbc::ClusterStateLedgerIterator}
+/// interface to iterate through an @bbref{mqbc::IncoreClusterStateLedger}.
+/// Note that any ledger iterated by this component *must* support aliasing.
+///
+/// @see @bbref{mqbc::ClusterStateLedgerIterator}
+/// @see @bbref{mqbc::IncoreClusterStateLedger}
+///
+///
+/// Thread Safety                    {#mqbc_incoreclusterledgeriterator_thread}
+/// =============
+///
+/// The @bbref{mqbc::IncoreClusterStateLedgerIterator} object is not thread
+/// safe and should always be manipulated from the associated cluster's
+/// dispatcher thread, unless explicitly documented in a method's contract.
 
 // MQB
-
 #include <mqbc_clusterstateledgeriterator.h>
 #include <mqbsi_ledger.h>
 #include <mqbsi_log.h>
@@ -55,30 +54,28 @@ namespace mqbc {
 // =======================================
 
 /// Provide a concrete implementation of the
-/// `mqbc::ClusterStateLedgerIterator` interface to iterate through an
-/// `mqbc::IncoreClusterStateLedger`.  Note that any ledger iterated by this
-/// component *must* support aliasing.
+/// @bbref{mqbc::ClusterStateLedgerIterator} interface to iterate through an
+/// @bbref{mqbc::IncoreClusterStateLedger}.  Note that any ledger iterated by
+/// this component *must* support aliasing.
 class IncoreClusterStateLedgerIterator BSLS_KEYWORD_FINAL
 : public ClusterStateLedgerIterator {
   private:
     // DATA
+
+    /// Whether the next call to `next()` is the first invocation.
     bool d_firstInvocation;
-    // Whether the next call to 'next()' is the
-    // first invocation.
 
+    /// Whether this iterator is in a valid state.
     bool d_isValid;
-    // Whether this iterator is in a valid state.
 
+    /// Ledger to iterate through.
     const mqbsi::Ledger* d_ledger_p;
-    // Ledger to iterate through.
 
+    /// Id of the record at the current iterator position.
     mqbsi::LedgerRecordId d_currRecordId;
-    // Id of the record at the current iterator
-    // position.
 
+    /// Header of the record at the current iterator position.
     ClusterStateRecordHeader* d_currRecordHeader_p;
-    // Header of the record at the current
-    // iterator position.
 
   public:
     // CREATORS
@@ -112,7 +109,7 @@ class IncoreClusterStateLedgerIterator BSLS_KEYWORD_FINAL
     // MANIPULATORS
     //   (virtual mqbc::ClusterStateLedgerIterator)
 
-    /// Iterate to the next record in the `mqbc::ClusterStateLedger`.
+    /// Iterate to the next record in the @bbref{mqbc::ClusterStateLedger}.
     /// Return 0 if a record is found, 1 if the end of the ledger
     /// is reached, or < 0 if an error was encountered.  If this method
     /// returns a non-zero value, this iterator becomes invalid and
@@ -121,21 +118,20 @@ class IncoreClusterStateLedgerIterator BSLS_KEYWORD_FINAL
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual int next() BSLS_KEYWORD_OVERRIDE;
+    int next() BSLS_KEYWORD_OVERRIDE;
 
     /// Assign self to be a copy of the specified `other`.  This uses the
     /// assignment operator under the hood, but circumvents object slicing.
     /// Behavior is undefined unless `other` and this object have the same
     /// type.
-    virtual void
-    copy(const ClusterStateLedgerIterator& other) BSLS_KEYWORD_OVERRIDE;
+    void copy(const ClusterStateLedgerIterator& other) BSLS_KEYWORD_OVERRIDE;
 
     // ACCESSORS
     //   (virtual mqbc::ClusterStateLedgerIterator)
 
     /// Return a new `ClusterStateLedgerIterator`, which is a clone of self,
     /// using the specified `allocator`.
-    virtual bslma::ManagedPtr<ClusterStateLedgerIterator>
+    bslma::ManagedPtr<ClusterStateLedgerIterator>
     clone(bslma::Allocator* allocator) const BSLS_KEYWORD_OVERRIDE;
 
     /// Return true if this iterator is initialized and valid, and the
@@ -143,7 +139,7 @@ class IncoreClusterStateLedgerIterator BSLS_KEYWORD_FINAL
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual bool isValid() const BSLS_KEYWORD_OVERRIDE;
+    bool isValid() const BSLS_KEYWORD_OVERRIDE;
 
     /// Return a const reference to the `ClusterStateRecordHeader` at the
     /// iterator position.  Behavior is undefined unless `isValid()` returns
@@ -151,8 +147,7 @@ class IncoreClusterStateLedgerIterator BSLS_KEYWORD_FINAL
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual const ClusterStateRecordHeader&
-    header() const BSLS_KEYWORD_OVERRIDE;
+    const ClusterStateRecordHeader& header() const BSLS_KEYWORD_OVERRIDE;
 
     /// Load the cluster message recorded at the iterator position to the
     /// specified `message`.  Return 0 on success or a non-zero error value
@@ -160,7 +155,7 @@ class IncoreClusterStateLedgerIterator BSLS_KEYWORD_FINAL
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual int loadClusterMessage(bmqp_ctrlmsg::ClusterMessage* message) const
+    int loadClusterMessage(bmqp_ctrlmsg::ClusterMessage* message) const
         BSLS_KEYWORD_OVERRIDE;
 
     /// Format this object to the specified output `stream` at the (absolute
@@ -176,10 +171,9 @@ class IncoreClusterStateLedgerIterator BSLS_KEYWORD_FINAL
     ///
     /// THREAD: This method is invoked in the associated cluster's
     ///         dispatcher thread.
-    virtual bsl::ostream&
-    print(bsl::ostream& stream,
-          int           level          = 0,
-          int           spacesPerLevel = 4) const BSLS_KEYWORD_OVERRIDE;
+    bsl::ostream& print(bsl::ostream& stream,
+                        int           level = 0,
+                        int spacesPerLevel  = 4) const BSLS_KEYWORD_OVERRIDE;
 
     // ACCESSORS
 

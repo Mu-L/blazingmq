@@ -21,8 +21,9 @@
 #include <mqbi_domain.h>
 #include <mqbstat_domainstats.h>
 
-// MWC
-#include <mwcu_printutil.h>
+// BMQ
+#include <bmqp_protocolutil.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bslim_printer.h>
@@ -33,6 +34,44 @@ namespace mqbc {
 // ---------------------------
 // class ClusterStateQueueInfo
 // ---------------------------
+
+bool ClusterStateQueueInfo::containsDefaultAppIdOnly(const AppInfos& appInfos)
+{
+    if (appInfos.empty()) {
+        return true;  // RETURN
+    }
+
+    if (appInfos.size() == 1 &&
+        appInfos.count(bmqp::ProtocolUtil::k_DEFAULT_APP_ID) == 1) {
+        return true;  // RETURN
+    }
+
+    return false;
+}
+
+bool ClusterStateQueueInfo::hasTheSameAppIds(const AppInfos& appInfos) const
+{
+    if (containsDefaultAppIdOnly(d_appInfos) &&
+        containsDefaultAppIdOnly(appInfos)) {
+        return true;  // RETURN
+    }
+
+    // This ignores the order
+
+    if (d_appInfos.size() != appInfos.size()) {
+        return false;  // RETURN
+    }
+
+    for (AppInfos::const_iterator cit = d_appInfos.cbegin();
+         cit != d_appInfos.cend();
+         ++cit) {
+        if (appInfos.count(cit->first) != 1) {
+            return false;  // RETURN
+        }
+    }
+
+    return true;
+}
 
 bsl::ostream& ClusterStateQueueInfo::print(bsl::ostream& stream,
                                            int           level,
@@ -47,10 +86,72 @@ bsl::ostream& ClusterStateQueueInfo::print(bsl::ostream& stream,
     printer.printAttribute("uri", uri());
     printer.printAttribute("queueKey", key());
     printer.printAttribute("partitionId", partitionId());
-    printer.printAttribute("appIdInfos", appIdInfos());
+    printer.printAttribute("appIdInfos", appInfos());
+    printer.printAttribute("stateOfAssignment", state());
     printer.end();
 
     return stream;
+}
+
+bsl::ostream&
+ClusterStateQueueInfo::State::print(bsl::ostream&                      stream,
+                                    ClusterStateQueueInfo::State::Enum value,
+                                    int                                level,
+                                    int spacesPerLevel)
+{
+    if (stream.bad()) {
+        return stream;  // RETURN
+    }
+
+    bdlb::Print::indent(stream, level, spacesPerLevel);
+    stream << ClusterStateQueueInfo::State::toAscii(value);
+
+    if (spacesPerLevel >= 0) {
+        stream << '\n';
+    }
+
+    return stream;
+}
+
+const char*
+ClusterStateQueueInfo::State::toAscii(ClusterStateQueueInfo::State::Enum value)
+{
+#define CASE(X)                                                               \
+    case k_##X: return #X;
+
+    switch (value) {
+        CASE(NONE)
+        CASE(ASSIGNING)
+        CASE(ASSIGNED)
+        CASE(UNASSIGNING)
+    default: return "(* NONE *)";
+    }
+
+#undef CASE
+}
+
+bool ClusterStateQueueInfo::State::fromAscii(
+    ClusterStateQueueInfo::State::Enum* out,
+    const bslstl::StringRef&            str)
+{
+#define CHECKVALUE(M)                                                         \
+    if (bdlb::String::areEqualCaseless(                                       \
+            toAscii(ClusterStateQueueInfo::State::k_##M),                     \
+            str.data(),                                                       \
+            static_cast<int>(str.length()))) {                                \
+        *out = ClusterStateQueueInfo::State::k_##M;                           \
+        return true;                                                          \
+    }
+
+    CHECKVALUE(NONE)
+    CHECKVALUE(ASSIGNING)
+    CHECKVALUE(ASSIGNED)
+    CHECKVALUE(UNASSIGNING)
+
+    // Invalid string
+    return false;
+
+#undef CHECKVALUE
 }
 
 // --------------------------
@@ -74,13 +175,13 @@ void ClusterStateObserver::onPartitionPrimaryAssignment(
 }
 
 void ClusterStateObserver::onQueueAssigned(
-    BSLS_ANNOTATION_UNUSED const ClusterStateQueueInfo& info)
+    BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<ClusterStateQueueInfo>& info)
 {
     // NOTHING
 }
 
 void ClusterStateObserver::onQueueUnassigned(
-    BSLS_ANNOTATION_UNUSED const ClusterStateQueueInfo& info)
+    BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<ClusterStateQueueInfo>& info)
 {
     // NOTHING
 }
@@ -88,14 +189,14 @@ void ClusterStateObserver::onQueueUnassigned(
 void ClusterStateObserver::onQueueUpdated(
     BSLS_ANNOTATION_UNUSED const bmqt::Uri& uri,
     BSLS_ANNOTATION_UNUSED const bsl::string& domain,
-    BSLS_ANNOTATION_UNUSED const AppIdInfos&  addedAppIds,
-    BSLS_ANNOTATION_UNUSED const AppIdInfos&  removedAppIds)
+    BSLS_ANNOTATION_UNUSED const AppInfos&    addedAppIds,
+    BSLS_ANNOTATION_UNUSED const AppInfos&    removedAppIds)
 {
     // NOTHING
 }
 
 void ClusterStateObserver::onPartitionOrphanThreshold(
-    BSLS_ANNOTATION_UNUSED size_t partitiondId)
+    BSLS_ANNOTATION_UNUSED size_t partitionId)
 {
     // NOTHING
 }
@@ -198,7 +299,7 @@ ClusterState& ClusterState::setPartitionPrimary(int          partitionId,
     pinfo.setPrimaryStatus(primaryStatus);
 
     BALL_LOG_INFO << "Cluster [" << d_cluster_p->name() << "]: "
-                  << "Setting primary of Partition [" << partitionId << "] to"
+                  << "Setting primary of Partition [" << partitionId << "] to "
                   << "[" << (node ? node->nodeDescription() : "** NULL **")
                   << "], leaseId: [" << leaseId << "], primaryStatus: ["
                   << primaryStatus << "], oldPrimary: ["
@@ -316,52 +417,67 @@ ClusterState& ClusterState::updatePartitionNumActiveQueues(int partitionId,
 bool ClusterState::assignQueue(const bmqt::Uri&        uri,
                                const mqbu::StorageKey& key,
                                int                     partitionId,
-                               const AppIdInfos&       appIdInfos)
+                               const AppInfos&         appIdInfos)
 {
     // executed by the cluster *DISPATCHER* thread
 
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(cluster()->dispatcher()->inDispatcherThread(cluster()));
 
-    bool                   isNewAssignment = true;
-    const DomainStatesIter domIt = d_domainStates.find(uri.qualifiedDomain());
+    bool                  isNewAssignment = true;
+    DomainStatesIter      domIt = domainStates().find(uri.qualifiedDomain());
+    UriToQueueInfoMapIter queueIt;
 
-    if (domIt == d_domainStates.end()) {
-        d_domainStates[uri.qualifiedDomain()].createInplace(d_allocator_p,
-                                                            d_allocator_p);
-        d_domainStates.at(uri.qualifiedDomain())
-            ->queuesInfo()[uri]
-            .createInplace(d_allocator_p,
-                           uri,
-                           key,
-                           partitionId,
-                           appIdInfos,
-                           d_allocator_p);
+    if (domIt == domainStates().end()) {
+        ClusterState::DomainStateSp domainState;
+        domainState.createInplace(d_allocator_p, d_allocator_p);
+        domIt =
+            domainStates().emplace(uri.qualifiedDomain(), domainState).first;
+
+        queueIt = domIt->second->queuesInfo().end();
     }
     else {
-        const UriToQueueInfoMapIter iter = domIt->second->queuesInfo().find(
-            uri);
-        if (iter == domIt->second->queuesInfo().end()) {
-            domIt->second->queuesInfo()[uri].createInplace(d_allocator_p,
-                                                           uri,
-                                                           key,
-                                                           partitionId,
-                                                           appIdInfos,
-                                                           d_allocator_p);
-        }
-        else {
+        queueIt = domIt->second->queuesInfo().find(uri);
+    }
+
+    if (queueIt == domIt->second->queuesInfo().end()) {
+        QueueInfoSp queueInfo;
+
+        queueInfo.createInplace(d_allocator_p,
+                                uri,
+                                key,
+                                partitionId,
+                                appIdInfos,
+                                d_allocator_p);
+
+        queueIt = domIt->second->queuesInfo().emplace(uri, queueInfo).first;
+    }
+    else {
+        if (queueIt->second->state() ==
+            ClusterStateQueueInfo::State::k_ASSIGNED) {
+            // See 'ClusterStateManager::processQueueAssignmentAdvisory' which
+            // insists on re-assigning
             isNewAssignment = false;
 
-            updatePartitionQueueMapped(iter->second->partitionId(), -1);
-            iter->second->setKey(key).setPartitionId(partitionId);
-            iter->second->appIdInfos() = appIdInfos;
-            iter->second->setPendingUnassignment(false);
+            if (queueIt->second->key() == key &&
+                queueIt->second->partitionId() == partitionId &&
+                queueIt->second->hasTheSameAppIds(appIdInfos)) {
+                // If queue info is unchanged, can simply return
+                return false;  // RETURN
+            }
+
+            updatePartitionQueueMapped(queueIt->second->partitionId(), -1);
         }
+        queueIt->second->setKey(key).setPartitionId(partitionId);
+        queueIt->second->appInfos() = appIdInfos;
     }
+
+    // Set the queue as assigned
+    queueIt->second->setState(ClusterStateQueueInfo::State::k_ASSIGNED);
 
     updatePartitionQueueMapped(partitionId, 1);
 
-    mwcu::Printer<AppIdInfos> printer(&appIdInfos);
+    bmqu::Printer<AppInfos> printer(&appIdInfos);
     BALL_LOG_INFO << "Cluster [" << d_cluster_p->name() << "]: "
                   << "Assigning queue [" << uri << "], queueKey: [" << key
                   << "] to Partition [" << partitionId
@@ -370,11 +486,7 @@ bool ClusterState::assignQueue(const bmqt::Uri&        uri,
 
     for (ObserversSetIter it = d_observers.begin(); it != d_observers.end();
          ++it) {
-        (*it)->onQueueAssigned(ClusterStateQueueInfo(uri,
-                                                     key,
-                                                     partitionId,
-                                                     appIdInfos,
-                                                     d_allocator_p));
+        (*it)->onQueueAssigned(queueIt->second);
     }
 
     // POSTCONDITIONS
@@ -414,10 +526,14 @@ bool ClusterState::unassignQueue(const bmqt::Uri& uri)
 
     for (ObserversSetIter it = d_observers.begin(); it != d_observers.end();
          ++it) {
-        (*it)->onQueueUnassigned(*cit->second);
+        (*it)->onQueueUnassigned(cit->second);
     }
 
     domIt->second->queuesInfo().erase(cit);
+
+    if (domIt->second->queuesInfo().empty()) {
+        d_domainStates.erase(domIt);
+    }
 
     // POSTCONDITIONS
     //
@@ -454,8 +570,8 @@ void ClusterState::clearQueues()
 
 int ClusterState::updateQueue(const bmqt::Uri&   uri,
                               const bsl::string& domain,
-                              const AppIdInfos&  addedAppIds,
-                              const AppIdInfos&  removedAppIds)
+                              const AppInfos&    addedAppIds,
+                              const AppInfos&    removedAppIds)
 {
     // executed by the cluster *DISPATCHER* thread
 
@@ -485,8 +601,8 @@ int ClusterState::updateQueue(const bmqt::Uri&   uri,
             return rc_QUEUE_NOT_FOUND;  // RETURN
         }
 
-        AppIdInfos& appIdInfos = iter->second->appIdInfos();
-        for (AppIdInfosCIter citer = addedAppIds.cbegin();
+        AppInfos& appIdInfos = iter->second->appInfos();
+        for (AppInfosCIter citer = addedAppIds.cbegin();
              citer != addedAppIds.cend();
              ++citer) {
             if (!appIdInfos.insert(*citer).second) {
@@ -494,18 +610,18 @@ int ClusterState::updateQueue(const bmqt::Uri&   uri,
             }
         }
 
-        for (AppIdInfosCIter citer = removedAppIds.begin();
+        for (AppInfosCIter citer = removedAppIds.begin();
              citer != removedAppIds.end();
              ++citer) {
-            const AppIdInfosCIter appIdInfoCIter = appIdInfos.find(*citer);
+            const AppInfosCIter appIdInfoCIter = appIdInfos.find(citer->first);
             if (appIdInfoCIter == appIdInfos.cend()) {
                 return rc_APPID_NOT_FOUND;  // RETURN
             }
             appIdInfos.erase(appIdInfoCIter);
         }
 
-        mwcu::Printer<AppIdInfos> printer1(&addedAppIds);
-        mwcu::Printer<AppIdInfos> printer2(&removedAppIds);
+        bmqu::Printer<AppInfos> printer1(&addedAppIds);
+        bmqu::Printer<AppInfos> printer2(&removedAppIds);
         BALL_LOG_INFO << "Cluster [" << d_cluster_p->name() << "]: "
                       << "Updating queue [" << uri << "], queueKey: ["
                       << iter->second->key() << "], partitionId: ["
@@ -516,8 +632,8 @@ int ClusterState::updateQueue(const bmqt::Uri&   uri,
     else {
         // This update is for an entire domain, instead of any individual
         // queue.
-        mwcu::Printer<AppIdInfos> printer1(&addedAppIds);
-        mwcu::Printer<AppIdInfos> printer2(&removedAppIds);
+        bmqu::Printer<AppInfos> printer1(&addedAppIds);
+        bmqu::Printer<AppInfos> printer2(&removedAppIds);
         BALL_LOG_INFO << "Cluster [" << d_cluster_p->name() << "]: "
                       << "Updating domain: [" << domain
                       << "], addedAppIds: " << printer1
@@ -550,9 +666,10 @@ void ClusterState::DomainState::adjustQueueCount(int by)
     d_numAssignedQueues += by;
 
     if (d_domain_p != 0) {
-        d_domain_p->domainStats()->onEvent(
-            mqbstat::DomainStats::EventType::e_QUEUE_COUNT,
-            d_numAssignedQueues);
+        d_domain_p->domainStats()
+            ->onEvent<mqbstat::DomainStats::EventType::e_QUEUE_COUNT>(
+
+                d_numAssignedQueues);
     }
 }
 
@@ -565,13 +682,14 @@ ClusterState::PartitionIdExtractor::PartitionIdExtractor(
 : d_allocator_p(allocator)
 , d_regex(allocator)
 {
-    const char  pattern[] = "^\\S+\\.([0-9]+)\\.\\S+\\.\\S+$";
-    bsl::string error(d_allocator_p);
-    size_t      errorOffset;
-    const int   rc = d_regex.prepare(&error,
-                                   &errorOffset,
-                                   pattern,
-                                   bdlpcre::RegEx::k_FLAG_JIT);
+    const char                  pattern[] = "^\\S+\\.([0-9]+)\\.\\S+\\.\\S+$";
+    bsl::string                 error(d_allocator_p);
+    size_t                      errorOffset;
+    BSLA_MAYBE_UNUSED const int rc = d_regex.prepare(
+        &error,
+        &errorOffset,
+        pattern,
+        bdlpcre::RegEx::k_FLAG_JIT);
     BSLS_ASSERT_SAFE(rc == 0);
     BSLS_ASSERT_SAFE(d_regex.isPrepared() == true);
 }

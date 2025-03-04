@@ -17,15 +17,13 @@
 #ifndef INCLUDED_MQBBLP_LOCALQUEUE
 #define INCLUDED_MQBBLP_LOCALQUEUE
 
-//@PURPOSE: Provide a queue implementation for a queue managed by this broker.
-//
-//@CLASSES:
-//
-//
-//@DESCRIPTION:
+/// @file mqbblp_localqueue.h
+///
+/// @brief Provide a queue implementation for a queue managed by this broker.
+///
+/// @todo Document component.
 
 // MQB
-
 #include <mqbblp_queuestate.h>
 #include <mqbi_dispatcher.h>
 #include <mqbi_queue.h>
@@ -34,9 +32,7 @@
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_protocol.h>
 #include <bmqt_messageguid.h>
-
-// MWC
-#include <mwcu_throttledaction.h>
+#include <bmqu_throttledaction.h>
 
 // BDE
 #include <ball_log.h>
@@ -73,9 +69,8 @@ namespace mqbblp {
 // class LocalQueue
 // ================
 
+/// @todo Document this class.
 class LocalQueue BSLS_CPP11_FINAL {
-    // TBD
-
   private:
     // CLASS-SCOPE CATEGORY
     BALL_LOG_SET_CLASS_CATEGORY("MQBBLP.LOCALQUEUE");
@@ -85,10 +80,9 @@ class LocalQueue BSLS_CPP11_FINAL {
     bslma::Allocator*                    d_allocator_p;
     QueueState*                          d_state_p;
     bslma::ManagedPtr<mqbi::QueueEngine> d_queueEngine_mp;
-    mwcu::ThrottledActionParams          d_throttledFailedPutMessages;
-    bool                                 d_hasNewMessages;
+    bmqu::ThrottledActionParams          d_throttledFailedPutMessages;
     bdlmt::Throttle                      d_throttledDuplicateMessages;
-    // Throttler for duplicates.
+    /// Throttler for duplicates.
     bool d_haveStrongConsistency;
 
   private:
@@ -231,14 +225,6 @@ class LocalQueue BSLS_CPP11_FINAL {
     int rejectMessage(const bmqt::MessageGUID& msgGUID,
                       unsigned int             upstreamSubQueueId,
                       mqbi::QueueHandle*       source);
-
-    /// Remove all outstanding messages from that queue, and load the
-    /// details of the purged queue into the specified `result` object.
-    /// Empty `appId` means to purge from ALL appIds.
-    ///
-    /// THREAD: this method is invoked in queue's dispatcher thread.
-    void purge(mqbcmd::PurgeQueueResult* result,
-               const bsl::string&        appId = "");
 
     // ACCESSORS
 

@@ -61,8 +61,7 @@
 #include <bmqt_messageguid.h>
 #include <bmqt_resultcode.h>
 
-// MWC
-#include <mwcc_orderedhashset.h>
+#include <bmqc_orderedhashset.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -432,7 +431,7 @@ class QueueHandle {
     typedef bsl::function<void(void)> VoidFunctor;
 
     /// An ordered hash map of GUID and associated message info.
-    typedef mwcc::OrderedHashMap<bmqt::MessageGUID,
+    typedef bmqc::OrderedHashMap<bmqt::MessageGUID,
                                  UnconfirmedMessageInfo,
                                  bslh::Hash<bmqt::MessageGUIDHashAlgo> >
         UnconfirmedMessageInfoMap;
@@ -565,12 +564,13 @@ class QueueHandle {
     /// for more information).
     ///
     /// THREAD: This method is called from the Queue's dispatcher thread.
-    virtual void deliverMessage(
-        const bsl::shared_ptr<bdlbb::Blob>&       message,
-        const bmqt::MessageGUID&                  msgGUID,
-        const StorageMessageAttributes&           attributes,
-        const bmqp::Protocol::MsgGroupId&         msgGroupId,
-        const bmqp::Protocol::SubQueueInfosArray& subscriptions) = 0;
+    virtual void
+    deliverMessage(const bsl::shared_ptr<bdlbb::Blob>&       message,
+                   const bmqt::MessageGUID&                  msgGUID,
+                   const StorageMessageAttributes&           attributes,
+                   const bmqp::Protocol::MsgGroupId&         msgGroupId,
+                   const bmqp::Protocol::SubQueueInfosArray& subscriptions,
+                   bool                                      isOutOfOrder) = 0;
 
     /// Called by the `Queue` to deliver the specified `message` with the
     /// specified `msgGUID`, `attributes` and `msgGroupId` for the specified
@@ -795,12 +795,17 @@ class Queue : public DispatcherClient {
     /// Return the queue engine used by this queue.
     virtual QueueEngine* queueEngine() = 0;
 
-    /// Return the stats associated with this queue.
-    virtual mqbstat::QueueStatsDomain* stats() = 0;
+    /// Set the stats associated with this queue.
+    virtual void
+    setStats(const bsl::shared_ptr<mqbstat::QueueStatsDomain>& stats) = 0;
 
     /// Return number of unconfirmed messages across all handles with the
     /// `specified `subId'.
     virtual bsls::Types::Int64 countUnconfirmed(unsigned int subId) = 0;
+
+    /// Stop sending PUSHes but continue receiving CONFIRMs, receiving and
+    /// sending PUTs and ACKs.
+    virtual void stopPushing() = 0;
 
     /// Called when a message with the specified `msgGUID`, `appData`,
     /// `options`, `compressionAlgorithmType` payload is pushed to this
@@ -811,7 +816,8 @@ class Queue : public DispatcherClient {
         const bsl::shared_ptr<bdlbb::Blob>&  appData,
         const bsl::shared_ptr<bdlbb::Blob>&  options,
         const bmqp::MessagePropertiesInfo&   messagePropertiesInfo,
-        bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType) = 0;
+        bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType,
+        bool                                 isOutOfOrder) = 0;
 
     /// Confirm the message with the specified `msgGUID` for the specified
     /// `upstreamSubQueueId` stream of the queue on behalf of the client
@@ -850,10 +856,13 @@ class Queue : public DispatcherClient {
     /// and current upstream `genCount`, then the PUT message gets dropped
     /// to avoid out of order PUTs.  If the `upstreamSubQueueId` is
     /// `k_ANY_SUBQUEUE_ID`, all SubQueues are reopen.
+    /// If the optionally specified isWriterOnly is true, ignore CONFIRMs. This
+    /// should be specified if the upstream is stopping.
     ///
     /// THREAD: This method is called from the Queue's dispatcher thread.
     virtual void onOpenUpstream(bsls::Types::Uint64 genCount,
-                                unsigned int        upstreamSubQueueId) = 0;
+                                unsigned int        upstreamSubQueueId,
+                                bool                isWriterOnly = false) = 0;
 
     /// Notify the (remote) queue about (re)open failure.  The queue NACKs
     /// all pending and incoming PUTs and drops CONFIRMs related to to the
@@ -895,12 +904,6 @@ class Queue : public DispatcherClient {
     virtual int processCommand(mqbcmd::QueueResult*        result,
                                const mqbcmd::QueueCommand& command) = 0;
 
-    /// Remove all outstanding messages from that queue and load the details
-    /// of the purged queue into the specified `result` object.  Empty
-    /// `appId` means to purge from ALL appIds.
-    virtual void purge(mqbcmd::PurgeQueueResult* result,
-                       const bsl::string&        appId = "") = 0;
-
     // ACCESSORS
 
     /// Return the domain this queue belong to.
@@ -908,6 +911,10 @@ class Queue : public DispatcherClient {
 
     /// Return the storage used by this queue.
     virtual Storage* storage() const = 0;
+
+    /// Return the stats associated with this queue.
+    virtual const bsl::shared_ptr<mqbstat::QueueStatsDomain>&
+    stats() const = 0;
 
     /// Return the partitionId assigned to this queue.
     virtual int partitionId() const = 0;

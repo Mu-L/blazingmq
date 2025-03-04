@@ -37,13 +37,13 @@
 #include <bmqt_queueflags.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwctsk_alarmlog.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_weakmemfn.h>
+#include <bmqsys_time.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_weakmemfn.h>
 
 // BDE
+#include <ball_logthrottle.h>
 #include <bdlb_print.h>
 #include <bdlb_scopeexit.h>
 #include <bdlf_bind.h>
@@ -66,6 +66,21 @@ namespace mqbblp {
 
 namespace {
 
+const int k_MAX_INSTANT_MESSAGES = 10;
+// Maximum messages logged with throttling in a short period of time.
+
+const bsls::Types::Int64 k_NS_PER_MESSAGE =
+    bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MINUTE / k_MAX_INSTANT_MESSAGES;
+// Time interval between messages logged with throttling.
+
+#define BMQ_LOGTHROTTLE_INFO()                                                \
+    BALL_LOGTHROTTLE_INFO(k_MAX_INSTANT_MESSAGES, k_NS_PER_MESSAGE)           \
+        << "[THROTTLED] "
+
+#define BMQ_LOGTHROTTLE_ERROR()                                               \
+    BALL_LOGTHROTTLE_ERROR(k_MAX_INSTANT_MESSAGES, k_NS_PER_MESSAGE)          \
+        << "[THROTTLED] "
+
 // ====================
 // class LimitedPrinter
 // ====================
@@ -75,7 +90,7 @@ class LimitedPrinter {
   private:
     // DATA
     const bsl::size_t  d_maxPrintBytes;
-    mwcu::MemOutStream d_out;
+    bmqu::MemOutStream d_out;
 
     // FRIENDS
     friend bsl::ostream& operator<<(bsl::ostream&         stream,
@@ -149,6 +164,7 @@ class RelayQueueEngine::AutoPurger {
             d_relayQueueEngine.afterQueuePurged(
                 bmqp::ProtocolUtil::k_NULL_APP_ID,
                 mqbu::StorageKey::k_NULL_KEY);
+            d_relayQueueEngine.d_storageIter_mp->reset();
         }
     }
 };
@@ -271,27 +287,29 @@ void RelayQueueEngine::onHandleConfiguredDispatched(
         return;  // RETURN
     }
 
-    if (bmqp_ctrlmsg::StatusCategory::E_SUCCESS == status.category()) {
-        BALL_LOG_INFO << "Received success 'configure-stream' response for "
-                      << "handle [" << handle << "] for queue ["
-                      << d_queueState_p->uri() << "], for parameters "
-                      << downStreamParameters;
-    }
-    else {
-        BALL_LOG_WARN
-            << "#QUEUE_CONFIGURE_FAILURE "
-            << "Received failed 'configure-stream' response for handle '"
-            << handle->client() << ":" << handle->id() << "' for queue '"
-            << d_queueState_p->uri() << "', for parameters "
-            << downStreamParameters << ", but assuming success.";
-    }
-
-    BALL_LOG_INFO_BLOCK
+    BALL_LOGTHROTTLE_INFO_BLOCK(k_MAX_INSTANT_MESSAGES, k_NS_PER_MESSAGE)
     {
+        if (bmqp_ctrlmsg::StatusCategory::E_SUCCESS == status.category()) {
+            BALL_LOG_INFO
+                << "[THROTTLED] Received success 'configure-stream' response"
+                << " for handle [" << handle << "] for queue ["
+                << d_queueState_p->uri() << "], for parameters "
+                << downStreamParameters;
+        }
+        else {
+            BALL_LOG_WARN
+                << "[THROTTLED] #QUEUE_CONFIGURE_FAILURE "
+                << "Received failed 'configure-stream' response for handle '"
+                << handle->client() << ":" << handle->id() << "' for queue '"
+                << d_queueState_p->uri() << "', for parameters "
+                << downStreamParameters << ", but assuming success.";
+        }
+
         mqbcmd::RoundRobinRouter outrr(d_allocator_p);
         context->d_routing_sp->loadInternals(&outrr);
 
-        BALL_LOG_OUTPUT_STREAM << "For queue [" << d_queueState_p->uri()
+        BALL_LOG_OUTPUT_STREAM << "[THROTTLED] For queue ["
+                               << d_queueState_p->uri()
                                << "] new routing will be "
                                << LimitedPrinter(outrr, 2048, d_allocator_p);
     }
@@ -309,22 +327,21 @@ void RelayQueueEngine::onHandleConfiguredDispatched(
 
     // Rebuild consumers for routing
     const mqbi::QueueCounts& counts = it->second.d_counts;
-
+    App_State*               app    = 0;
     if (counts.d_readCount > 0) {
-        AppsMap::const_iterator itApp = d_apps.find(upstreamSubQueueId);
-        App_State&              app   = *itApp->second;
+        app = findApp(upstreamSubQueueId);
+        BSLS_ASSERT_SAFE(app);
 
-        BSLS_ASSERT_SAFE(itApp != d_apps.end());
-
-        applyConfiguration(app, *context);
+        applyConfiguration(*app, *context);
     }
 
-    BALL_LOG_INFO_BLOCK
+    BALL_LOGTHROTTLE_INFO_BLOCK(k_MAX_INSTANT_MESSAGES, k_NS_PER_MESSAGE)
     {
         mqbcmd::QueueEngine outqe(d_allocator_p);
         loadInternals(&outqe);
 
-        BALL_LOG_OUTPUT_STREAM << "For queue [" << d_queueState_p->uri()
+        BALL_LOG_OUTPUT_STREAM << "[THROTTLED] For queue ["
+                               << d_queueState_p->uri()
                                << "], the engine config is "
                                << LimitedPrinter(outqe, 2048, d_allocator_p);
     }
@@ -332,11 +349,9 @@ void RelayQueueEngine::onHandleConfiguredDispatched(
     // Invoke callback sending ConfigureQueue response before PUSHing.
     context->invokeCallback();
 
-    // 'downstreamSubQueueId' can represent a producer, or a consumer with no
-    // capacity or with some capacity.  We want to invoke 'onHandleUsable' only
-    // in the later case.
-
-    deliverMessages();
+    if (app) {
+        processAppRedelivery(upstreamSubQueueId, app);
+    }
 }
 
 void RelayQueueEngine::onHandleReleased(
@@ -346,7 +361,7 @@ void RelayQueueEngine::onHandleReleased(
     const bsl::shared_ptr<QueueEngineUtil_ReleaseHandleProctor>& proctor)
 {
     d_queueState_p->queue()->dispatcher()->execute(
-        bdlf::BindUtil::bind(mwcu::WeakMemFnUtil::weakMemFn(
+        bdlf::BindUtil::bind(bmqu::WeakMemFnUtil::weakMemFn(
                                  &RelayQueueEngine::onHandleReleasedDispatched,
                                  d_self.acquireWeak()),
                              status,
@@ -444,7 +459,7 @@ void RelayQueueEngine::onHandleReleasedDispatched(
     BSLS_ASSERT_SAFE(appStateIt != d_apps.end());
     BSLS_ASSERT_SAFE(appStateIt->second);
 
-    App_State& app = *appStateIt->second;
+    App_State* app = appStateIt->second.get();
 
     if (streamResult.hasNoHandleStreamConsumers()) {
         // There are no more consumers for this subStream.
@@ -459,12 +474,10 @@ void RelayQueueEngine::onHandleReleasedDispatched(
             // The handle has a valid consumer priority, meaning that a
             // downstream client is attempting to release the consumer portion
             // of the handle without having first configured it to have null
-            // streamParameters (i.e. invalid consumerPriority).  This is not
-            // the expected flow since we expect an incoming configureQueue
-            // with null streamParameters to precede a 'releaseHandle' that
-            // releases the consumer portion of the handle.
-            BALL_LOG_ERROR
-                << "#QUEUE_IMPROPER_BEHAVIOR "
+            // streamParameters (i.e. invalid consumerPriority).
+            // This is expected in shutdown V2 where we minimize the
+            // number of requests.
+            BALL_LOG_INFO
                 << "For queue [" << d_queueState_p->uri() << "],  received a "
                 << "'releaseHandle' releasing the consumer portion of handle "
                 << "[id: " << handle->id()
@@ -488,7 +501,7 @@ void RelayQueueEngine::onHandleReleasedDispatched(
             handle->setStreamParameters(nullStreamParams);
         }
 
-        app.invalidate(handle);
+        app->invalidate(handle);
 
         // This is in continuation of the special-case handling above.  If the
         // client is attempting to release the consumer portion of an *active*
@@ -498,8 +511,8 @@ void RelayQueueEngine::onHandleReleasedDispatched(
         // the effects of a configureQueue with null streamParameters.  Note
         // that this may affect the 'd_queueState_p->streamParameters()'.
 
-        if (app.transferUnconfirmedMessages(handle, info)) {
-            processAppRedelivery(app, info.appId());
+        if (app->transferUnconfirmedMessages(handle, info)) {
+            processAppRedelivery(upstreamSubQueueId, app);
         }
         else {
             // We lost the last reader.
@@ -509,30 +522,30 @@ void RelayQueueEngine::onHandleReleasedDispatched(
             // readers), because those messages may be re-routed by the primary
             // to another client.  Also get rid of any pending and
             // to-be-redelivered messages.
-            mqbu::StorageKey appKey = mqbu::StorageKey(upstreamSubQueueId);
-            afterQueuePurged(info.appId(), appKey);
+            beforeOneAppRemoved(upstreamSubQueueId);
+            d_pushStream.removeApp(upstreamSubQueueId);
+            app->clear();
         }
         if (streamResult.hasNoHandleStreamProducers()) {
             // Remove the producer handle from cached producers/consumers
-            app.d_cache.erase(handle);
+            app->d_cache.erase(handle);
         }
     }
 
     if (streamResult.isQueueStreamEmpty()) {
+        unsigned int numMessages = d_pushStream.removeApp(upstreamSubQueueId);
+
         BALL_LOG_INFO << "For queue [" << d_queueState_p->uri()
                       << "], removing App for appId: [" << info.appId()
                       << "] and virtual storage associated with"
-                      << " upstreamSubQueueId: [" << upstreamSubQueueId << "]";
+                      << " upstreamSubQueueId: [" << upstreamSubQueueId << "]"
+                      << " with " << numMessages << " messages";
 
-        BSLS_ASSERT_SAFE(app.d_cache.empty());
-        const bool removed = d_subStreamMessages_p->removeVirtualStorage(
-            mqbu::StorageKey(upstreamSubQueueId));
-
-        BSLS_ASSERT_SAFE(removed);
-        (void)removed;  // Compiler happiness
+        BSLS_ASSERT_SAFE(app->d_cache.empty());
 
         // Remove and delete empty App_State
         d_apps.erase(appStateIt);
+        d_appIds.erase(app->appId());
         d_queueState_p->removeUpstreamParameters(upstreamSubQueueId);
         d_queueState_p->abandon(upstreamSubQueueId);
     }
@@ -553,12 +566,7 @@ void RelayQueueEngine::deliverMessages()
     BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
         d_queueState_p->queue()));
 
-    // Auto-purge on exit.
-    // TBD: We need to revisit this.  We would prefer to have
-    //      'deliverMessages()' called once for a bunch of messages, since
-    //      what we have now is inefficient but it's less of an overhead here
-    //      as compared to the primary, so this is why we haven't implemented
-    //      this optimization yet.
+    // Auto-purge broadcast storage on exit.
     AutoPurger onExit(*this);
 
     // The guard MUST be created before the no consumers check.  This is
@@ -568,70 +576,109 @@ void RelayQueueEngine::deliverMessages()
 
     // Deliver messages until either:
     //   1. End of storage; or
-    //   2. subStream's capacity is saturated
+    //   2. All subStreams return 'e_NO_CAPACITY_ALL'
 
-    QueueEngineUtil_AppsDeliveryContext context(d_queueState_p->queue(),
-                                                d_allocator_p);
-    while (context.d_doRepeat) {
-        context.reset();
+    while (d_appsDeliveryContext.reset(d_storageIter_mp.get())) {
+        // Assume, all Apps need to deliver (some may be at capacity)
+        unsigned int numApps = d_storageIter_mp->numApps();
 
-        for (AppsMap::iterator it = d_apps.begin(); it != d_apps.end(); ++it) {
-            // First try to send any message in the redelivery list ...
-            bsls::TimeInterval     delay;
-            const AppStateSp&      appSp = it->second;
-            const mqbu::StorageKey key(appSp->upstreamSubQueueId());
-            mqbi::Storage* storage = d_subStreamMessages_p->virtualStorage(
-                key);
-            const bsl::string& appId = appSp->d_appId;
-            BSLS_ASSERT_SAFE(storage);
+        for (unsigned int i = 0; i < numApps; ++i) {
+            const PushStream::Element* element = d_storageIter_mp->element(i);
 
-            appSp->processDeliveryLists(&delay, key, *storage, appId);
+            App_State* app = element->app().d_app.get();
 
-            if (delay != bsls::TimeInterval()) {
-                appSp->scheduleThrottle(
-                    mwcsys::Time::nowMonotonicClock() + delay,
-                    bdlf::BindUtil::bind(
-                        &RelayQueueEngine::processAppRedelivery,
-                        this,
-                        bsl::ref(*appSp),
-                        appSp->d_appId));
+            BSLS_ASSERT_SAFE(app);
+
+            if (!app->isAuthorized()) {
+                // This App got the PUSH (recorded in the PushStream)
+                BMQ_LOGTHROTTLE_ERROR()
+                    << "#NOT AUTHORIZED "
+                    << "Remote queue: " << d_queueState_p->uri()
+                    << " (id: " << d_queueState_p->id()
+                    << ") discarding a PUSH message for guid "
+                    << d_storageIter_mp->guid() << ", with NOT AUTHORIZED App "
+                    << app->appId();
+
+                d_storageIter_mp->removeCurrentElement();
             }
-            else if (appSp->redeliveryListSize() == 0) {
-                context.processApp(*appSp);
+            else if (element->app().isLastPush(d_storageIter_mp->guid())) {
+                // This `app` has already seen this message.
+                d_storageIter_mp->removeCurrentElement();
+            }
+            else {
+                element->app().setLastPush(d_storageIter_mp->guid());
+
+                if (d_appsDeliveryContext.processApp(*app, i)) {
+                    // The current element has made it either to delivery or
+                    // putAside and it can be removed
+                    d_storageIter_mp->removeCurrentElement();
+                }
+                else {
+                    // The current element has made it to resumePoint and it
+                    // cannot be removed.
+                    element->app().setLastPush(bmqt::MessageGUID());
+                }
             }
         }
-        context.deliverMessage();
+        d_appsDeliveryContext.deliverMessage();
     }
 }
 
-void RelayQueueEngine::processAppRedelivery(App_State&         state,
-                                            const bsl::string& appId)
+void RelayQueueEngine::processAppRedelivery(unsigned int upstreamSubQueueId,
+                                            App_State*   app)
 {
     // executed by the *QUEUE DISPATCHER* thread
+
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
         d_queueState_p->queue()));
 
-    BSLS_ASSERT_SAFE(d_subStreamMessages_p);
+    // Position to the last 'Routers::e_NO_CAPACITY_ALL' point
+    bslma::ManagedPtr<PushStreamIterator> storageIter_mp;
+    PushStreamIterator*                   start = 0;
 
-    bsls::TimeInterval     delay;
-    const mqbu::StorageKey key(state.upstreamSubQueueId());
-    mqbi::Storage* virtualStorage = d_subStreamMessages_p->virtualStorage(key);
+    if (app->resumePoint().isUnset()) {
+        start = d_storageIter_mp.get();
+    }
+    else {
+        PushStream::iterator it = d_pushStream.d_stream.find(
+            app->resumePoint());
 
-    BSLS_ASSERT_SAFE(virtualStorage);
+        if (it == d_pushStream.d_stream.end()) {
+            // The message is gone because of purge
+            // Start at the beginning
+            it = d_pushStream.d_stream.begin();
+        }
 
-    state.processDeliveryLists(&delay, key, *virtualStorage, appId);
+        storageIter_mp.load(new (*d_allocator_p)
+                                VirtualPushStreamIterator(upstreamSubQueueId,
+                                                          storage(),
+                                                          &d_pushStream,
+                                                          it),
+                            d_allocator_p);
+
+        start = storageIter_mp.get();
+    }
+
+    bsls::TimeInterval delay;
+    app->deliverMessages(&delay,
+                         d_realStorageIter_mp.get(),
+                         start,
+                         d_storageIter_mp.get());
 
     if (delay != bsls::TimeInterval()) {
-        state.scheduleThrottle(
-            mwcsys::Time::nowMonotonicClock() + delay,
+        app->scheduleThrottle(
+            bmqsys::Time::nowMonotonicClock() + delay,
             bdlf::BindUtil::bind(&RelayQueueEngine::processAppRedelivery,
                                  this,
-                                 bsl::ref(state),
-                                 appId));
+                                 upstreamSubQueueId,
+                                 app));
     }
-    else if (state.redeliveryListSize() == 0) {
-        deliverMessages();
+
+    if (app->isReadyForDelivery()) {
+        // can continue delivering
+        const bmqt::MessageGUID dummy;
+        afterNewMessage(dummy, 0);
     }
 }
 
@@ -679,9 +726,10 @@ void RelayQueueEngine::configureApp(
         &previousParameters,
         upstreamSubQueueId);
 
-    BALL_LOG_INFO << "For queue '" << d_queueState_p->uri() << "', about to "
-                  << "rebuild upstream state [current stream parameters: "
-                  << previousParameters << "]";
+    BMQ_LOGTHROTTLE_INFO()
+        << "For queue '" << d_queueState_p->uri()
+        << "', about to rebuild upstream state [current stream parameters: "
+        << previousParameters << "]";
 
     rebuildUpstreamState(context->d_routing_sp.get(),
                          &appState,
@@ -700,12 +748,13 @@ void RelayQueueEngine::configureApp(
     if (hadParameters && previousParameters == streamParamsToSend) {
         // Last advertised stream parameters for this queue are same as the
         // newly advertised ones.  No need to send any notification upstream.
-        BALL_LOG_INFO << "For queue [" << d_queueState_p->uri()
-                      << "], last advertised stream parameter by the queue"
-                      << " were same as newly advertised ones: "
-                      << previousParameters
-                      << ". Not sending configure-queue request upstream, but"
-                      << " returning success to downstream client.";
+
+        BMQ_LOGTHROTTLE_INFO()
+            << "For queue [" << d_queueState_p->uri()
+            << "], last advertised stream parameter by the queue"
+            << " were same as newly advertised ones: " << previousParameters
+            << ". Not sending configure-queue request upstream, but"
+            << " returning success to downstream client.";
 
         // Set the parameters and inform downstream client of success
         handle->setStreamParameters(streamParameters);
@@ -754,13 +803,13 @@ void RelayQueueEngine::rebuildUpstreamState(Routers::AppContext* context,
          ++iter) {
         const bmqp_ctrlmsg::StreamParameters& streamParameters =
             iter->second.d_streamParameters;
-        mwcu::MemOutStream errorStream(d_allocator_p);
+        bmqu::MemOutStream errorStream(d_allocator_p);
         context->load(iter->first,
                       &errorStream,
                       iter->second.d_downstreamSubQueueId,
                       upstreamSubQueueId,
                       streamParameters,
-                      appState->d_routing_sp.get());
+                      appState->routing().get());
 
         if (errorStream.length() > 0) {
             BALL_LOG_WARN << "#BMQ_SUBSCRIPTION_FAILURE for queue '"
@@ -780,9 +829,10 @@ void RelayQueueEngine::rebuildUpstreamState(Routers::AppContext* context,
 
     d_queueState_p->setUpstreamParameters(upstreamParams, upstreamSubQueueId);
 
-    BALL_LOG_INFO << "For queue '" << d_queueState_p->uri() << "', rebuilt "
-                  << "upstream parameters [new upstream parameters: "
-                  << upstreamParams << "]";
+    BMQ_LOGTHROTTLE_INFO()
+        << "For queue '" << d_queueState_p->uri()
+        << "', rebuilt upstream parameters [new upstream parameters: "
+        << upstreamParams << "]";
 }
 
 void RelayQueueEngine::applyConfiguration(App_State&        app,
@@ -794,9 +844,9 @@ void RelayQueueEngine::applyConfiguration(App_State&        app,
     BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
         d_queueState_p->queue()));
 
-    app.reset();
+    app.undoRouting();
 
-    app.d_routing_sp = context.d_routing_sp;
+    app.routing() = context.d_routing_sp;
 
     if (!d_queueState_p->isDeliverConsumerPriority()) {
         if (d_queueState_p->hasMultipleSubStreams()) {
@@ -817,9 +867,30 @@ void RelayQueueEngine::applyConfiguration(App_State&        app,
         }
     }
 
-    app.d_routing_sp->apply();
+    app.routing()->apply();
 
-    app.d_routing_sp->registerSubscriptions();
+    Routers::Consumers& consumers = app.routing()->d_consumers;
+
+    for (Routers::Consumers::const_iterator itConsumer = consumers.begin();
+         itConsumer != consumers.end();
+         ++itConsumer) {
+        Routers::Consumer& consumer = consumers.value(itConsumer);
+        mqbi::QueueHandle* handle   = itConsumer->first;
+
+        if (!d_queueState_p->handleCatalog().hasHandle(handle)) {
+            // This can happen with out-of-order Configure responses as in the
+            // case when network disconnects with two concurrent requests and
+            // the second gets (error) response before the first one gets
+            // cancelled.
+            itConsumer->second.lock()->invalidate();
+
+            app.routing()->finalize();
+
+            continue;  // CONTINUE
+        }
+
+        consumer.registerSubscriptions(handle);
+    }
 
     BALL_LOG_INFO << "For queue '" << d_queueState_p->uri() << "', "
                   << "rebuilt highest priority consumers: [count: "
@@ -827,24 +898,24 @@ void RelayQueueEngine::applyConfiguration(App_State&        app,
 }
 
 // CREATORS
-RelayQueueEngine::RelayQueueEngine(
-    QueueState*                  queueState,
-    mqbs::VirtualStorageCatalog* subStreamMessages,
-    const mqbconfm::Domain&      domainConfig,
-    bslma::Allocator*            allocator)
+RelayQueueEngine::RelayQueueEngine(QueueState*             queueState,
+                                   const mqbconfm::Domain& domainConfig,
+                                   bslma::Allocator*       allocator)
 : d_queueState_p(queueState)
-, d_subStreamMessages_p(subStreamMessages)
+, d_pushStream(queueState->pushElementsPool(), allocator)
 , d_domainConfig(domainConfig, allocator)
 , d_apps(allocator)
+, d_appIds(allocator)
 , d_self(this)  // use default allocator
-, d_scheduler_p(queueState->scheduler())
+, d_appsDeliveryContext(d_queueState_p->queue(), allocator)
+, d_storageIter_mp()
+, d_realStorageIter_mp()
 , d_allocator_p(allocator)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(queueState);
     BSLS_ASSERT_SAFE(queueState->queue());
     BSLS_ASSERT_SAFE(queueState->storage());
-    BSLS_ASSERT_SAFE(subStreamMessages);
 
     d_throttledRejectedMessages.initialize(
         1,
@@ -865,21 +936,33 @@ RelayQueueEngine::~RelayQueueEngine()
 
 // MANIPULATORS
 int RelayQueueEngine::configure(
-    BSLS_ANNOTATION_UNUSED bsl::ostream& errorDescription)
+    BSLS_ANNOTATION_UNUSED bsl::ostream& errorDescription,
+    BSLS_ANNOTATION_UNUSED bool          isReconfigure)
 {
-    BSLS_ASSERT_SAFE(d_subStreamMessages_p);
     return 0;
 }
 
-void RelayQueueEngine::resetState()
+void RelayQueueEngine::resetState(bool isShuttingDown)
 {
-    d_self.reset(this);
-
     for (AppsMap::iterator it = d_apps.begin(); it != d_apps.end(); ++it) {
-        it->second->reset();
-        it->second->d_routing_sp.reset();
+        it->second->undoRouting();
+        if (isShuttingDown) {
+            it->second->routing()->reset();
+        }
+        // else, keep the routing which new engine can reuse
     }
-    d_apps.clear();
+    if (!isShuttingDown) {
+        d_apps.clear();
+    }
+
+    d_realStorageIter_mp = storage()->getIterator(
+        mqbu::StorageKey::k_NULL_KEY);
+
+    d_storageIter_mp.load(
+        new (*d_allocator_p) PushStreamIterator(storage(),
+                                                &d_pushStream,
+                                                d_pushStream.d_stream.begin()),
+        d_allocator_p);
 }
 
 int RelayQueueEngine::rebuildInternalState(
@@ -963,7 +1046,7 @@ mqbi::QueueHandle* RelayQueueEngine::getHandle(
         queueHandle = d_queueState_p->handleCatalog().createHandle(
             clientContext,
             handleParameters,
-            &d_queueState_p->stats());
+            d_queueState_p->stats().get());
         handleCreated = true;
 
         BALL_LOG_INFO << "For queue [" << d_queueState_p->uri()
@@ -990,30 +1073,25 @@ mqbi::QueueHandle* RelayQueueEngine::getHandle(
     const bmqp_ctrlmsg::SubQueueIdInfo& downstreamInfo =
         bmqp::QueueUtil::extractSubQueueInfo(handleParameters);
 
-    AppsMap::iterator itApp = d_apps.find(upstreamSubQueueId);
-    if (itApp == d_apps.end()) {
+    App_State* app = findApp(upstreamSubQueueId);
+    if (app == 0) {
         // Create and insert new App_State
         // Correlate downstreamInfo with upstream
-        mqbu::StorageKey   appKey = mqbu::StorageKey(upstreamSubQueueId);
-        bsl::ostringstream errorDesc;
-        d_subStreamMessages_p->addVirtualStorage(errorDesc,
-                                                 downstreamInfo.appId(),
-                                                 appKey);
 
-        AppStateSp appStateSp(new (*d_allocator_p) App_State(
-                                  upstreamSubQueueId,
-                                  downstreamInfo.appId(),
-                                  d_subStreamMessages_p->getIterator(appKey),
-                                  d_queueState_p->queue(),
-                                  d_scheduler_p,
-                                  appKey,
-                                  d_queueState_p->routingContext(),
-                                  d_allocator_p),
+        AppStateSp appStateSp(new (*d_allocator_p)
+                                  App_State(upstreamSubQueueId,
+                                            downstreamInfo.appId(),
+                                            d_queueState_p->queue(),
+                                            d_queueState_p->scheduler(),
+                                            d_queueState_p->routingContext(),
+                                            d_allocator_p),
                               d_allocator_p);
-        BSLS_ASSERT_SAFE(appStateSp->d_storageIter_mp);
 
-        itApp = d_apps.insert(bsl::make_pair(upstreamSubQueueId, appStateSp))
-                    .first;
+        app = appStateSp.get();
+
+        d_apps.insert(bsl::make_pair(upstreamSubQueueId, appStateSp));
+
+        d_appIds.insert(bsl::make_pair(app->appId(), appStateSp));
 
         d_queueState_p->adopt(appStateSp);
 
@@ -1024,8 +1102,15 @@ mqbi::QueueHandle* RelayQueueEngine::getHandle(
                       << " upstreamSubQueueId: [" << upstreamSubQueueId << "]";
     }
 
-    BSLS_ASSERT_SAFE(itApp != d_apps.end());
-    App_State& app(*itApp->second);
+    BSLS_ASSERT_SAFE(app);
+
+    if (!app->isAuthorized()) {
+        if (app->authorize()) {
+            BALL_LOG_INFO << "Queue '" << d_queueState_p->uri()
+                          << "' authorized App '" << downstreamInfo.appId()
+                          << "' with ordinal " << app->ordinal() << ".";
+        }
+    }
 
     queueHandle->registerSubStream(
         downstreamInfo,
@@ -1036,7 +1121,7 @@ mqbi::QueueHandle* RelayQueueEngine::getHandle(
     // If a new reader/write, insert its (default-valued) stream parameters
     // into our map of consumer stream parameters advertised upstream.
     bsl::pair<App_State::CachedParametersMap::iterator, bool> insertResult =
-        app.d_cache.insert(bsl::make_pair(
+        app->d_cache.insert(bsl::make_pair(
             queueHandle,
             RelayQueueEngine_AppState::CachedParameters(handleParameters,
                                                         downstreamInfo.subId(),
@@ -1105,13 +1190,13 @@ void RelayQueueEngine::configureHandle(
         return;  // RETURN
     }
 
-    unsigned int      upstreamSubQueueId = it->second.d_upstreamSubQueueId;
-    AppsMap::iterator itApp(d_apps.find(upstreamSubQueueId));
-    BSLS_ASSERT_SAFE(itApp != d_apps.end());
+    unsigned int upstreamSubQueueId = it->second.d_upstreamSubQueueId;
+    App_State*   app                = findApp(upstreamSubQueueId);
+    BSLS_ASSERT_SAFE(app);
 
     context->initializeRouting(d_queueState_p->routingContext());
 
-    configureApp(*itApp->second, handle, streamParameters, context);
+    configureApp(*app, handle, streamParameters, context);
 }
 
 void RelayQueueEngine::releaseHandle(
@@ -1160,13 +1245,13 @@ void RelayQueueEngine::releaseHandleImpl(
         handle->subStreamInfos().find(appId);
     BSLS_ASSERT_SAFE(it != handle->subStreamInfos().end());
 
-    unsigned int      upstreamSubQueueId = it->second.d_upstreamSubQueueId;
-    AppsMap::iterator itApp              = d_apps.find(upstreamSubQueueId);
+    unsigned int upstreamSubQueueId = it->second.d_upstreamSubQueueId;
+    App_State*   app                = findApp(upstreamSubQueueId);
 
-    BSLS_ASSERT_SAFE(itApp != d_apps.end());
-    App_State::CachedParametersMap::iterator itHandle =
-        itApp->second->d_cache.find(handle);
-    BSLS_ASSERT_SAFE(itHandle != itApp->second->d_cache.end());
+    BSLS_ASSERT_SAFE(app);
+    App_State::CachedParametersMap::iterator itHandle = app->d_cache.find(
+        handle);
+    BSLS_ASSERT_SAFE(itHandle != app->d_cache.end());
     bmqp_ctrlmsg::QueueHandleParameters& cachedHandleParameters =
         itHandle->second.d_handleParameters;
 
@@ -1231,7 +1316,7 @@ void RelayQueueEngine::releaseHandleImpl(
         effectiveHandleParam,
         upstreamSubQueueId,
         bdlf::BindUtil::bind(
-            mwcu::WeakMemFnUtil::weakMemFn(&RelayQueueEngine::onHandleReleased,
+            bmqu::WeakMemFnUtil::weakMemFn(&RelayQueueEngine::onHandleReleased,
                                            d_self.acquireWeak()),
             bdlf::PlaceHolders::_1,  // Status
             handle,
@@ -1269,15 +1354,10 @@ void RelayQueueEngine::onHandleUsable(mqbi::QueueHandle* handle,
 
     if (d_queueState_p->routingContext().onUsable(&upstreamSubQueueId,
                                                   upstreamSubscriptionId)) {
-        // TEMPORARILY
-        // Call the same 'deliverMessages' as in the case of 'afterNewMessage'
-        // which attempts to delivery every message for every application
-        // (which is '__defaut' in non-fanout case.  While the logic is
-        // simplified, it may be suboptimal if the case of large number of
-        // applications and small capacity limits.
+        App_State* app = findApp(upstreamSubQueueId);
 
-        (void)upstreamSubQueueId;
-        deliverMessages();
+        BSLS_ASSERT_SAFE(app);
+        processAppRedelivery(upstreamSubQueueId, app);
     }
 }
 
@@ -1314,33 +1394,21 @@ int RelayQueueEngine::onConfirmMessage(mqbi::QueueHandle*       handle,
     // Specified 'subscriptionId' is the downstream one.  Need to calculate
     // corresponding appKey.  This is done by retrieving the upstream subId
     // and using it to create the appKey.
-    AppsMap::iterator itApp = d_apps.find(upstreamSubQueueId);
+    App_State* app = findApp(upstreamSubQueueId);
 
-    BSLS_ASSERT_SAFE(itApp != d_apps.end());
+    BSLS_ASSERT_SAFE(app);
 
-    // Inform the 'app' that 'msgGUID' is about to be removed from its virtual
-    // storage, so that app can advance its iterator etc if required.
-
-    QueueEngineUtil_AppState& app = *itApp->second;
-
-    app.beforeMessageRemoved(msgGUID, false);
-
-    // Create appKey and remove message.
-    const mqbu::StorageKey appKey(upstreamSubQueueId);
-    d_subStreamMessages_p->remove(msgGUID, appKey);
-
-    app.tryCancelThrottle(handle, msgGUID);
+    app->tryCancelThrottle(handle, msgGUID);
 
     // If proxy, also inform the physical storage.
     if (d_queueState_p->domain()->cluster()->isRemote()) {
         mqbi::Storage*            storage = d_queueState_p->storage();
-        mqbi::StorageResult::Enum rc      = storage->releaseRef(msgGUID,
-                                                           appKey,
-                                                           0ULL);
+        mqbi::StorageResult::Enum rc      = storage->confirm(msgGUID,
+                                                        app->appKey(),
+                                                        0ULL);
         if (mqbi::StorageResult::e_ZERO_REFERENCES == rc) {
             // Since there are no references, there should be no app holding
             // msgGUID and no need to call `beforeMessageRemoved`
-            BSLS_ASSERT_SAFE(!d_subStreamMessages_p->hasMessage(msgGUID));
 
             return rc_NO_MORE_REFERENCES;  // RETURN
         }
@@ -1367,60 +1435,50 @@ int RelayQueueEngine::onRejectMessage(
     // Retrieve upstream subId and use it to create an appKey to reject the
     // message.
 
-    AppsMap::iterator itApp = d_apps.find(upstreamSubQueueId);
+    App_State* app = findApp(upstreamSubQueueId);
 
-    BSLS_ASSERT_SAFE(itApp != d_apps.end());
+    BSLS_ASSERT_SAFE(app);
 
     // Inform the 'app' that 'msgGUID' is about to be removed from its virtual
     // storage, so that app can advance its iterator etc if required.
 
-    QueueEngineUtil_AppState& app = *itApp->second;
-    const mqbu::StorageKey    appKey(upstreamSubQueueId);
-    int                       result = 0;
+    int result = 0;
 
     bslma::ManagedPtr<mqbi::StorageIterator> message;
-
-    mqbi::StorageResult::Enum rc = d_subStreamMessages_p->getIterator(&message,
-                                                                      appKey,
-                                                                      msgGUID);
+    mqbi::StorageResult::Enum rc = storage()->getIterator(&message,
+                                                          app->appKey(),
+                                                          msgGUID);
 
     if (rc == mqbi::StorageResult::e_SUCCESS) {
-        result = message->rdaInfo().counter();
+        bmqp::RdaInfo& rda =
+            message->appMessageState(app->ordinal()).d_rdaInfo;
+
+        result = rda.counter();
 
         if (d_throttledRejectedMessages.requestPermission()) {
             BALL_LOG_INFO << "[THROTTLED] Queue '" << d_queueState_p->uri()
                           << "' rejecting PUSH [GUID: '" << msgGUID
-                          << "', subQueueId: " << app.upstreamSubQueueId()
-                          << "] with the counter: [" << message->rdaInfo()
-                          << "]";
+                          << "', subQueueId: " << app->upstreamSubQueueId()
+                          << "] with the counter: [" << rda << "]";
         }
 
-        if (!message->rdaInfo().isUnlimited()) {
+        if (!rda.isUnlimited()) {
             BSLS_ASSERT_SAFE(result);
-            message->rdaInfo().setPotentiallyPoisonous(true);
-            message->rdaInfo().setCounter(--result);
+            rda.setPotentiallyPoisonous(true);
+            rda.setCounter(--result);
 
             if (result == 0) {
-                // Inform the 'app' that 'msgGUID' is about to be removed from
-                // its virtual storage, so that app can advance its iterator
-                // etc if required.
-
-                app.beforeMessageRemoved(msgGUID, false);
-
-                d_subStreamMessages_p->remove(msgGUID, appKey);
+                // TODO d_subStreamMessages_p->remove(msgGUID, appKey);
 
                 if (d_queueState_p->domain()->cluster()->isRemote()) {
-                    rc = d_queueState_p->storage()->releaseRef(msgGUID,
-                                                               appKey,
-                                                               0ULL,
-                                                               true);
+                    rc =
+                        storage()->confirm(msgGUID, app->appKey(), 0ULL, true);
                     if (mqbi::StorageResult::e_ZERO_REFERENCES == rc) {
                         // Since there are no references, there should be no
                         // app holding msgGUID and no need to call
                         // `beforeMessageRemoved`.
-                        BSLS_ASSERT_SAFE(
-                            !d_subStreamMessages_p->hasMessage(msgGUID));
-                        d_queueState_p->storage()->remove(msgGUID, 0, true);
+
+                        storage()->remove(msgGUID, 0);
                     }
                 }
             }
@@ -1430,7 +1488,7 @@ int RelayQueueEngine::onRejectMessage(
         BALL_LOG_INFO << "[THROTTLED] Queue '" << d_queueState_p->uri()
                       << "' got reject for an unknown message [GUID: '"
                       << msgGUID
-                      << "', subQueueId: " << app.upstreamSubQueueId() << "]";
+                      << "', subQueueId: " << app->upstreamSubQueueId() << "]";
     }
 
     return result;
@@ -1444,18 +1502,8 @@ void RelayQueueEngine::beforeMessageRemoved(const bmqt::MessageGUID& msgGUID)
     BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
         d_queueState_p->queue()));
 
-    for (AppsMap::iterator iter = d_apps.begin(); iter != d_apps.end();
-         ++iter) {
-        App_State& app(*iter->second);
-
-        app.beforeMessageRemoved(msgGUID, true);
-
-        mqbu::StorageKey appKey = mqbi::QueueEngine::k_DEFAULT_APP_KEY;
-
-        if (d_queueState_p->hasMultipleSubStreams()) {
-            appKey = app.d_appKey;
-        }
-        d_subStreamMessages_p->remove(msgGUID, appKey);
+    if (!d_storageIter_mp->atEnd() && (d_storageIter_mp->guid() == msgGUID)) {
+        d_storageIter_mp->advance();
     }
 }
 
@@ -1485,43 +1533,19 @@ void RelayQueueEngine::afterQueuePurged(const bsl::string&      appId,
         BSLS_ASSERT_SAFE(appId == bmqp::ProtocolUtil::k_NULL_APP_ID);
 
         // Purge all virtual storages, and reset all iterators.
-        d_subStreamMessages_p->removeAll(mqbu::StorageKey::k_NULL_KEY);
+
+        d_pushStream.removeAll();
 
         for (AppsMap::iterator it = d_apps.begin(); it != d_apps.end(); ++it) {
-            it->second->d_storageIter_mp->reset();
-            it->second->d_redeliveryList.clear();
+            it->second->clear();
         }
+        d_storageIter_mp->reset();
     }
     else {
-        // Purge virtual storage and reset iterator corresponding to
-        // the specified 'appKey', which can be constructed by using
-        // either upstream subId or storage-level appKey.
+        // Purge virtual storage corresponding to the specified 'appKey'.
 
-        // Lookup in 'd_subStreamMessages_p' first.
-        bsl::string      appIdFound;
-        mqbu::StorageKey subStreamAppKey;
-        bool             foundAppKey = true;
-
-        if (d_subStreamMessages_p->hasVirtualStorage(appKey, &appIdFound)) {
-            BSLS_ASSERT_SAFE(appIdFound == appId);
-
-            subStreamAppKey = appKey;
-        }
-        else if (d_queueState_p->storage()->hasVirtualStorage(appKey,
-                                                              &appIdFound)) {
-            // Note that 'appId' may not exist in
-            // 'd_subStreamMessages_p' if that consumer is not
-            // connected (directly or indirectly) to this relay node.
-
-            BSLS_ASSERT_SAFE(appIdFound == appId);
-
-            foundAppKey = d_subStreamMessages_p->hasVirtualStorage(
-                appIdFound,
-                &subStreamAppKey);
-        }
-        else {
-            foundAppKey = false;
-
+        AppIds::const_iterator itApp = d_appIds.find(appId);
+        if (itApp == d_appIds.end()) {
             BALL_LOG_ERROR << "#QUEUE_STORAGE_NOTFOUND "
                            << "For queue '" << d_queueState_p->uri()
                            << "', queueKey '" << d_queueState_p->key()
@@ -1530,19 +1554,12 @@ void RelayQueueEngine::afterQueuePurged(const bsl::string&      appId,
                            << "' while attempting to purge its virtual "
                            << "storage.";
         }
+        else {
+            // Clear out virtual storage corresponding to the App.
+            beforeOneAppRemoved(itApp->second->upstreamSubQueueId());
+            d_pushStream.removeApp(itApp->second->upstreamSubQueueId());
 
-        if (foundAppKey) {
-            // Clear out virtual storage corresponding to the retrieved
-            // 'subStreamAppKey'.
-            d_subStreamMessages_p->removeAll(subStreamAppKey);
-
-            for (AppsMap::iterator it = d_apps.begin(); it != d_apps.end();
-                 ++it) {
-                if (it->second->d_appId == appIdFound) {
-                    it->second->d_storageIter_mp->reset();
-                    it->second->d_redeliveryList.clear();
-                }
-            }
+            itApp->second->clear();
         }
     }
 }
@@ -1559,6 +1576,20 @@ void RelayQueueEngine::onTimer(
     // NOTHING
 }
 
+mqbi::StorageResult::Enum RelayQueueEngine::evaluateAppSubscriptions(
+    BSLS_ANNOTATION_UNUSED const bmqp::PutHeader& putHeader,
+    BSLS_ANNOTATION_UNUSED const bsl::shared_ptr<bdlbb::Blob>& appData,
+    BSLS_ANNOTATION_UNUSED const bmqp::MessagePropertiesInfo& mpi,
+    BSLS_ANNOTATION_UNUSED bsls::Types::Uint64 timestamp)
+{
+    // executed by the *QUEUE DISPATCHER* thread
+
+    BSLS_ASSERT_OPT(false && "should never be invoked");
+
+    // NOTHING
+    return mqbi::StorageResult::e_INVALID_OPERATION;
+}
+
 void RelayQueueEngine::loadInternals(mqbcmd::QueueEngine* out) const
 {
     // executed by the *QUEUE DISPATCHER* thread
@@ -1570,15 +1601,11 @@ void RelayQueueEngine::loadInternals(mqbcmd::QueueEngine* out) const
     mqbcmd::RelayQueueEngine& relayQueueEngine = out->makeRelay();
 
     int                          numSubStreams = 0;
-    mqbi::Storage::AppIdKeyPairs appIdKeyPairs;
-    if (d_subStreamMessages_p) {
-        numSubStreams = d_subStreamMessages_p->numVirtualStorages();
-        d_subStreamMessages_p->loadVirtualStorageDetails(&appIdKeyPairs);
-    }
-    else {
-        numSubStreams = d_queueState_p->storage()->numVirtualStorages();
-        d_queueState_p->storage()->loadVirtualStorageDetails(&appIdKeyPairs);
-    }
+    mqbi::Storage::AppInfos      appIdKeyPairs;
+
+    numSubStreams = storage()->numVirtualStorages();
+    storage()->loadVirtualStorageDetails(&appIdKeyPairs);
+
     BSLS_ASSERT_SAFE(static_cast<int>(appIdKeyPairs.size()) == numSubStreams);
 
     relayQueueEngine.numSubstreams() = numSubStreams;
@@ -1586,19 +1613,19 @@ void RelayQueueEngine::loadInternals(mqbcmd::QueueEngine* out) const
         bsl::vector<mqbcmd::RelayQueueEngineSubStream>& subStreams =
             relayQueueEngine.subStreams();
         subStreams.reserve(appIdKeyPairs.size());
-        for (size_t i = 0; i < appIdKeyPairs.size(); ++i) {
-            const mqbi::Storage::AppIdKeyPair& p = appIdKeyPairs[i];
 
+        for (mqbi::Storage::AppInfos::const_iterator cit =
+                 appIdKeyPairs.cbegin();
+             cit != appIdKeyPairs.cend();
+             ++cit) {
             subStreams.resize(subStreams.size() + 1);
             mqbcmd::RelayQueueEngineSubStream& subStream = subStreams.back();
-            subStream.appId()                            = p.first;
-            mwcu::MemOutStream appKey;
-            appKey << p.second;
-            subStream.appKey() = appKey.str();
-            subStream.numMessages() =
-                (d_subStreamMessages_p
-                     ? d_subStreamMessages_p->numMessages(p.second)
-                     : d_queueState_p->storage()->numMessages(p.second));
+            subStream.appId()                            = cit->first;
+            bmqu::MemOutStream appKey;
+            appKey << cit->second;
+            subStream.appKey()      = appKey.str();
+            subStream.numMessages() = d_queueState_p->storage()->numMessages(
+                cit->second);
         }
     }
 
@@ -1616,29 +1643,344 @@ void RelayQueueEngine::loadInternals(mqbcmd::QueueEngine* out) const
         &relayQueueEngine.routing());
 }
 
+void RelayQueueEngine::registerStorage(const bsl::string&      appId,
+                                       const mqbu::StorageKey& appKey,
+                                       unsigned int            appOrdinal)
+{
+    // executed by the *QUEUE DISPATCHER* thread
+
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
+        d_queueState_p->queue()));
+
+    AppIds::iterator iter = d_appIds.find(appId);
+
+    if (iter == d_appIds.end()) {
+        // No consumer has opened the queue with 'appId'.
+
+        return;  // RETURN
+    }
+
+    // A consumer has already opened the queue with 'appId'.
+
+    BALL_LOG_INFO << "Remote queue: " << d_queueState_p->uri()
+                  << " (id: " << d_queueState_p->id()
+                  << ") now has storage: [App Id: " << appId
+                  << ", key: " << appKey << ", ordinal: " << appOrdinal << "]";
+
+    iter->second->authorize(appKey, appOrdinal);
+}
+
+void RelayQueueEngine::unregisterStorage(const bsl::string&      appId,
+                                         const mqbu::StorageKey& appKey,
+                                         unsigned int            appOrdinal)
+{
+    // executed by the *QUEUE DISPATCHER* thread
+
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(d_queueState_p->queue()->dispatcher()->inDispatcherThread(
+        d_queueState_p->queue()));
+
+    AppIds::iterator iter = d_appIds.find(appId);
+    mqbu::StorageKey key;
+
+    if (iter == d_appIds.end()) {
+        // No consumer has opened the queue with 'appId'.
+    }
+    else {
+        // A consumer has already opened the queue with 'appId'.
+        BSLS_ASSERT_SAFE(iter->second->appKey() == appKey);
+
+        iter->second->unauthorize();
+    }
+
+    (void)appOrdinal;
+}
+
 bool RelayQueueEngine::subscriptionId2upstreamSubQueueId(
-    unsigned int* subQueueId,
-    unsigned int  subscriptionId) const
+    const bmqt::MessageGUID& msgGUID,
+    unsigned int*            subQueueId,
+    unsigned int             subscriptionId) const
 {
     if (subscriptionId == bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID) {
         BSLS_ASSERT_SAFE(d_apps.find(bmqp::QueueId::k_DEFAULT_SUBQUEUE_ID) !=
                          d_apps.end());
-        *subQueueId = bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID;
+        *subQueueId = bmqp::QueueId::k_DEFAULT_SUBQUEUE_ID;
     }
     else {
         const Routers::SubscriptionIds::SharedItem itId =
             d_queueState_p->routingContext().d_groupIds.find(subscriptionId);
         if (!itId) {
+            BMQ_LOGTHROTTLE_ERROR()
+                << "#QUEUE_UNKNOWN_SUBSCRIPTION_ID "
+                << "Remote queue: " << d_queueState_p->uri()
+                << " (id: " << d_queueState_p->id()
+                << ") received a PUSH message for guid " << msgGUID
+                << ", with unknown Subscription Id " << subscriptionId;
+
             return false;  // RETURN
         }
         if (itId->value().d_priorityGroup == 0) {
             // The 'd_queueContext.d_groupIds' may contain new ids for which
             // configure response is not received yet.
+
+            BMQ_LOGTHROTTLE_ERROR()
+                << "#QUEUE_UNKNOWN_SUBSCRIPTION_ID "
+                << "Remote queue: " << d_queueState_p->uri()
+                << " (id: " << d_queueState_p->id()
+                << ") received a PUSH message for guid " << msgGUID
+                << ", with unconfigured Subscription Id " << subscriptionId;
+
             return false;
         }
         *subQueueId = itId->value().upstreamSubQueueId();
     }
     return true;
+}
+
+unsigned int
+RelayQueueEngine::push(mqbi::StorageMessageAttributes*     attributes,
+                       const bmqt::MessageGUID&            msgGUID,
+                       const bsl::shared_ptr<bdlbb::Blob>& appData,
+                       bmqp::Protocol::SubQueueInfosArray& subscriptions,
+                       bool                                isOutOfOrder)
+{
+    if (isOutOfOrder) {
+        BSLS_ASSERT_SAFE(subscriptions.size() == 1);
+
+        // No guarantee of uniqueness.  Cannot use PushStream.
+        unsigned int subQueueId;
+
+        unsigned int subscriptionId = subscriptions.begin()->id();
+        unsigned int ordinalPlusOne = 0;  // Invalid value
+
+        // Reusing 'subscriptions' to 'setPushState()' below.
+        subscriptions.begin()->setId(ordinalPlusOne);
+
+        if (subscriptionId2upstreamSubQueueId(msgGUID,
+                                              &subQueueId,
+                                              subscriptionId)) {
+            App_State* app = findApp(subQueueId);
+
+            if (app == 0) {
+                BMQ_LOGTHROTTLE_ERROR()
+                    << "#QUEUE_UNKNOWN_SUBSCRIPTION_ID "
+                    << "Remote queue: " << d_queueState_p->uri()
+                    << " (id: " << d_queueState_p->id()
+                    << ") discarding a PUSH message for guid " << msgGUID
+                    << ", with unknown App Id " << subQueueId;
+
+                return 0;  // RETURN
+            }
+
+            if (!checkForDuplicate(app, msgGUID)) {
+                return 0;  // RETURN
+            }
+
+            app->putForRedelivery(msgGUID);
+
+            attributes->setRefCount(1);
+
+            // Reusing 'subscriptions' to 'setPushState()' below.
+            ordinalPlusOne = 1 + app->ordinal();
+            subscriptions.begin()->setId(ordinalPlusOne);
+
+            storePush(attributes, msgGUID, appData, subscriptions, true);
+
+            // Attempt to deliver
+            processAppRedelivery(subQueueId, app);
+
+            return 1;  // RETURN
+        }
+
+        return 0;  // RETURN
+    }
+
+    // Count only those subQueueIds which 'storage' is aware of.
+
+    PushStream::iterator itGuid = d_pushStream.findOrAppendMessage(msgGUID);
+    unsigned int         count  = 0;
+
+    for (bmqp::Protocol::SubQueueInfosArray::iterator it =
+             subscriptions.begin();
+         it != subscriptions.end();
+         ++it) {
+        unsigned int subQueueId;
+
+        unsigned int subscriptionId = it->id();
+        unsigned int ordinalPlusOne = 0;  // Invalid value
+
+        // Reusing 'subscriptions' to 'setPushState()' below.
+        it->setId(ordinalPlusOne);
+
+        if (!subscriptionId2upstreamSubQueueId(msgGUID,
+                                               &subQueueId,
+                                               subscriptionId)) {
+            continue;  // CONTINUE
+        }
+
+        PushStream::Apps::iterator itApp = d_pushStream.d_apps.find(
+            subQueueId);
+        if (itApp == d_pushStream.d_apps.end()) {
+            AppsMap::const_iterator app_cit = d_apps.find(subQueueId);
+
+            if (app_cit == d_apps.end()) {
+                BMQ_LOGTHROTTLE_ERROR()
+                    << "#QUEUE_UNKNOWN_SUBSCRIPTION_ID "
+                    << "Remote queue: " << d_queueState_p->uri()
+                    << " (id: " << d_queueState_p->id()
+                    << ") discarding a PUSH message for guid " << msgGUID
+                    << ", with unknown App Id " << subscriptionId;
+                continue;  // CONTINUE
+            }
+
+            itApp =
+                d_pushStream.d_apps.emplace(subQueueId, app_cit->second).first;
+        }
+        else {
+            const PushStream::App& app = itApp->second;
+
+            if (app.last() && app.last()->equal(itGuid)) {
+                BMQ_LOGTHROTTLE_INFO()
+                    << "Remote queue: " << d_queueState_p->uri()
+                    << " (id: " << d_queueState_p->id() << ", App '"
+                    << itApp->second.d_app->appId()
+                    << "') discarding a duplicate PUSH for guid " << msgGUID;
+
+                continue;  // CONTINUE
+            }
+
+            if (!checkForDuplicate(app.d_app.get(), msgGUID)) {
+                continue;  // CONTINUE
+            }
+        }
+
+        PushStream::Element* element =
+            d_pushStream.create(it->rdaInfo(), subscriptionId, itGuid, itApp);
+
+        // Reusing 'subscriptions' to 'setPushState()' below.
+        ordinalPlusOne = 1 + itApp->second.d_app->ordinal();
+        it->setId(ordinalPlusOne);
+
+        d_pushStream.add(element);
+        ++count;
+    }
+
+    if (count) {
+        // Pass correct ref count
+        attributes->setRefCount(count);
+        storePush(attributes, msgGUID, appData, subscriptions, false);
+    }
+    return count;
+}
+
+bool RelayQueueEngine::checkForDuplicate(const App_State*         app,
+                                         const bmqt::MessageGUID& msgGUID)
+{
+    // Check the storage if this is duplicate PUSH
+    // Currently, only Proxies can do this because they clear their storage
+    // once all readers are gone.  Therefore, a Proxy can detect duplicate PUSH
+    // when there is a client (potentially) processing the same PUSH.
+    // Replicas do not clear their (replicated) storage.  They do not check if
+    // there is a client (potentially) processing the same PUSH.
+    // Also, Proxies use InMemoryStorage which relies on PUSH uniqueness for
+    // calculating the refCount.
+    // (Replicas receive the refCount by replication).
+
+    if (d_queueState_p->domain()->cluster()->isRemote()) {
+        d_realStorageIter_mp->reset(msgGUID);
+        if (!d_realStorageIter_mp->atEnd()) {
+            const mqbi::AppMessage& appView =
+                d_realStorageIter_mp->appMessageView(app->ordinal());
+
+            if (appView.isPushing()) {
+                BMQ_LOGTHROTTLE_INFO()
+                    << "Remote queue: " << d_queueState_p->uri()
+                    << " (id: " << d_queueState_p->id() << ", App '"
+                    << app->appId()
+                    << "') discarding a duplicate PUSH for guid " << msgGUID;
+                return false;  // RETURN
+            }
+        }
+    }
+    return true;
+}
+
+void RelayQueueEngine::storePush(
+    mqbi::StorageMessageAttributes*           attributes,
+    const bmqt::MessageGUID&                  msgGUID,
+    const bsl::shared_ptr<bdlbb::Blob>&       appData,
+    const bmqp::Protocol::SubQueueInfosArray& subscriptions,
+
+    bool isOutOfOrder)
+{
+    if (d_queueState_p->domain()->cluster()->isRemote()) {
+        // Save the message along with the subIds in the storage.  Note that
+        // for now, we will assume that in fanout mode, the only option present
+        // in 'options' is subQueueInfos, and we won't store the specified
+        // 'options' in the storage.
+
+        mqbi::DataStreamMessage* dataStreamMessage = 0;
+
+        mqbi::StorageResult::Enum result = storage()->put(
+            attributes,
+            msgGUID,
+            appData,
+            bsl::shared_ptr<bdlbb::Blob>(),
+            &dataStreamMessage);  // No options
+
+        if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
+                result != mqbi::StorageResult::e_SUCCESS)) {
+            BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+
+            BMQ_LOGTHROTTLE_INFO()
+                << d_queueState_p->uri() << " failed to store GUID ["
+                << msgGUID << "], result = " << result;
+        }
+        else {
+            BSLS_ASSERT_SAFE(dataStreamMessage);
+
+            // Reusing previously cached ordinals.
+            for (bmqp::Protocol::SubQueueInfosArray::const_iterator cit =
+                     subscriptions.begin();
+                 cit != subscriptions.end();
+                 ++cit) {
+                if (cit->id() > 0) {
+                    dataStreamMessage->app(cit->id() - 1).setPushState();
+                }
+            }
+        }
+    }
+}
+
+void RelayQueueEngine::beforeOneAppRemoved(unsigned int upstreamSubQueueId)
+{
+    while (!d_storageIter_mp->atEnd()) {
+        const int numApps = d_storageIter_mp->numApps();
+        if (numApps > 1) {
+            // Removal of App's elements will not invalidate 'd_storageIter_mp'
+            break;
+        }
+        if (numApps == 1) {
+            const PushStream::Element* element = d_storageIter_mp->element(0);
+            if (element->app().d_app->upstreamSubQueueId() !=
+                upstreamSubQueueId) {
+                break;
+            }
+        }
+        else {
+            BSLS_ASSERT_SAFE(numApps == 0);
+
+            // The case when 'advance' does not follow 'removeCurrentElement'
+        }
+
+        d_storageIter_mp->advance();
+    }
+}
+
+mqbi::Storage* RelayQueueEngine::storage() const
+{
+    return d_queueState_p->storage();
 }
 
 }  // close package namespace

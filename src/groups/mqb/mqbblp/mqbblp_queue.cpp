@@ -41,9 +41,8 @@
 // BMQ
 #include <bmqt_queueflags.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bdlb_print.h>
@@ -159,7 +158,7 @@ void Queue::configureDispatched(int*          result,
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
 
-    mwcu::MemOutStream throwaway(d_allocator_p);
+    bmqu::MemOutStream throwaway(d_allocator_p);
     bsl::ostream&      errStream = (errorDescription ? *errorDescription
                                                      : throwaway);
 
@@ -335,7 +334,7 @@ void Queue::convertToLocalDispatched()
 
     int                                   rc;
     bdlma::LocalSequentialAllocator<1024> localAllocator(d_allocator_p);
-    mwcu::MemOutStream                    errorDescription(&localAllocator);
+    bmqu::MemOutStream                    errorDescription(&localAllocator);
 
     // Move remoteQueue to a temporary stack based managed pointer, so that
     // we can bypass all precondition checks (since we are temporarily
@@ -344,7 +343,7 @@ void Queue::convertToLocalDispatched()
 
     d_state.setId(bmqp::QueueId::k_PRIMARY_QUEUE_ID);
     createLocal();
-    rc = d_localQueue_mp->configure(errorDescription, true);
+    rc = d_localQueue_mp->configure(errorDescription, false);
     if (rc != 0) {
         BALL_LOG_ERROR
             << "#QUEUE_CONVERTION_FAILURE " << d_state.uri()
@@ -395,9 +394,7 @@ void Queue::convertToLocalDispatched()
 
 void Queue::updateStats()
 {
-    d_state.stats()
-        .setReaderCount(d_state.handleParameters().readCount())
-        .setWriterCount(d_state.handleParameters().writeCount());
+    d_state.updateStats();
 }
 
 void Queue::listMessagesDispatched(mqbcmd::QueueResult* result,
@@ -456,14 +453,13 @@ Queue::Queue(const bmqt::Uri&                          uri,
              int                                       partitionId,
              mqbi::Domain*                             domain,
              mqbi::StorageManager*                     storageManager,
-             bdlbb::BlobBufferFactory*                 blobBufferFactory,
-             bdlmt::EventScheduler*                    scheduler,
+             const mqbi::ClusterResources&             resources,
              bdlmt::FixedThreadPool*                   threadPool,
              const bmqp_ctrlmsg::RoutingConfiguration& routingCfg,
              bslma::Allocator*                         allocator)
 : d_allocator_p(allocator)
 , d_schemaLearner(allocator)
-, d_state(this, uri, id, key, partitionId, domain, allocator)
+, d_state(this, uri, id, key, partitionId, domain, resources, allocator)
 , d_localQueue_mp(0)
 , d_remoteQueue_mp(0)
 {
@@ -487,9 +483,6 @@ Queue::Queue(const bmqt::Uri&                          uri,
     //      storage.
 
     d_state.setStorageManager(storageManager)
-        .setAppKeyGenerator(storageManager)
-        .setBlobBufferFactory(blobBufferFactory)
-        .setEventScheduler(scheduler)
         .setMiscWorkThreadPool(threadPool)
         .setRoutingConfig(routingCfg)
         .setMessageThrottleConfig(messageThrottleConfig);
@@ -578,7 +571,8 @@ void Queue::onOpenFailure(unsigned int subQueueId)
 }
 
 void Queue::onOpenUpstream(bsls::Types::Uint64 genCount,
-                           unsigned int        subQueueId)
+                           unsigned int        subQueueId,
+                           bool                isWriterOnly)
 {
     // executed by the *QUEUE* dispatcher thread
 
@@ -586,7 +580,7 @@ void Queue::onOpenUpstream(bsls::Types::Uint64 genCount,
     BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
 
     if (d_remoteQueue_mp) {
-        d_remoteQueue_mp->onOpenUpstream(genCount, subQueueId);
+        d_remoteQueue_mp->onOpenUpstream(genCount, subQueueId, isWriterOnly);
     }
 }
 
@@ -749,7 +743,8 @@ void Queue::onPushMessage(
     const bsl::shared_ptr<bdlbb::Blob>&  appData,
     const bsl::shared_ptr<bdlbb::Blob>&  options,
     const bmqp::MessagePropertiesInfo&   messagePropertiesInfo,
-    bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType)
+    bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType,
+    bool                                 isOutOfOrder)
 {
     // executed by the *CLUSTER* dispatcher thread
 
@@ -773,7 +768,8 @@ void Queue::onPushMessage(
         .setOptions(options)
         .setGuid(msgGUID)
         .setMessagePropertiesInfo(messagePropertiesInfo)
-        .setCompressionAlgorithmType(compressionAlgorithmType);
+        .setCompressionAlgorithmType(compressionAlgorithmType)
+        .setOutOfOrderPush(isOutOfOrder);
 
     dispatcher()->dispatchEvent(dispEvent, this);
 }
@@ -852,31 +848,8 @@ int Queue::processCommand(mqbcmd::QueueResult*        result,
     // executed by *ANY* thread
 
     if (command.isPurgeAppIdValue()) {
-        if (command.purgeAppId().empty()) {
-            mqbcmd::Error& error = result->makeError();
-            error.message()      = "Queue Purge requires a non-empty appId ("
-                                   "Specify '*' to purge the entire queue).";
-            return -1;  // RETURN
-        }
-
-        result->makePurgedQueues();
-        result->purgedQueues().queues().resize(1);
-        mqbcmd::PurgeQueueResult& purgedQueueResult =
-            result->purgedQueues().queues().back();
-
-        // Empty string means all appIds, however, for the command, we require
-        // the user to be explicit if the entire queue is to be deleted, and
-        // therefore require '*' for the appid.
-        bsl::string appId = (command.purgeAppId() == "*")
-                                ? ""
-                                : command.purgeAppId();
-        dispatcher()->execute(bdlf::BindUtil::bind(&Queue::purge,
-                                                   this,
-                                                   &purgedQueueResult,
-                                                   appId),
-                              this);
-        dispatcher()->synchronize(this);
-        return 0;  // RETURN
+        BSLS_ASSERT_SAFE(false && "Should not get here. PURGE QUEUE command "
+                                  "must be processed on a storage level.");
     }
     else if (command.isInternalsValue()) {
         mqbcmd::QueueInternals& queueInternals = result->makeQueueInternals();
@@ -900,29 +873,10 @@ int Queue::processCommand(mqbcmd::QueueResult*        result,
     }
 
     mqbcmd::Error&     error = result->makeError();
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << "Unknown command '" << command << "'";
     error.message() = os.str();
     return -1;
-}
-
-void Queue::purge(mqbcmd::PurgeQueueResult* result, const bsl::string& appId)
-{
-    // executed by the *QUEUE* dispatcher thread
-
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
-
-    if (!isLocal()) {
-        mwcu::MemOutStream errorMsg;
-        errorMsg << "Not purging '" << d_state.uri() << "' "
-                 << "[reason: queue is NOT local]";
-        mqbcmd::Error& error = result->makeError();
-        error.message()      = errorMsg.str();
-        return;  // RETURN
-    }
-
-    d_localQueue_mp->purge(result, appId);
 }
 
 void Queue::onDispatcherEvent(const mqbi::DispatcherEvent& event)
@@ -968,6 +922,11 @@ bsls::Types::Int64 Queue::countUnconfirmed(unsigned int subId)
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(dispatcher()->inDispatcherThread(this));
 
+    if (subId == bmqp::QueueId::k_UNASSIGNED_SUBQUEUE_ID) {
+        return d_state.handleCatalog().countUnconfirmed();  // RETURN
+    }
+
+    // TODO(shutdown-v2): TEMPORARY, remove when all switch to StopRequest V2.
     struct local {
         static void sum(bsls::Types::Int64*                  sum,
                         mqbi::QueueHandle*                   handle,
@@ -989,6 +948,11 @@ bsls::Types::Int64 Queue::countUnconfirmed(unsigned int subId)
                              subId));
 
     return result;
+}
+
+void Queue::stopPushing()
+{
+    queueEngine()->resetState(true);  // isShuttingDown
 }
 
 }  // close package namespace

@@ -17,20 +17,17 @@
 #ifndef INCLUDED_MQBA_ADMINSESSION
 #define INCLUDED_MQBA_ADMINSESSION
 
-//@PURPOSE: Provide a session for interaction with BlazingMQ broker admin
-// clients.
-//
-//@CLASSES:
-//  mqba::AdminSession     : mechanism representing a session with an admin
-//  mqba::AdminSessionState: VST representing the state of a session
-//
-//@DESCRIPTION: This component provides a mechanism, 'mqba::AdminSession', that
-// allows BlazingMQ broker to send and receive messages from an admin connected
-// to the broker.  'mqba::AdminSessionState' is a value semantic type holding
-// the state associated to an 'mqba::Session'.
+/// @file mqba_adminsession.h
+///
+/// @brief Provide a session for interaction with BlazingMQ broker admin
+/// clients.
+///
+/// This component provides a mechanism, @bbref{mqba::AdminSession}, that
+/// allows BlazingMQ broker to send and receive messages from an admin
+/// connected to the broker.  @bbref{mqba::AdminSessionState} is a value
+/// semantic type holding the state associated to an 'mqba::Session'.
 
 // MQB
-
 #include <mqbi_dispatcher.h>
 #include <mqbi_queue.h>
 #include <mqbnet_session.h>
@@ -38,9 +35,8 @@
 // BMQ
 #include <bmqp_schemaeventbuilder.h>
 
-// MWC
-#include <mwcio_channel.h>
-#include <mwcu_sharedresource.h>
+#include <bmqio_channel.h>
+#include <bmqu_sharedresource.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -86,24 +82,19 @@ struct AdminSessionState {
 
   public:
     // PUBLIC DATA
+
+    /// Allocator to use.
     bslma::Allocator* d_allocator_p;
-    // Allocator to use.
 
+    /// Dispatcher client data associated to this session.
     mqbi::DispatcherClientData d_dispatcherClientData;
-    // Dispatcher client data associated to
-    // this session.
 
-    bdlbb::BlobBufferFactory* d_bufferFactory_p;
-    // Blob buffer factory to use.
-
+    /// Pool of shared pointers to blobs to use.
     BlobSpPool* d_blobSpPool_p;
-    // Pool of shared pointers to blob to
-    // use.
 
+    /// Builder for schema messages.  To be used only in client dispatcher
+    /// thread.
     bmqp::SchemaEventBuilder d_schemaEventBuilder;
-    // Builder for schema messages.  To be
-    // used only in client dispatcher
-    // thread.
 
   private:
     // NOT IMPLEMENTED
@@ -119,14 +110,13 @@ struct AdminSessionState {
 
     // CREATORS
 
-    /// Constructor of a new session state using the specified `dispatcher`,
-    /// `blobSpPool` and `bufferFactory`.  The specified `encodingType` is
-    /// the encoding which the schema event builder will use.  Memory
-    /// allocations are performed using the specified `allocator`.
-    AdminSessionState(BlobSpPool*               blobSpPool,
-                      bdlbb::BlobBufferFactory* bufferFactory,
-                      bmqp::EncodingType::Enum  encodingType,
-                      bslma::Allocator*         allocator);
+    /// Constructor of a new session state using the specified `dispatcher` and
+    /// `blobSpPool`.  The specified `encodingType` is the encoding which the
+    /// schema event builder will use.  Memory allocations are performed using
+    /// the specified `allocator`.
+    AdminSessionState(BlobSpPool*              blobSpPool,
+                      bmqp::EncodingType::Enum encodingType,
+                      bslma::Allocator*        allocator);
 };
 
 // ==================
@@ -141,43 +131,36 @@ class AdminSession : public mqbnet::Session, public mqbi::DispatcherClient {
 
   private:
     // DATA
-    mwcu::SharedResource<AdminSession> d_self;
-    // This object is used to avoid
-    // executing a callback if the session
-    // has been destroyed: this is *ONLY* to
-    // be used with the callbacks that will
-    // be called from outside of the
-    // dispatcher's thread.
 
+    /// This object is used to avoid executing a callback if the session has
+    /// been destroyed: this is *ONLY* to be used with the callbacks that will
+    /// be called from outside of the dispatcher's thread.
+    bmqu::SharedResource<AdminSession> d_self;
+
+    /// Show whether the session is running.
     bool d_running;
-    // Show whether the session is running.
 
+    /// Negotiation message received from the remote peer.
     bmqp_ctrlmsg::NegotiationMessage d_negotiationMessage;
-    // Negotiation message received from the
-    // remote peer.
 
+    /// Raw pointer to the right field in `d_negotiationMessage` (depending on
+    /// whether it's a `client` or a `broker`).
     bmqp_ctrlmsg::ClientIdentity* d_clientIdentity_p;
-    // Raw pointer to the right field in
-    // 'd_negotiationMessage' (depending
-    // whether it's a 'client' or a
-    // 'broker').
 
+    /// Short identifier for this session.
     bsl::string d_description;
-    // Short identifier for this session.
 
-    bsl::shared_ptr<mwcio::Channel> d_channel_sp;
-    // Channel associated to this session.
+    /// Channel associated to this session.
+    bsl::shared_ptr<bmqio::Channel> d_channel_sp;
 
+    /// The state associated to this session.
     AdminSessionState d_state;
-    // The state associated to this session.
 
+    /// Pointer to the event scheduler to use (held, not owned).
     bdlmt::EventScheduler* d_scheduler_p;
-    // Pointer to the event scheduler to
-    // use (held, not owned)
 
+    /// The callback to invoke on received admin command.
     mqbnet::Session::AdminCommandEnqueueCb d_adminCb;
-    // The callback to invoke on received
-    // admin command.
 
   private:
     // NOT IMPLEMENTED
@@ -231,20 +214,18 @@ class AdminSession : public mqbnet::Session, public mqbi::DispatcherClient {
     // CREATORS
 
     /// Constructor of a new session associated to the specified `channel`
-    /// and using the specified `dispatcher`, `blobSpPool`, `bufferFactory`
-    /// and `scheduler`.  The specified `negotiationMessage` represents the
-    /// identity received from the peer during negotiation, and the
-    /// specified `sessionDescription` is the short form description of the
-    /// session.  Memory allocations are performed using the specified
-    /// `allocator`.  The specified `adminEnqueueCb` callback is used to
-    /// enqueue admin commands to entity that is responsible for executing
-    /// admin commands.
-    AdminSession(const bsl::shared_ptr<mwcio::Channel>&  channel,
+    /// and using the specified `dispatcher`, `blobSpPool` and `scheduler`.
+    /// The specified `negotiationMessage` represents the  identity received
+    /// from the peer during negotiation, and the specified
+    /// `sessionDescription` is the short form description of the session.
+    /// Memory allocations are performed using the specified `allocator`.
+    /// The specified `adminEnqueueCb` callback is used to enqueue admin
+    /// commands to entity that is responsible for executing admin commands.
+    AdminSession(const bsl::shared_ptr<bmqio::Channel>&  channel,
                  const bmqp_ctrlmsg::NegotiationMessage& negotiationMessage,
                  const bsl::string&                      sessionDescription,
                  mqbi::Dispatcher*                       dispatcher,
                  AdminSessionState::BlobSpPool*          blobSpPool,
-                 bdlbb::BlobBufferFactory*               bufferFactory,
                  bdlmt::EventScheduler*                  scheduler,
                  const mqbnet::Session::AdminCommandEnqueueCb& adminEnqueueCb,
                  bslma::Allocator*                             allocator);
@@ -262,9 +243,13 @@ class AdminSession : public mqbnet::Session, public mqbi::DispatcherClient {
     /// Initiate the shutdown of the session and invoke the specified
     /// `callback` upon completion of (asynchronous) shutdown sequence or
     /// if the specified `timeout` is expired.
+    /// The optional (temporary) specified 'supportShutdownV2' indicates
+    /// shutdown V2 logic which is not applicable to `AdminSession`
+    /// implementation.
     void
     initiateShutdown(const ShutdownCb&         callback,
-                     const bsls::TimeInterval& timeout) BSLS_KEYWORD_OVERRIDE;
+                     const bsls::TimeInterval& timeout,
+                     bool supportShutdownV2 = false) BSLS_KEYWORD_OVERRIDE;
 
     /// Make the session abandon any work it has.
     void invalidate() BSLS_KEYWORD_OVERRIDE;
@@ -304,7 +289,7 @@ class AdminSession : public mqbnet::Session, public mqbi::DispatcherClient {
     //  (virtual: mqbnet::Session)
 
     /// Return the channel associated to this session.
-    bsl::shared_ptr<mwcio::Channel> channel() const BSLS_KEYWORD_OVERRIDE;
+    bsl::shared_ptr<bmqio::Channel> channel() const BSLS_KEYWORD_OVERRIDE;
 
     /// Return the clusterNode associated to this session, or 0 if there are
     /// none.
@@ -350,7 +335,7 @@ class AdminSession : public mqbnet::Session, public mqbi::DispatcherClient {
 // -------------------
 
 // MANIPULATORS
-inline bsl::shared_ptr<mwcio::Channel> AdminSession::channel() const
+inline bsl::shared_ptr<bmqio::Channel> AdminSession::channel() const
 {
     return d_channel_sp;
 }

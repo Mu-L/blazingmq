@@ -19,19 +19,19 @@
 // MQB
 #include <mqbs_filestoreprotocol.h>
 
-// MWC
-#include <mwcc_orderedhashmap.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
+#include <bmqc_orderedhashmap.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // BDE
 #include <bdlb_random.h>
 #include <bdlde_md5.h>
 #include <bsl_set.h>
 #include <bslh_hash.h>
+#include <bsls_keyword.h>
 #include <bsls_timeutil.h>
 #include <bsls_types.h>
 
@@ -114,142 +114,148 @@ void test1_breathingTest()
 //   Basic functionality
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
     PV("Test some invalid StorageKeys");
     mqbu::StorageKey s1;
-    ASSERT_EQ(true, s1.isNull());
+    BMQTST_ASSERT_EQ(true, s1.isNull());
 
     mqbu::StorageKey s2;
     s1 = s2;
 
-    ASSERT_EQ(true, s1.isNull());
-    ASSERT_EQ(true, s2.isNull());
+    BMQTST_ASSERT_EQ(true, s1.isNull());
+    BMQTST_ASSERT_EQ(true, s2.isNull());
 
     mqbu::StorageKey s3(s1);
-    ASSERT_EQ(true, s3.isNull());
+    BMQTST_ASSERT_EQ(true, s3.isNull());
 
     PV("Create StorageKey s4 and s5 from valid hex");
     const char          k_VALID_HEX[] = "ABCDEF1234";
     const unsigned char k_VALID_BIN[] = {0xAB, 0xCD, 0xEF, 0x12, 0x34};
     mqbu::StorageKey    s4;
     s4.fromHex(k_VALID_HEX);
-    ASSERT_EQ(false, s4.isNull());
+    BMQTST_ASSERT_EQ(false, s4.isNull());
 
     mqbu::StorageKey s5(mqbu::StorageKey::HexRepresentation(), k_VALID_HEX);
-    ASSERT_EQ(false, s5.isNull());
-    ASSERT_EQ(0,
-              bsl::memcmp(s4.data(),
-                          s5.data(),
-                          mqbu::StorageKey::e_KEY_LENGTH_BINARY));
+    BMQTST_ASSERT_EQ(false, s5.isNull());
+    BMQTST_ASSERT_EQ(0,
+                     bsl::memcmp(s4.data(),
+                                 s5.data(),
+                                 mqbu::StorageKey::e_KEY_LENGTH_BINARY));
 
     PV("Create StorageKey s6 and s7 from valid binary");
     const char       k_VALID_BINARY[] = "ABCDE";
     mqbu::StorageKey s6;
     s6.fromBinary(k_VALID_BINARY);
-    ASSERT_EQ(false, s6.isNull());
-    ASSERT_EQ(0,
-              bsl::memcmp(k_VALID_BINARY,
-                          s6.data(),
-                          mqbu::StorageKey::e_KEY_LENGTH_BINARY));
-    ASSERT_EQ(s6, reinterpret_cast<const mqbu::StorageKey&>(k_VALID_BINARY));
+    BMQTST_ASSERT_EQ(false, s6.isNull());
+    BMQTST_ASSERT_EQ(0,
+                     bsl::memcmp(k_VALID_BINARY,
+                                 s6.data(),
+                                 mqbu::StorageKey::e_KEY_LENGTH_BINARY));
+    BMQTST_ASSERT_EQ(
+        s6,
+        reinterpret_cast<const mqbu::StorageKey&>(k_VALID_BINARY));
 
     mqbu::StorageKey s7(mqbu::StorageKey::BinaryRepresentation(),
                         k_VALID_BINARY);
-    ASSERT_EQ(false, s7.isNull());
-    ASSERT_EQ(0,
-              bsl::memcmp(s6.data(),
-                          s7.data(),
-                          mqbu::StorageKey::e_KEY_LENGTH_BINARY));
+    BMQTST_ASSERT_EQ(false, s7.isNull());
+    BMQTST_ASSERT_EQ(0,
+                     bsl::memcmp(s6.data(),
+                                 s7.data(),
+                                 mqbu::StorageKey::e_KEY_LENGTH_BINARY));
 
     PV("Create StorageKey from integer");
     mqbu::StorageKey s8(0u);
-    ASSERT_EQ(false, s8.isNull());
+    BMQTST_ASSERT_EQ(false, s8.isNull());
 
     mqbu::StorageKey s9(0u);
-    ASSERT_EQ(false, s9.isNull());
+    BMQTST_ASSERT_EQ(false, s9.isNull());
 
-    ASSERT_EQ(true, s8 == s9);
-    ASSERT_EQ(false, s8 != s9);
+    BMQTST_ASSERT_EQ(true, s8 == s9);
+    BMQTST_ASSERT_EQ(false, s8 != s9);
 
     mqbu::StorageKey s10(bsl::numeric_limits<unsigned int>::max());
-    ASSERT_EQ(false, s10.isNull());
+    BMQTST_ASSERT_EQ(false, s10.isNull());
 
     mqbu::StorageKey s11(bsl::numeric_limits<unsigned int>::max());
-    ASSERT_EQ(false, s11.isNull());
+    BMQTST_ASSERT_EQ(false, s11.isNull());
 
-    ASSERT_EQ(true, s10 == s11);
-    ASSERT_EQ(false, s10 != s11);
+    BMQTST_ASSERT_EQ(true, s10 == s11);
+    BMQTST_ASSERT_EQ(false, s10 != s11);
 
     PV("Checking accessors");
     char s[mqbu::StorageKey::e_KEY_LENGTH_HEX];
     s5.loadHex(s);
-    ASSERT_EQ(0, memcmp(k_VALID_HEX, s, mqbu::StorageKey::e_KEY_LENGTH_HEX));
+    BMQTST_ASSERT_EQ(
+        0,
+        memcmp(k_VALID_HEX, s, mqbu::StorageKey::e_KEY_LENGTH_HEX));
 
-    bsl::vector<char> binBuf(s_allocator_p);
+    bsl::vector<char> binBuf(bmqtst::TestHelperUtil::allocator());
     s5.loadBinary(&binBuf);
-    ASSERT_EQ(0,
-              memcmp(k_VALID_BIN,
-                     &binBuf[0],
-                     mqbu::StorageKey::e_KEY_LENGTH_BINARY));
+    BMQTST_ASSERT_EQ(0,
+                     memcmp(k_VALID_BIN,
+                            &binBuf[0],
+                            mqbu::StorageKey::e_KEY_LENGTH_BINARY));
 
     PV("Checking overloaded == and != operators");
-    ASSERT_EQ(false, s4 == s6);
-    ASSERT_EQ(true, s4 == s5);
-    ASSERT_EQ(false, s4 != s5);
-    ASSERT_EQ(true, s4 != s6);
+    BMQTST_ASSERT_EQ(false, s4 == s6);
+    BMQTST_ASSERT_EQ(true, s4 == s5);
+    BMQTST_ASSERT_EQ(false, s4 != s5);
+    BMQTST_ASSERT_EQ(true, s4 != s6);
 
     PV("Checking default hashing and less than operator");
-    bsl::map<mqbu::StorageKey, int> storageMap(s_allocator_p);
+    bsl::map<mqbu::StorageKey, int> storageMap(
+        bmqtst::TestHelperUtil::allocator());
     storageMap.insert(bsl::make_pair(s2, 1));
     storageMap.insert(bsl::make_pair(s4, 2));
     storageMap.insert(bsl::make_pair(s6, 3));
-    ASSERT_EQ(false, storageMap.insert(bsl::make_pair(s2, 1)).second);
+    BMQTST_ASSERT_EQ(false, storageMap.insert(bsl::make_pair(s2, 1)).second);
     bsl::map<mqbu::StorageKey, int>::const_iterator it = storageMap.find(s4);
-    ASSERT_EQ(true, storageMap.end() != it);
-    ASSERT_EQ(s4, it->first);
-    ASSERT_EQ(2, it->second);
+    BMQTST_ASSERT_EQ(true, storageMap.end() != it);
+    BMQTST_ASSERT_EQ(s4, it->first);
+    BMQTST_ASSERT_EQ(2, it->second);
 
     bsl::unordered_map<mqbu::StorageKey, int> unorderedStorageMap(
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
     unorderedStorageMap.insert(bsl::make_pair(s2, 1));
     unorderedStorageMap.insert(bsl::make_pair(s4, 2));
     unorderedStorageMap.insert(bsl::make_pair(s6, 3));
-    ASSERT_EQ(false, unorderedStorageMap.insert(bsl::make_pair(s2, 1)).second);
+    BMQTST_ASSERT_EQ(false,
+                     unorderedStorageMap.insert(bsl::make_pair(s2, 1)).second);
     bsl::unordered_map<mqbu::StorageKey, int>::const_iterator uit =
         unorderedStorageMap.find(s4);
-    ASSERT_EQ(s4, uit->first);
-    ASSERT_EQ(2, uit->second);
+    BMQTST_ASSERT_EQ(s4, uit->first);
+    BMQTST_ASSERT_EQ(2, uit->second);
 
     s4.reset();
-    ASSERT_EQ(true, s4.isNull());
+    BMQTST_ASSERT_EQ(true, s4.isNull());
 
     PV("Ensure that unordered map compiles when custom hash algo is "
        "specified");
     bsl::unordered_map<mqbu::StorageKey,
                        int,
                        bslh::Hash<mqbu::StorageKeyHashAlgo> >
-        myMap(s_allocator_p);
+        myMap(bmqtst::TestHelperUtil::allocator());
 
     myMap.insert(bsl::make_pair(s6, 2));
 
-    ASSERT_EQ(1u, myMap.count(s6));
+    BMQTST_ASSERT_EQ(1u, myMap.count(s6));
 }
 
 void test2_streamout()
 {
-    mwctst::TestHelper::printTestName("STREAM OUT");
+    bmqtst::TestHelper::printTestName("STREAM OUT");
 
     // Create StorageKey from valid hex rep
     const char k_HEX[] = "0123456789";
 
     mqbu::StorageKey s1(mqbu::StorageKey::HexRepresentation(), k_HEX);
 
-    mwcu::MemOutStream osstr(s_allocator_p);
+    bmqu::MemOutStream osstr(bmqtst::TestHelperUtil::allocator());
     osstr << s1;
 
-    bsl::string storageKeyStr(k_HEX, s_allocator_p);
+    bsl::string storageKeyStr(k_HEX, bmqtst::TestHelperUtil::allocator());
 
-    ASSERT_EQ(storageKeyStr, osstr.str());
+    BMQTST_ASSERT_EQ(storageKeyStr, osstr.str());
 
     PV("StorageKey [" << osstr.str() << "]");
 }
@@ -270,9 +276,9 @@ void test3_defaultHashUniqueness()
 //   Hash uniqueness of the generated StorageKeys.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("DEFAULT HASH UNIQUENESS");
+    bmqtst::TestHelper::printTestName("DEFAULT HASH UNIQUENESS");
 
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // Because there is no emplace on unordered_map, the temporary list
     // created upon insertion of objects in the map uses the default
     // allocator.
@@ -285,8 +291,10 @@ void test3_defaultHashUniqueness()
     typedef bsl::vector<mqbu::StorageKey>                        StorageKeys;
 
     // hash -> vector of corresponding StorageKeys
-    bsl::unordered_map<size_t, StorageKeys> hashes(s_allocator_p);
-    bsl::unordered_set<mqbu::StorageKey>    keySet(s_allocator_p);
+    bsl::unordered_map<size_t, StorageKeys> hashes(
+        bmqtst::TestHelperUtil::allocator());
+    bsl::unordered_set<mqbu::StorageKey> keySet(
+        bmqtst::TestHelperUtil::allocator());
 
     hashes.reserve(k_NUM_ELEMS);
     generateStorageKeys(&keySet, k_NUM_ELEMS);  // k_NUM_ELEMS in keySet
@@ -315,7 +323,7 @@ void test3_defaultHashUniqueness()
     // collisions was in the range of [1, 1].
     const size_t k_MAX_EXPECTED_COLLISIONS = 2;
 
-    ASSERT_LT(maxCollisions, k_MAX_EXPECTED_COLLISIONS);
+    BMQTST_ASSERT_LT(maxCollisions, k_MAX_EXPECTED_COLLISIONS);
 
     if (true || (maxCollisions >= k_MAX_EXPECTED_COLLISIONS)) {
         cout << "Number of collisions...............: "
@@ -355,23 +363,23 @@ void test4_customHashUniqueness()
 //   Hash uniqueness of the generated StorageKeys.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("CUSTOM HASH UNIQUENESS");
+    bmqtst::TestHelper::printTestName("CUSTOM HASH UNIQUENESS");
 
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // Because there is no emplace on unordered_map, the temporary list
     // created upon insertion of objects in the map uses the default
     // allocator.
 
-    enum {
-        k_NUM_ELEMS = 10000  // 10K
-    };
+    BSLS_KEYWORD_CONSTEXPR bsl::size_t k_NUM_ELEMS = 10000;  // 10K
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
     typedef bsl::vector<mqbu::StorageKey>                        StorageKeys;
 
     // hash -> vector of corresponding StorageKeys
-    bsl::unordered_map<size_t, StorageKeys> hashes(s_allocator_p);
-    bsl::unordered_set<mqbu::StorageKey>    keySet(s_allocator_p);
+    bsl::unordered_map<size_t, StorageKeys> hashes(
+        bmqtst::TestHelperUtil::allocator());
+    bsl::unordered_set<mqbu::StorageKey> keySet(
+        bmqtst::TestHelperUtil::allocator());
 
     hashes.reserve(k_NUM_ELEMS);
     generateStorageKeys(&keySet, k_NUM_ELEMS);  // k_NUM_ELEMS in keySet
@@ -401,7 +409,7 @@ void test4_customHashUniqueness()
     // collisions was in the range of [1, 2].
     const size_t k_MAX_EXPECTED_COLLISIONS = 3;
 
-    ASSERT_LT(maxCollisions, k_MAX_EXPECTED_COLLISIONS);
+    BMQTST_ASSERT_LT(maxCollisions, k_MAX_EXPECTED_COLLISIONS);
 
     if (true || (maxCollisions >= k_MAX_EXPECTED_COLLISIONS)) {
         cout << "Number of collisions...............: "
@@ -444,7 +452,7 @@ void testN1_defaultHashBenchmark()
 //   NA
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("DEFAULT HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("DEFAULT HASH BENCHMARK");
 
     const size_t                k_NUM_ITERATIONS = 10000000;  // 10M
     bsl::hash<mqbu::StorageKey> hasher;  // same as: bslh::Hash<> hasher;
@@ -464,11 +472,11 @@ void testN1_defaultHashBenchmark()
 
     cout << "Calculated " << k_NUM_ITERATIONS << " default hashes of the"
          << " StorageKey in "
-         << mwcu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
          << "Above implies that 1 hash of the StorageKey was calculated in "
          << (end - begin) / k_NUM_ITERATIONS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ITERATIONS * 1000000000) / (end - begin)))
          << " hashes per second." << endl;
 }
@@ -488,7 +496,7 @@ void testN2_customHashBenchmark()
 //   NA
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("CUSTOM HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("CUSTOM HASH BENCHMARK");
 
     const size_t                         k_NUM_ITERATIONS = 10000000;  // 10M
     bslh::Hash<mqbu::StorageKeyHashAlgo> hasher;
@@ -508,11 +516,11 @@ void testN2_customHashBenchmark()
 
     cout << "Calculated " << k_NUM_ITERATIONS << " custom hashes of the"
          << " StorageKey in "
-         << mwcu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
          << "Above implies that 1 hash of the StorageKey was calculated in "
          << (end - begin) / k_NUM_ITERATIONS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ITERATIONS * 1000000000) / (end - begin)))
          << " hashes per second." << endl;
 }
@@ -528,13 +536,16 @@ void testN3_hashTableWithDefaultHashBenchmark()
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("HASH TABLE w/ DEFAULT HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("HASH TABLE w/ DEFAULT HASH BENCHMARK");
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
 
     const size_t                                 k_NUM_ELEMS = 10000;  // 10K
-    bsl::unordered_set<mqbu::StorageKey>         keySet(s_allocator_p);
-    bsl::unordered_map<mqbu::StorageKey, size_t> ht(16843, s_allocator_p);
+    bsl::unordered_set<mqbu::StorageKey>         keySet(
+        bmqtst::TestHelperUtil::allocator());
+    bsl::unordered_map<mqbu::StorageKey, size_t> ht(
+        16843,
+        bmqtst::TestHelperUtil::allocator());
     ht.reserve(k_NUM_ELEMS);
 
     generateStorageKeys(&keySet, k_NUM_ELEMS);  // k_NUM_ELEMS in keySet
@@ -551,11 +562,11 @@ void testN3_hashTableWithDefaultHashBenchmark()
 
     cout << "Inserted " << k_NUM_ELEMS << " elements in hashtable using "
          << "default hash algorithm in "
-         << mwcu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
          << "Above implies that 1 element was inserted in "
          << (end - begin) / k_NUM_ELEMS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ELEMS * 1000000000) / (end - begin)))
          << " insertions per second." << endl;
 }
@@ -571,16 +582,17 @@ void testN4_hashTableWithCustomHashBenchmark()
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("HASH TABLE w/ CUSTOM HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("HASH TABLE w/ CUSTOM HASH BENCHMARK");
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
 
     const size_t                         k_NUM_ELEMS = 10000;  // 10K
-    bsl::unordered_set<mqbu::StorageKey> keySet(s_allocator_p);
+    bsl::unordered_set<mqbu::StorageKey> keySet(
+        bmqtst::TestHelperUtil::allocator());
     bsl::unordered_map<mqbu::StorageKey,
                        size_t,
                        bslh::Hash<mqbu::StorageKeyHashAlgo> >
-        ht(16843, s_allocator_p);
+        ht(16843, bmqtst::TestHelperUtil::allocator());
     ht.reserve(k_NUM_ELEMS);
 
     generateStorageKeys(&keySet, k_NUM_ELEMS);
@@ -597,11 +609,11 @@ void testN4_hashTableWithCustomHashBenchmark()
 
     cout << "Inserted " << k_NUM_ELEMS << " elements in hashtable using "
          << "custom hash algorithm in "
-         << mwcu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
          << "Above implies that 1 element was inserted in "
          << (end - begin) / k_NUM_ELEMS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ELEMS * 1000000000) / (end - begin)))
          << " insertions per second." << endl;
 }
@@ -617,16 +629,19 @@ void testN5_orderedMapWithDefaultHashBenchmark()
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("ORDERED MAP DEFAULT HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("ORDERED MAP DEFAULT HASH BENCHMARK");
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
 
     const size_t                         k_NUM_ELEMS = 10000;  // 10K
-    bsl::unordered_set<mqbu::StorageKey> keySet(s_allocator_p);
+    bsl::unordered_set<mqbu::StorageKey> keySet(
+        bmqtst::TestHelperUtil::allocator());
 
     generateStorageKeys(&keySet, k_NUM_ELEMS);
 
-    mwcc::OrderedHashMap<mqbu::StorageKey, size_t> ht(16843, s_allocator_p);
+    bmqc::OrderedHashMap<mqbu::StorageKey, size_t> ht(
+        16843,
+        bmqtst::TestHelperUtil::allocator());
 
     int i = 1;
     // Warmup
@@ -648,11 +663,11 @@ void testN5_orderedMapWithDefaultHashBenchmark()
 
     cout << "Inserted " << k_NUM_ELEMS << " elements in ordered map using "
          << "default hash algorithm in "
-         << mwcu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
          << "Above implies that 1 element was inserted in "
          << (end - begin) / k_NUM_ELEMS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ELEMS * 1000000000) / (end - begin)))
          << " insertions per second." << endl;
 }
@@ -668,19 +683,20 @@ void testN6_orderedMapWithCustomHashBenchmark()
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("ORDERED MAP Custom HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("ORDERED MAP Custom HASH BENCHMARK");
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
 
     const size_t                         k_NUM_ELEMS = 10000;  // 10K
-    bsl::unordered_set<mqbu::StorageKey> keySet(s_allocator_p);
+    bsl::unordered_set<mqbu::StorageKey> keySet(
+        bmqtst::TestHelperUtil::allocator());
 
     generateStorageKeys(&keySet, k_NUM_ELEMS);
 
-    mwcc::OrderedHashMap<mqbu::StorageKey,
+    bmqc::OrderedHashMap<mqbu::StorageKey,
                          size_t,
                          bslh::Hash<mqbu::StorageKeyHashAlgo> >
-        ht(16843, s_allocator_p);
+        ht(16843, bmqtst::TestHelperUtil::allocator());
 
     int i = 1;
     // Warmup
@@ -702,11 +718,11 @@ void testN6_orderedMapWithCustomHashBenchmark()
 
     cout << "Inserted " << k_NUM_ELEMS << " elements in ordered map using "
          << "default hash algorithm in "
-         << mwcu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
+         << bmqu::PrintUtil::prettyTimeInterval(end - begin) << ".\n"
          << "Above implies that 1 element was inserted in "
          << (end - begin) / k_NUM_ELEMS << " nano seconds.\n"
          << "In other words: "
-         << mwcu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
+         << bmqu::PrintUtil::prettyNumber(static_cast<bsls::Types::Int64>(
                 (k_NUM_ELEMS * 1000000000) / (end - begin)))
          << " insertions per second." << endl;
 }
@@ -728,7 +744,7 @@ testN1_defaultHashBenchmark_GoogleBenchmark(benchmark::State& state)
 //   NA
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("DEFAULT HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("DEFAULT HASH BENCHMARK");
 
     const size_t                k_NUM_ITERATIONS = state.range(0);  // 10M
     bsl::hash<mqbu::StorageKey> hasher;  // same as: bslh::Hash<> hasher;
@@ -759,7 +775,7 @@ static void testN2_customHashBenchmark_GoogleBenchmark(benchmark::State& state)
 //   NA
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("CUSTOM HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("CUSTOM HASH BENCHMARK");
 
     const size_t                         k_NUM_ITERATIONS = state.range(0);
     bslh::Hash<mqbu::StorageKeyHashAlgo> hasher;
@@ -789,13 +805,16 @@ static void testN3_hashTableWithDefaultHashBenchmark_GoogleBenchmark(
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("HASH TABLE w/ DEFAULT HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("HASH TABLE w/ DEFAULT HASH BENCHMARK");
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
 
     const size_t                                 k_NUM_ELEMS = state.range(0);
-    bsl::unordered_set<mqbu::StorageKey>         keySet(s_allocator_p);
-    bsl::unordered_map<mqbu::StorageKey, size_t> ht(16843, s_allocator_p);
+    bsl::unordered_set<mqbu::StorageKey>         keySet(
+        bmqtst::TestHelperUtil::allocator());
+    bsl::unordered_map<mqbu::StorageKey, size_t> ht(
+        16843,
+        bmqtst::TestHelperUtil::allocator());
     ht.reserve(k_NUM_ELEMS);
 
     generateStorageKeys(&keySet, k_NUM_ELEMS);  // k_NUM_ELEMS in keySet
@@ -822,16 +841,17 @@ static void testN4_hashTableWithCustomHashBenchmark_GoogleBenchmark(
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("HASH TABLE w/ CUSTOM HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("HASH TABLE w/ CUSTOM HASH BENCHMARK");
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
 
     const size_t                         k_NUM_ELEMS = state.range(0);
-    bsl::unordered_set<mqbu::StorageKey> keySet(s_allocator_p);
+    bsl::unordered_set<mqbu::StorageKey> keySet(
+        bmqtst::TestHelperUtil::allocator());
     bsl::unordered_map<mqbu::StorageKey,
                        size_t,
                        bslh::Hash<mqbu::StorageKeyHashAlgo> >
-        ht(16843, s_allocator_p);
+        ht(16843, bmqtst::TestHelperUtil::allocator());
     ht.reserve(k_NUM_ELEMS);
 
     generateStorageKeys(&keySet, k_NUM_ELEMS);
@@ -857,16 +877,19 @@ static void testN5_orderedMapWithDefaultHashBenchmark_GoogleBenchmark(
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("ORDERED MAP DEFAULT HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("ORDERED MAP DEFAULT HASH BENCHMARK");
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
 
     const size_t                         k_NUM_ELEMS = state.range(0);
-    bsl::unordered_set<mqbu::StorageKey> keySet(s_allocator_p);
+    bsl::unordered_set<mqbu::StorageKey> keySet(
+        bmqtst::TestHelperUtil::allocator());
 
     generateStorageKeys(&keySet, k_NUM_ELEMS);
 
-    mwcc::OrderedHashMap<mqbu::StorageKey, size_t> ht(16843, s_allocator_p);
+    bmqc::OrderedHashMap<mqbu::StorageKey, size_t> ht(
+        16843,
+        bmqtst::TestHelperUtil::allocator());
 
     int i = 1;
     // Warmup
@@ -897,19 +920,20 @@ static void testN6_orderedMapWithCustomHashBenchmark_GoogleBenchmark(
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("ORDERED MAP Custom HASH BENCHMARK");
+    bmqtst::TestHelper::printTestName("ORDERED MAP Custom HASH BENCHMARK");
 
     typedef bsl::unordered_set<mqbu::StorageKey>::const_iterator CITER;
 
     const size_t                         k_NUM_ELEMS = state.range(0);
-    bsl::unordered_set<mqbu::StorageKey> keySet(s_allocator_p);
+    bsl::unordered_set<mqbu::StorageKey> keySet(
+        bmqtst::TestHelperUtil::allocator());
 
     generateStorageKeys(&keySet, k_NUM_ELEMS);
 
-    mwcc::OrderedHashMap<mqbu::StorageKey,
+    bmqc::OrderedHashMap<mqbu::StorageKey,
                          size_t,
                          bslh::Hash<mqbu::StorageKeyHashAlgo> >
-        ht(16843, s_allocator_p);
+        ht(16843, bmqtst::TestHelperUtil::allocator());
 
     int i = 1;
     // Warmup
@@ -942,7 +966,7 @@ int main(int argc, char* argv[])
 {
     bsls::TimeUtil::initialize();
 
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -951,40 +975,40 @@ int main(int argc, char* argv[])
     case 2: test2_streamout(); break;
     case 1: test1_breathingTest(); break;
     case -1:
-        MWC_BENCHMARK_WITH_ARGS(testN1_defaultHashBenchmark,
-                                RangeMultiplier(10)
-                                    ->Range(10, 10000000)
-                                    ->Unit(benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN1_defaultHashBenchmark,
+                                   RangeMultiplier(10)
+                                       ->Range(10, 10000000)
+                                       ->Unit(benchmark::kMillisecond));
         break;
     case -2:
-        MWC_BENCHMARK_WITH_ARGS(testN2_customHashBenchmark,
-                                RangeMultiplier(10)
-                                    ->Range(10, 10000000)
-                                    ->Unit(benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN2_customHashBenchmark,
+                                   RangeMultiplier(10)
+                                       ->Range(10, 10000000)
+                                       ->Unit(benchmark::kMillisecond));
         break;
     case -3:
-        MWC_BENCHMARK_WITH_ARGS(testN3_hashTableWithDefaultHashBenchmark,
-                                RangeMultiplier(10)->Range(10, 10000)->Unit(
-                                    benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN3_hashTableWithDefaultHashBenchmark,
+                                   RangeMultiplier(10)->Range(10, 10000)->Unit(
+                                       benchmark::kMillisecond));
         break;
     case -4:
-        MWC_BENCHMARK_WITH_ARGS(testN4_hashTableWithCustomHashBenchmark,
-                                RangeMultiplier(10)->Range(10, 10000)->Unit(
-                                    benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN4_hashTableWithCustomHashBenchmark,
+                                   RangeMultiplier(10)->Range(10, 10000)->Unit(
+                                       benchmark::kMillisecond));
         break;
     case -5:
-        MWC_BENCHMARK_WITH_ARGS(testN5_orderedMapWithDefaultHashBenchmark,
-                                RangeMultiplier(10)->Range(10, 10000)->Unit(
-                                    benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN5_orderedMapWithDefaultHashBenchmark,
+                                   RangeMultiplier(10)->Range(10, 10000)->Unit(
+                                       benchmark::kMillisecond));
         break;
     case -6:
-        MWC_BENCHMARK_WITH_ARGS(testN6_orderedMapWithCustomHashBenchmark,
-                                RangeMultiplier(10)->Range(10, 10000)->Unit(
-                                    benchmark::kMillisecond));
+        BMQTST_BENCHMARK_WITH_ARGS(testN6_orderedMapWithCustomHashBenchmark,
+                                   RangeMultiplier(10)->Range(10, 10000)->Unit(
+                                       benchmark::kMillisecond));
         break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 #ifdef BSLS_PLATFORM_OS_LINUX
@@ -994,7 +1018,7 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_GBL_ALLOC);
 }
 
 // ----------------------------------------------------------------------------

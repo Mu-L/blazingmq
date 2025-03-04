@@ -17,30 +17,29 @@
 #ifndef INCLUDED_BMQT_QUEUEOPTIONS
 #define INCLUDED_BMQT_QUEUEOPTIONS
 
-//@PURPOSE: Provide a value-semantic type for options related to a queue.
-//
-//@CLASSES:
-//  bmqt::QueueOptions: options related to a queue.
-//
-//@DESCRIPTION: 'bmqt::QueueOptions' provides a value-semantic type,
-// 'QueueOptions', which is used to specify parameters for a queue.
-//
-//
-// The following parameters are supported:
-//: o !maxUnconfirmedMessages!:
-//:      Maximum number of outstanding messages that can be sent by the broker
-//:      without being confirmed.
-//:
-//: o !maxUnconfirmedBytes!:
-//:      Maximum accumulated bytes of all outstanding messages that can be sent
-//:      by the broker without being confirmed.
-//:
-//: o !consumerPriority!:
-//:      Priority of a consumer with respect to delivery of messages.
-//:
-//: o !suspendsOnBadHostHealth!:
-//:      Sets whether the queue should suspend operation when the host machine
-//:      is unhealthy.
+/// @file bmqt_queueoptions.h
+///
+/// @brief Provide a value-semantic type for options related to a queue.
+///
+/// @bbref{bmqt::QueueOptions} provides a value-semantic type, `QueueOptions`,
+/// which is used to specify parameters for a queue.
+///
+/// The following parameters are supported:
+///
+///   - *maxUnconfirmedMessages*:
+///     Maximum number of outstanding messages that can be sent by the broker
+///     without being confirmed.
+///
+///   - *maxUnconfirmedBytes*:
+///     Maximum accumulated bytes of all outstanding messages that can be sent
+///     by the broker without being confirmed.
+///
+///   - *consumerPriority*:
+///     Priority of a consumer with respect to delivery of messages.
+///
+///   - *suspendsOnBadHostHealth*:
+///     Sets whether the queue should suspend operation when the host machine
+///     is unhealthy.
 
 // BMQ
 
@@ -67,13 +66,12 @@ namespace bmqt {
 class QueueOptions {
   public:
     // PUBLIC CONSTANTS
-    static const int k_CONSUMER_PRIORITY_MIN;
-    // Constant representing the minimum
-    // valid consumer priority
 
+    /// Constant representing the minimum valid consumer priority
+    static const int k_CONSUMER_PRIORITY_MIN;
+
+    /// Constant representing the maximum valid consumer priority
     static const int k_CONSUMER_PRIORITY_MAX;
-    // Constant representing the maximum
-    // valid consumer priority
 
     static const int  k_DEFAULT_MAX_UNCONFIRMED_MESSAGES;
     static const int  k_DEFAULT_MAX_UNCONFIRMED_BYTES;
@@ -88,19 +86,17 @@ class QueueOptions {
     // DATA
     Subscription d_info;
 
+    /// Whether the queue suspends operation while the host is unhealthy.
     bsl::optional<bool> d_suspendsOnBadHostHealth;
-    // Whether the queue suspends operation
-    // while the host is unhealthy.
 
     Subscriptions d_subscriptions;
 
+    /// `true` if `d_subscriptions` had a value, `false` otherwise.  Emulates
+    /// `bsl::optional` for `d_subscriptions`.
     bool d_hadSubscriptions;
-    // 'true' if 'd_subscriptions' had a value, 'false'
-    // otherwise.  Emulates 'bsl::optional' for
-    // 'd_subscriptions'.
 
+    /// Allocator
     bslma::Allocator* d_allocator_p;
-    // Allocator
 
   public:
     // PUBLIC TYPES
@@ -127,6 +123,9 @@ class QueueOptions {
     QueueOptions(const QueueOptions& other, bslma::Allocator* allocator = 0);
 
     // MANIPULATORS
+
+    /// Assign to this object the value of the specified `rhs` object.
+    QueueOptions& operator=(const QueueOptions& rhs);
 
     /// Set the maxUnconfirmedMessages to the specified `value`.  The
     /// behavior is undefined unless `value >= 0`. If the specified `value`
@@ -257,6 +256,20 @@ bsl::ostream& operator<<(bsl::ostream& stream, const QueueOptions& rhs);
 // ------------------
 
 // MANIPULATORS
+
+inline QueueOptions& QueueOptions::operator=(const QueueOptions& rhs)
+{
+    if (this != &rhs) {
+        d_info                    = rhs.d_info;
+        d_suspendsOnBadHostHealth = rhs.d_suspendsOnBadHostHealth;
+        d_hadSubscriptions        = rhs.d_hadSubscriptions;
+        d_subscriptions           = Subscriptions(rhs.d_subscriptions,
+                                        this->d_allocator_p);
+    }
+
+    return *this;
+}
+
 inline QueueOptions& QueueOptions::setMaxUnconfirmedMessages(int value)
 {
     d_info.setMaxUnconfirmedMessages(value);

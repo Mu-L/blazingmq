@@ -44,8 +44,7 @@
 // BMQ
 #include <bmqt_messageguid.h>
 
-// MWC
-#include <mwcc_orderedhashmap.h>
+#include <bmqc_orderedhashmap.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -62,41 +61,25 @@ namespace BloombergLP {
 namespace mqbs {
 
 // FORWARD DECLARATION
-class VirtualStorageIterator;
+class VirtualStorageCatalog;
 
 // ====================
 // class VirtualStorage
 // ====================
 
-class VirtualStorage : public mqbi::Storage {
-    // TBD
+class VirtualStorage {
+    // This Mechanism represents one App in a Storage (FileBased or InMemory)
 
-  private:
-    // FRIENDS
-    friend class VirtualStorageIterator;
-
-    // PRIVATE TYPES
-    struct MessageContext {
-        int                   d_size;
-        mutable bmqp::RdaInfo d_rdaInfo;
-        unsigned int          d_subscriptionId;
-
-        MessageContext(int                  size,
-                       const bmqp::RdaInfo& rdaInfo,
-                       unsigned int         subScriptionId);
-    };
-
+  public:
     /// msgGUID -> MessageContext
     /// Must be a container in which iteration order is same as insertion
     /// order.
-    typedef mwcc::OrderedHashMap<bmqt::MessageGUID,
-                                 MessageContext,
+    typedef bmqc::OrderedHashMap<bmqt::MessageGUID,
+                                 mqbi::DataStreamMessage,
                                  bslh::Hash<bmqt::MessageGUIDHashAlgo> >
-        GuidList;
+        DataStream;
 
-    typedef GuidList::iterator GuidListIter;
-
-    typedef mqbi::Storage::StorageKeys StorageKeys;
+    typedef DataStream::iterator DataStreamIterator;
 
   private:
     // DATA
@@ -106,18 +89,21 @@ class VirtualStorage : public mqbi::Storage {
     // underlying 'real' storage.  Held.
 
     bsl::string d_appId;
-    // AppId of the consumer client which this
-    // instance represents.
+    // AppId of the App which this instance represents.
 
     mqbu::StorageKey d_appKey;
     // Storage key of the associated 'appId'.
 
-    GuidList d_guids;
-    // List of guids that are part of this storage.
+    bsls::Types::Int64 d_removedBytes;
+    // Cumulative count of all bytes _removed_ from this App
+    // The owner 'VirtualStorageCatalog' keeps track of all bytes
 
-    bsls::Types::Int64 d_totalBytes;
-    // Total size (in bytes) of all the messages that
-    // it holds.
+    bsls::Types::Int64 d_numRemoved;
+    // Cumulative count of all messages _removed_ from this App
+    // The owner 'VirtualStorageCatalog' keeps track of all messages
+
+    unsigned int d_ordinal;
+    // The ordinal to locate corresponding state in 'DataStreamMessage'
 
   private:
     // NOT IMPLEMENTED
@@ -131,256 +117,91 @@ class VirtualStorage : public mqbi::Storage {
     // CREATORS
 
     /// Create an instance of virtual storage backed by the specified real
-    /// `storage`, and having the specified `appId` and `appKey`, and use
+    /// `storage`, and having the specified `appId`, and `appKey`, and use
     /// the specified `allocator` for any memory allocations.  Behavior is
     /// undefined unless `storage` is non-null, `appId` is non-empty and
     /// `appKey` is non-null.  Note that the specified real `storage` must
     /// outlive this virtual storage instance.
+    /// The specified 'ordinal' uniquely identifies an offset for this instance
+    /// in 'DataStreamMessage'.
     VirtualStorage(mqbi::Storage*          storage,
                    const bsl::string&      appId,
                    const mqbu::StorageKey& appKey,
+                   unsigned int            ordinal,
+                   bsls::Types::Int64      numMessagesSoFar,
                    bslma::Allocator*       allocator);
 
     /// Destructor.
-    ~VirtualStorage() BSLS_KEYWORD_OVERRIDE;
+    ~VirtualStorage();
 
     // ACCESSORS
-
-    /// Return the URI of the queue this storage is associated with.
-    const bmqt::Uri& queueUri() const BSLS_KEYWORD_OVERRIDE;
-
-    /// Return the storage key associated with this instance.
-    const mqbu::StorageKey& queueKey() const BSLS_KEYWORD_OVERRIDE;
 
     /// Return the appId associated with this storage instance.  Note that
     /// the returned string is always non-empty.
-    const bsl::string& appId() const BSLS_KEYWORD_OVERRIDE;
+    const bsl::string& appId() const;
 
     /// Return the app key, if any, associated with this storage instance.
     /// Note that the returned key is always non-null.
-    const mqbu::StorageKey& appKey() const BSLS_KEYWORD_OVERRIDE;
+    const mqbu::StorageKey& appKey() const;
 
-    /// Return the current configuration used by this storage. The behavior
-    /// is undefined unless `configure` was successfully called.
-    const mqbconfm::Storage& config() const BSLS_KEYWORD_OVERRIDE;
-
-    /// Return the partitionId associated with this storage.
-    int partitionId() const BSLS_KEYWORD_OVERRIDE;
-
-    /// Return true if storage is backed by a persistent data store,
-    /// otherwise return false.
-    bool isPersistent() const BSLS_KEYWORD_OVERRIDE;
-
-    bsls::Types::Int64
-    numMessages(const mqbu::StorageKey& appKey) const BSLS_KEYWORD_OVERRIDE;
+    bsls::Types::Int64 numRemoved() const;
     // Return the number of messages in the storage.
 
-    bsls::Types::Int64
-    numBytes(const mqbu::StorageKey& appKey) const BSLS_KEYWORD_OVERRIDE;
+    bsls::Types::Int64 removedBytes() const;
     // Return the number of bytes in the storage.
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    bool isEmpty() const BSLS_KEYWORD_OVERRIDE;
-
-    bool
-    hasMessage(const bmqt::MessageGUID& msgGUID) const BSLS_KEYWORD_OVERRIDE;
-    // Return true if this storage has message with the specified
-    // 'msgGUID', false otherwise.
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    int numVirtualStorages() const BSLS_KEYWORD_OVERRIDE;
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    bool hasVirtualStorage(const mqbu::StorageKey& appKey,
-                           bsl::string* appId = 0) const BSLS_KEYWORD_OVERRIDE;
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    bool hasVirtualStorage(const bsl::string& appId,
-                           mqbu::StorageKey*  appKey = 0) const
-        BSLS_KEYWORD_OVERRIDE;
 
     /// Return `true` if there was Replication Receipt for the specified
     /// `msgGUID`.
-    bool
-    hasReceipt(const bmqt::MessageGUID& msgGUID) const BSLS_KEYWORD_OVERRIDE;
+    bool hasReceipt(const bmqt::MessageGUID& msgGUID) const;
 
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    void loadVirtualStorageDetails(AppIdKeyPairs* buffer) const
-        BSLS_KEYWORD_OVERRIDE;
-
-    /// Store in the specified `msgSize` the size, in bytes, of the message
-    /// having the specified `msgGUID` if found and return success, or
-    /// return a non-zero return code and leave `msgSize` untouched if no
-    /// message with `msgGUID` were found.
-    mqbi::StorageResult::Enum getMessageSize(
-        int*                     msgSize,
-        const bmqt::MessageGUID& msgGUID) const BSLS_KEYWORD_OVERRIDE;
+    /// Return the unique offset of this instance in 'DataStreamMessage'.
+    unsigned int ordinal() const;
 
     // MANIPULATORS
 
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    mqbu::CapacityMeter* capacityMeter() BSLS_KEYWORD_OVERRIDE;
-
-    // ACCESSORS
-
-    /// Retrieve the message and its metadata having the specified `msgGUID`
-    /// in the specified `appData`, `options` and `attributes` from this
-    /// storage.  Return zero on success or a non-zero error code on
-    /// failure.
+    /// Change the state of this App in the specified 'dataStreamMessage' to
+    /// indicate CONFIRM.
     mqbi::StorageResult::Enum
-    get(bsl::shared_ptr<bdlbb::Blob>*   appData,
-        bsl::shared_ptr<bdlbb::Blob>*   options,
-        mqbi::StorageMessageAttributes* attributes,
-        const bmqt::MessageGUID&        msgGUID) const BSLS_KEYWORD_OVERRIDE;
+    confirm(mqbi::DataStreamMessage* dataStreamMessage);
 
-    /// Populate the specified `attributes` buffer with attributes of the
-    /// message having the specified `msgGUID`.  Return zero on success or a
-    /// non-zero error code on failure.
+    /// Change the state of this App in the specified 'dataStreamMessage' to
+    /// indicate removal (by a purge or unregistration).
     mqbi::StorageResult::Enum
-    get(mqbi::StorageMessageAttributes* attributes,
-        const bmqt::MessageGUID&        msgGUID) const BSLS_KEYWORD_OVERRIDE;
+    remove(mqbi::DataStreamMessage* dataStreamMessage);
 
-    // MANIPULATORS
+    bool remove(mqbi::DataStreamMessage* dataStreamMessage,
+                unsigned int             replacingOrdinal);
 
-    /// Configure this storage using the specified `config` and `limits`.
-    /// Return 0 on success, or an non-zero return code and fill in a
-    /// description of the error in the specified `errorDescription`
-    /// otherwise.  Note that calling `configure` on an already configured
-    /// storage should atomically reconfigure that storage with the new
-    /// configuration (or fail and leave the storage untouched).
-    int configure(bsl::ostream&            errorDescription,
-                  const mqbconfm::Storage& config,
-                  const mqbconfm::Limits&  limits,
-                  const bsls::Types::Int64 messageTtl,
-                  const int maxDeliveryAttempts) BSLS_KEYWORD_OVERRIDE;
+    /// Observe removal of this App from the specified 'dataStreamMessage' by
+    /// GC and update bytes and messages counts if needed.
+    void onGC(const mqbi::DataStreamMessage& dataStreamMessage);
 
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    void setQueue(mqbi::Queue* queue) BSLS_KEYWORD_OVERRIDE;
+    /// Reset bytes and messages counts as in the case of purging all Apps.
+    void resetStats();
 
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    mqbi::Queue* queue() BSLS_KEYWORD_OVERRIDE;
+    void replaceOrdinal(unsigned int replacingOrdinal);
 
-    /// Close this storage.
-    void close() BSLS_KEYWORD_OVERRIDE;
-
-    /// Save the message having the specified `msgGUID`, `msgSize`, and
-    /// `rdaInfo` into this virtual storage. Return 0 on success or an
-    /// non-zero error code on failure.
-    mqbi::StorageResult::Enum put(const bmqt::MessageGUID& msgGUID,
-                                  int                      msgSize,
-                                  const bmqp::RdaInfo&     rdaInfo,
-                                  unsigned int             subScriptionId);
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol. Please call
-    /// put(const bmqt::MessageGUID& msgGUID, const int msgSize) instead.
-    mqbi::StorageResult::Enum
-    put(mqbi::StorageMessageAttributes*     attributes,
-        const bmqt::MessageGUID&            msgGUID,
-        const bsl::shared_ptr<bdlbb::Blob>& appData,
-        const bsl::shared_ptr<bdlbb::Blob>& options,
-        const StorageKeys& storageKeys = StorageKeys()) BSLS_KEYWORD_OVERRIDE;
-
-    /// Get an iterator for items stored in the virtual storage identified
-    /// by the specified `appKey`.  Iterator will point to point to the
-    /// oldest item, if any, or to the end of the collection if empty.  Note
-    /// that if `appKey` is null, an iterator over the underlying physical
-    /// storage will be returned.  Also note that because `Storage` and
-    /// `StorageIterator` are interfaces, the implementation of this method
-    /// will allocate, so it's recommended to keep the iterator.
-    bslma::ManagedPtr<mqbi::StorageIterator>
-    getIterator(const mqbu::StorageKey& appKey) BSLS_KEYWORD_OVERRIDE;
-
-    /// Load into the the specified `out` an iterator for items stored in
-    /// the virtual storage identified by the specified `appKey`, initially
-    /// pointing to the item associated with the specified `msgGUID`.
-    /// Return zero on success, and a non-zero code if `msgGUID` was not
-    /// found in the storage.  Note that if `appKey` is null, an iterator
-    /// over the underlying physical storage will be returned.  Also note
-    /// that because `Storage` and `StorageIterator` are interfaces, the
-    /// implementation of this method will allocate, so it's recommended to
-    /// keep the iterator.
-    mqbi::StorageResult::Enum
-    getIterator(bslma::ManagedPtr<mqbi::StorageIterator>* out,
-                const mqbu::StorageKey&                   appKey,
-                const bmqt::MessageGUID& msgGUID) BSLS_KEYWORD_OVERRIDE;
-
-    /// Remove from the storage the message having the specified `msgGUID`
-    /// and store it's size, in bytes, in the optionally specified `msgSize`
-    /// if the `msgGUID` was found.  Return 0 on success, or a non-zero
-    /// return code if the `msgGUID` was not found.  The optionally
-    /// specified `clearAll` is ignored.
-    mqbi::StorageResult::Enum
-    remove(const bmqt::MessageGUID& msgGUID,
-           int*                     msgSize  = 0,
-           bool                     clearAll = false) BSLS_KEYWORD_OVERRIDE;
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    mqbi::StorageResult::Enum
-    releaseRef(const bmqt::MessageGUID& msgGUID,
-               const mqbu::StorageKey&  appKey,
-               bsls::Types::Int64       timestamp,
-               bool onReject = false) BSLS_KEYWORD_OVERRIDE;
-
-    /// Remove all entries from this storage.  Specified `appKey` is unused.
-    /// This routine always returns success.
-    mqbi::StorageResult::Enum
-    removeAll(const mqbu::StorageKey& appKey) BSLS_KEYWORD_OVERRIDE;
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    void dispatcherFlush(bool storage, bool queues) BSLS_KEYWORD_OVERRIDE;
-
-    /// Attempt to garbage-collect messages for which TTL has expired, and
-    /// return the number of messages garbage-collected.  Populate the
-    /// specified `latestGcMsgTimestampEpoch` with the timestamp, as seconds
-    /// from epoch, of the latest message garbage-collected due to TTL
-    /// expiration, and the specified `configuredTtlValue` with the TTL
-    /// value (in seconds) with which this storage instance is configured.
-    virtual int gcExpiredMessages(
-        bsls::Types::Uint64* latestGcMsgTimestampEpoch,
-        bsls::Types::Int64*  configuredTtlValue,
-        bsls::Types::Uint64  secondsFromEpoch) BSLS_KEYWORD_OVERRIDE;
-
-    /// Garbage-collect those messages from the deduplication history which
-    /// have expired the deduplication window.  Return `true`, if there are
-    /// expired items unprocessed because of the batch limit.
-    virtual bool gcHistory() BSLS_KEYWORD_OVERRIDE;
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    int
-    addVirtualStorage(bsl::ostream&           errorDescription,
-                      const bsl::string&      appId,
-                      const mqbu::StorageKey& appKey) BSLS_KEYWORD_OVERRIDE;
-
-    /// Behavior is undefined if this method is ever invoked.  This method
-    /// needs to be implemented as its part of base protocol.
-    bool
-    removeVirtualStorage(const mqbu::StorageKey& appKey) BSLS_KEYWORD_OVERRIDE;
+    void setNumRemoved(bsls::Types::Int64 numRemoved);
 };
 
-// ============================
-// class VirtualStorageIterator
-// ============================
+// =====================
+// class StorageIterator
+// =====================
 
-class VirtualStorageIterator : public mqbi::StorageIterator {
-    // TBD
+class StorageIterator : public mqbi::StorageIterator {
+    // Mechanism to provide access to both underlying real storage (FileBased
+    // or InMemory) and all App states in Virtual Storage.
 
   private:
     // DATA
-    VirtualStorage* d_virtualStorage_p;
+    mqbi::Storage* d_storage_p;
+    // underlying 'real' storage (FileBased or InMemory).
 
-    VirtualStorage::GuidList::const_iterator d_iterator;
+    VirtualStorageCatalog* d_owner_p;
+    // The owner and creator.
+
+    VirtualStorage::DataStreamIterator d_iterator;
+    // Access to App states in Virtual Storages.
 
     mutable mqbi::StorageMessageAttributes d_attributes;
 
@@ -394,13 +215,12 @@ class VirtualStorageIterator : public mqbi::StorageIterator {
     mutable bsl::shared_ptr<bdlbb::Blob> d_options_sp;
 
     mutable bool d_haveReceipt;
-    // Avoid reading Attributes.
+    // Cached value.
 
   private:
     // NOT IMPLEMENTED
-    VirtualStorageIterator(const VirtualStorageIterator&);  // = delete
-    VirtualStorageIterator&
-    operator=(const VirtualStorageIterator&);  // = delete
+    StorageIterator(const StorageIterator&);             // = delete
+    StorageIterator& operator=(const StorageIterator&);  // = delete
 
   private:
     // PRIVATE MANIPULATORS
@@ -422,18 +242,25 @@ class VirtualStorageIterator : public mqbi::StorageIterator {
   public:
     // CREATORS
 
-    /// Create a new VirtualStorageIterator from the specified `storage` and
-    /// pointing at the specified `initialPosition`.
-    VirtualStorageIterator(
-        VirtualStorage*                                 storage,
-        const VirtualStorage::GuidList::const_iterator& initialPosition);
+    /// Create a new VirtualStorageIterator for the specified 'storage' and
+    /// 'owner' pointing at the specified 'initialPosition'.
+    StorageIterator(
+        mqbi::Storage*                              storage,
+        VirtualStorageCatalog*                      owner,
+        const VirtualStorage::DataStream::iterator& initialPosition);
 
     /// Destructor
-    ~VirtualStorageIterator() BSLS_KEYWORD_OVERRIDE;
+    ~StorageIterator() BSLS_KEYWORD_OVERRIDE;
 
     // MANIPULATORS
     bool advance() BSLS_KEYWORD_OVERRIDE;
-    void reset() BSLS_KEYWORD_OVERRIDE;
+
+    /// If the specified 'where' is unset, reset the iterator to point to the
+    /// to the beginning of the Virtual Storage.  Otherwise, reset the
+    /// iterator to point to the item corresponding to the 'where'.  If the
+    /// item is not found, reset the iterator to the end of the storage.
+    void reset(const bmqt::MessageGUID& where = bmqt::MessageGUID())
+        BSLS_KEYWORD_OVERRIDE;
 
     // ACCESSORS
 
@@ -442,15 +269,19 @@ class VirtualStorageIterator : public mqbi::StorageIterator {
     /// behavior is undefined unless `atEnd` returns `false`.
     const bmqt::MessageGUID& guid() const BSLS_KEYWORD_OVERRIDE;
 
-    /// Return a reference offering modifiable access to the RdaInfo
-    /// associated to the item currently pointed at by this iterator.  The
-    /// behavior is undefined unless `atEnd` returns `false`.
-    bmqp::RdaInfo& rdaInfo() const BSLS_KEYWORD_OVERRIDE;
-
-    /// Return subscription id associated to the item currently pointed at
-    /// by this iterator.
+    /// Return a reference offering non-modifiable access to the App state
+    /// corresponding to the specified 'ordinal' and the item currently pointed
+    /// at by this iterator.
     /// The behavior is undefined unless `atEnd` returns `false`.
-    unsigned int subscriptionId() const BSLS_KEYWORD_OVERRIDE;
+    const mqbi::AppMessage&
+    appMessageView(unsigned int appOrdinal) const BSLS_KEYWORD_OVERRIDE;
+
+    /// Return a reference offering modifiable access to the App state
+    /// corresponding to the specified 'ordinal' and the item currently pointed
+    /// at by this iterator.
+    /// The behavior is undefined unless `atEnd` returns `false`.
+    mqbi::AppMessage&
+    appMessageState(unsigned int appOrdinal) BSLS_KEYWORD_OVERRIDE;
 
     /// Return a reference offering non-modifiable access to the application
     /// data associated with the item currently pointed at by this iterator.
@@ -478,39 +309,54 @@ class VirtualStorageIterator : public mqbi::StorageIterator {
     bool hasReceipt() const BSLS_KEYWORD_OVERRIDE;
 };
 
+// ============================
+// class VirtualStorageIterator
+// ============================
+
+class VirtualStorageIterator : public StorageIterator {
+    // Mechanism to provide access to both underlying real storage (FileBased
+    // or InMemory) and one App states in Virtual Storage.
+  private:
+    // DATA
+    VirtualStorage* d_virtualStorage_p;
+
+  private:
+    // NOT IMPLEMENTED
+    VirtualStorageIterator(const VirtualStorageIterator&);  // = delete
+    VirtualStorageIterator&
+    operator=(const VirtualStorageIterator&);  // = delete
+
+  public:
+    // CREATORS
+
+    /// Create a new VirtualStorageIterator for the specified 'storage' and
+    /// 'owner' pointing at the specified 'initialPosition'.  The specified
+    /// 'virtualStorage' identifies the App which states this object iterates.
+    VirtualStorageIterator(
+        VirtualStorage*                             virtualStorage,
+        mqbi::Storage*                              storage,
+        VirtualStorageCatalog*                      owner,
+        const VirtualStorage::DataStream::iterator& initialPosition);
+
+    /// Destructor
+    ~VirtualStorageIterator() BSLS_KEYWORD_OVERRIDE;
+
+    // MANIPULATORS
+
+    /// Advance the iterator to the next messages which has the App state as
+    /// pending.
+    bool advance() BSLS_KEYWORD_OVERRIDE;
+};
+
 // ============================================================================
 //                             INLINE DEFINITIONS
 // ============================================================================
-
-// ------------------------------------
-// class VirtualStorage::MessageContext
-// ------------------------------------
-
-inline VirtualStorage::MessageContext::MessageContext(
-    int                  size,
-    const bmqp::RdaInfo& rdaInfo,
-    unsigned int         subScriptionId)
-: d_size(size)
-, d_rdaInfo(rdaInfo)
-, d_subscriptionId(subScriptionId)
-{
-    // NOTHING
-}
 
 // --------------------
 // class VirtualStorage
 // --------------------
 
 // ACCESSORS
-inline const bmqt::Uri& VirtualStorage::queueUri() const
-{
-    return d_storage_p->queueUri();
-}
-
-inline const mqbu::StorageKey& VirtualStorage::queueKey() const
-{
-    return d_storage_p->queueKey();
-}
 
 inline const bsl::string& VirtualStorage::appId() const
 {
@@ -522,53 +368,14 @@ inline const mqbu::StorageKey& VirtualStorage::appKey() const
     return d_appKey;
 }
 
-inline const mqbconfm::Storage& VirtualStorage::config() const
+inline bsls::Types::Int64 VirtualStorage::numRemoved() const
 {
-    return d_storage_p->config();
+    return d_numRemoved;  // TODO
 }
 
-inline int VirtualStorage::partitionId() const
+inline bsls::Types::Int64 VirtualStorage::removedBytes() const
 {
-    return mqbs::DataStore::k_INVALID_PARTITION_ID;
-}
-
-inline bool VirtualStorage::isPersistent() const
-{
-    return d_storage_p->isPersistent();
-}
-
-inline mqbu::CapacityMeter* VirtualStorage::capacityMeter()
-{
-    BSLS_ASSERT_OPT(false && "Should not be invoked.");
-    return static_cast<mqbu::CapacityMeter*>(0);
-}
-
-inline bsls::Types::Int64 VirtualStorage::numMessages(
-    BSLS_ANNOTATION_UNUSED const mqbu::StorageKey& appKey) const
-{
-    return d_guids.size();
-}
-
-inline bsls::Types::Int64 VirtualStorage::numBytes(
-    BSLS_ANNOTATION_UNUSED const mqbu::StorageKey& appKey) const
-{
-    return d_totalBytes;
-}
-
-inline bool VirtualStorage::isEmpty() const
-{
-    // executed by *ANY* thread
-
-    BSLS_ASSERT_OPT(false && "Should not be invoked.");
-    // If needed, can be implemented in a manner similar to
-    // 'mqbs::InMemoryStorage' and 'mqbs::FileBackedStorage'.
-
-    return false;
-}
-
-inline bool VirtualStorage::hasMessage(const bmqt::MessageGUID& msgGUID) const
-{
-    return 1 == d_guids.count(msgGUID);
+    return d_removedBytes;
 }
 
 }  // close package namespace

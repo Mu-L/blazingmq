@@ -24,7 +24,7 @@
 #include <bsls_protocoltest.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -86,24 +86,24 @@ static void test1_breathingTest()
 //   PROTOCOL TEST
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // The default allocator check fails in this test case because the
     // 'markDone' methods of AbstractSession may sometimes return a
     // memory-aware object without utilizing the parameter allocator.
 
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     PV("Creating a concrete object");
     bsls::ProtocolTest<HostHealthMonitorTestImp> monitor;
 
     PV("Verify that the protocol is abstract");
-    ASSERT(monitor.testAbstract());
+    BMQTST_ASSERT(monitor.testAbstract());
 
     PV("Verify that there are no data members");
-    ASSERT(monitor.testNoDataMembers());
+    BMQTST_ASSERT(monitor.testNoDataMembers());
 
     PV("Verify that the destructor is virtual");
-    ASSERT(monitor.testVirtualDestructor());
+    BMQTST_ASSERT(monitor.testVirtualDestructor());
 
     PV("Verify that all methods are public and virtual");
 
@@ -118,7 +118,7 @@ static void test1_breathingTest()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -126,9 +126,9 @@ int main(int argc, char* argv[])
     default: {
         bsl::cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND."
                   << bsl::endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

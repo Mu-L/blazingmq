@@ -1,2 +1,37 @@
+# Build env
 /build/
 /cmake.bld/
+/vcpkg_installed/
+compile_commands.json
+/out/
+/.cache/
+CMakeUserPresets.json
+/thirdparty/
+/include/
+/lib/
+**/.idea
+
+# Eclipse IDE
+.project
+.cproject
+
+# Mac DS_Store files
+**/.DS_Store
+.lcldev/
+settings.json
+
+# Python files
+*.pyc
+**/__pycache__/
+.pytest_cache/
+.cache/
+.venv/
+
+# fuzz-test output folder
+**/boofuzz-results
+
+# Symlink from 'src/applications/bmqbrkr/run'
+src/applications/bmqbrkr/etc/etc
+
+# 'sim_cpp11_features.pl' backups
+*.bak

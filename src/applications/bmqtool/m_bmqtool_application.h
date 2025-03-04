@@ -29,6 +29,7 @@
 #include <m_bmqtool_filelogger.h>
 #include <m_bmqtool_interactive.h>
 #include <m_bmqtool_messages.h>
+#include <m_bmqtool_poster.h>
 #include <m_bmqtool_storageinspector.h>
 
 // MQB
@@ -39,15 +40,16 @@
 #include <bmqa_queueid.h>
 #include <bmqa_session.h>
 
-// MWC
-#include <mwcst_statcontext.h>
-#include <mwctsk_consoleobserver.h>
+// BMQ
+#include <bmqst_statcontext.h>
+#include <bmqtsk_consoleobserver.h>
 
 // BDE
 #include <ball_multiplexobserver.h>
 #include <bdlbb_blob.h>
 #include <bdlbb_pooledblobbufferfactory.h>
 #include <bdlmt_eventscheduler.h>
+#include <bdlmt_throttle.h>
 #include <bsl_list.h>
 #include <bslma_allocator.h>
 #include <bslma_managedptr.h>
@@ -74,27 +76,18 @@ namespace m_bmqtool {
 /// Main application class for `bmqtool`.
 class Application : public bmqa::SessionEventHandler {
   private:
-    // TYPES
-    typedef bslma::ManagedPtr<mwcst::StatContext> StatContextMP;
-
-    /// This structure holds context created by `bmqa::Session`.
-    /// It must be destructed before the `d_session_mp`.
-    struct SessionContext {
-        bmqa::QueueId d_queueId;
-
-        bmqa::MessageEventBuilder d_eventBuilder;
-        // Message event builder.
-
-        SessionContext(bslma::Allocator* d_allocator);
-    };
+    // CLASS METHODS
+    static bsl::shared_ptr<bmqst::StatContext>
+    createStatContext(int historySize, bslma::Allocator* allocator);
 
     // DATA
     bslma::Allocator* d_allocator_p;
     // Held, not owned
 
-    Parameters* d_parameters_p;
-    // Command-line parameters.  Held, not
-    // owned
+    /// Run parameters
+    /// Copy is made to ensure lifetime of the Parameters object used by this
+    /// Application
+    const Parameters d_parameters;
 
     bslmt::Semaphore* d_shutdownSemaphore_p;
     // Semaphore holding the main thread
@@ -104,13 +97,16 @@ class Application : public bmqa::SessionEventHandler {
     // Handle on the running thread
     // (producer mode)
 
-    StatContextMP d_statContext_mp;
+    bmqa::QueueId d_queueId;
+    // Queue to send/receive messages
+
+    bsl::shared_ptr<bmqst::StatContext> d_statContext_sp;
     // StatContext for msg/event stats
 
     bdlmt::EventScheduler d_scheduler;
     // Used to schedule stat snapshots
 
-    bool d_isConnected;
+    bsls::AtomicBool d_isConnected;
     // Are we connected to bmqbrkr?  (to
     // know whether to dump stats/publish
     // message or not)
@@ -121,30 +117,10 @@ class Application : public bmqa::SessionEventHandler {
 
     ball::MultiplexObserver d_multiplexObserver;
 
-    mwctsk::ConsoleObserver d_consoleObserver;
-
-    bdlbb::PooledBlobBufferFactory d_bufferFactory;
-    // Buffer factory for the payload of the
-    // published message
-
-    bdlbb::PooledBlobBufferFactory d_timeBufferFactory;
-    // Small buffer factory for the first
-    // blob of the published message, to
-    // hold the timestamp information
-
-    bdlbb::Blob d_blob;
-    // Blob to post
-
-    bslma::ManagedPtr<SessionContext> d_sessionContext_mp;
+    bmqtsk::ConsoleObserver d_consoleObserver;
 
     bslma::ManagedPtr<bmqa::Session> d_session_mp;
     // Session with the BlazingMQ broker.
-
-    int d_msgUntilNextTimestamp;
-    // Number of messages remaining to send
-    // until stamping one with latency.
-
-    Interactive d_interactive;
 
     StorageInspector d_storageInspector;
 
@@ -152,11 +128,32 @@ class Application : public bmqa::SessionEventHandler {
     // Logger to use in case events logging
     // to file has been enabled.
 
-    bsl::list<bsls::Types::Int64> d_latencies;
-    // List of all message latencies (in
-    // ns).  Only populated when requested
-    // to generate a latency report (with
-    // --latency-report).
+    Poster d_poster;
+    // A factory for posting series of messages.
+
+    Interactive d_interactive;
+    // CLI handler.
+
+    /// A throttle object used to control confirm latency logging on a consumer
+    bdlmt::Throttle d_confirmLatencyThrottle;
+
+    /// List of all confirm message latencies (in ns).
+    /// Confirm message latency is the end-to-end time to deliver a message,
+    /// starting from producer post and ending on a consumer.
+    /// Only populated when requested to generate a latency report (with
+    /// --latency-report).
+    bsl::list<bsls::Types::Int64> d_confirmLatencies;
+
+    /// A throttle object used to control ack latency logging on a consumer
+    bdlmt::Throttle d_ackLatencyThrottle;
+
+    /// List of all ack message latencies (in ns).
+    /// Ack message latency is the time between posting a message and getting
+    /// an ACK for it, meaning that the message was at least replicated with
+    /// a needed quorum (delivery might not have happened yet).
+    /// Only populated when requested to generate a latency report (with
+    /// --latency-report).
+    bsl::list<bsls::Types::Int64> d_ackLatencies;
 
     bsls::AtomicBool d_autoReadInProgress;
     // Auto-consume mode only.  True if a
@@ -166,6 +163,19 @@ class Application : public bmqa::SessionEventHandler {
     // Auto-consume mode only.  True if a
     // message was seen during the current
     // grace period.
+
+    bsl::uint64_t d_numExpectedAcks;
+    // Auto-produce mode only. The total number of messages
+    // the tool will send. After posting is finished
+    // the tool will be waiting for this number of ACK
+    // messages, after which the shutdown semaphore will
+    // be posted.
+
+    bsl::uint64_t d_numAcknowledged;
+    // Auto-produce mode only. The number of acknowledged
+    // messages. When the value of this field becomes equal
+    // to d_numExpectedAcks, the shutdown semaphore will be
+    // posted.
 
     // PRIVATE MANIPULATORS
     //   (virtual: bmqa::SessionEventHandler)
@@ -205,8 +215,12 @@ class Application : public bmqa::SessionEventHandler {
     /// Print the final stats to the standard output, at exit time.
     void printFinalStats();
 
-    /// Generate the latency report.
-    void generateLatencyReport();
+    /// Generate the latency report from the specified `latencies`.
+    /// The specified `name` represents the origin of the latencies, it is
+    /// either end-to-end latency (producer->consumer) or ack latency
+    /// (producer->cluster->producer-ack).
+    void generateLatencyReport(const bsl::list<bsls::Types::Int64>& latencies,
+                               const bslstl::StringRef&             name);
 
     /// Do any `pre` run initialization, such as connecting to bmqbrkr,
     /// opening a queue, preparing the blob to publish, ...  Return 0 on
@@ -226,9 +240,9 @@ class Application : public bmqa::SessionEventHandler {
     // CREATORS
 
     /// Constructor
-    Application(m_bmqtool::Parameters* parameters,
-                bslmt::Semaphore*      shutdownSemaphore,
-                bslma::Allocator*      allocator);
+    Application(const m_bmqtool::Parameters& parameters,
+                bslmt::Semaphore*            shutdownSemaphore,
+                bslma::Allocator*            allocator);
 
     ~Application() BSLS_KEYWORD_OVERRIDE;
 

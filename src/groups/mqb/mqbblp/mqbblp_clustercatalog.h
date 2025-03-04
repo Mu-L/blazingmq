@@ -17,61 +17,64 @@
 #ifndef INCLUDED_MQBBLP_CLUSTERCATALOG
 #define INCLUDED_MQBBLP_CLUSTERCATALOG
 
-//@PURPOSE: Provide a catalog for building and retrieving Cluster objects.
-//
-//@CLASSES:
-//  mqbblp::ClusterCatalog: mechanism to manage a catalog of cluster objects
-//  mqbblp::ClusterCatalogIterator: mechanism to iterator over cluster catalog.
-//
-//@DESCRIPTION: 'mqbblp::ClusterCatalog' is a mechanism to manage all the
-// cluster components (implementing the 'mqbi::Cluster' interface).  It is in
-// charge of loading the clusters' definition and creating the cluster object
-// this broker is part of.  Clusters are reused when queried, and lazily
-// constructed if not yet created.  'mqbblp::ClusterCatalogIterator' provides
-// thread safe iteration through all the cluster of a cluster catalog.  The
-// order of the iteration is implementation defined.  Thread safe iteration is
-// provided by locking the catalog during the iterator's construction and
-// unlocking it at the iterator's destruction.  This guarantees that during the
-// life time of an iterator, the catalog can't be modified.
-//
-/// Thread-safety
-///-------------
-// This object is *thread* *enabled*, meaning that two threads can safely call
-// any methods on the *same* *instance* without external synchronization.
-//
-/// Usage
-///-----
-//
-/// Iterator Usage
-///- - - - - - -
-// The following code fragment shows how to use
-// 'mqbblp::ClusterCatalogIterator' to iterate through all cluster objects of
-// 'catalog'.
-//..
-//      for (ClusterCatalogIterator it(&catalog); it; ++it) {
-//          mqbi::Cluster *c = it.cluster();
-//
-//          use(c);                          // the function 'use' uses the
-//                                           // cluster in some way
-//      }
-//      // 'it' is now destroyed out of the scope, releasing the lock.
-//..
-// Note that the associated catalog is locked when the iterator is constructed
-// and is unlocked only when the iterator is destroyed.  This means that until
-// the iterator is destroyed, all the threads trying to modify the catalog will
-// remain blocked.  So clients must make sure to destroy their iterators after
-// they are done using them.  One easy way is to use the
-// 'for(ClusterCatalogIterator it(catalog); ...' as above.
+/// @file mqbblp_clustercatalog.h
+///
+/// @brief Provide a catalog for building and retrieving `Cluster` objects.
+///
+/// @bbref{mqbblp::ClusterCatalog} is a mechanism to manage all the cluster
+/// components (implementing the @bbref{mqbi::Cluster} interface).  It is in
+/// charge of loading the clusters' definition and creating the cluster object
+/// this broker is part of.  Clusters are reused when queried, and lazily
+/// constructed if not yet created.  @bbref{mqbblp::ClusterCatalogIterator}
+/// provides thread safe iteration through all the cluster of a cluster
+/// catalog.  The order of the iteration is implementation defined.  Thread
+/// safe iteration is provided by locking the catalog during the iterator's
+/// construction and unlocking it at the iterator's destruction.  This
+/// guarantees that during the life time of an iterator, the catalog can't be
+/// modified.
+///
+/// Thread-safety                               {#mqbblp_clustercatalog_thread}
+/// =============
+///
+/// This object is *thread* *enabled*, meaning that two threads can safely call
+/// any methods on the *same* *instance* without external synchronization.
+///
+/// Usage                                        {#mqbblp_clustercatalog_usage}
+/// =====
+///
+/// Iterator Usage                            {#mqbblp_clustercatalog_iterator}
+/// --------------
+///
+/// The following code fragment shows how to use
+/// @bbref{mqbblp::ClusterCatalogIterator} to iterate through all cluster
+/// objects of `catalog`.
+///
+/// ```
+/// for (ClusterCatalogIterator it(&catalog); it; ++it) {
+///     mqbi::Cluster *c = it.cluster();
+///
+///     use(c);                               // the function `use` uses the
+///                                           // cluster in some way
+/// }
+/// // `it` is now destroyed out of the scope, releasing the lock.
+/// ```
+///
+/// Note that the associated catalog is locked when the iterator is constructed
+/// and is unlocked only when the iterator is destroyed.  This means that until
+/// the iterator is destroyed, all the threads trying to modify the catalog
+/// will remain blocked.  So clients must make sure to destroy their iterators
+/// after they are done using them.  One easy way is to use the
+/// `for(ClusterCatalogIterator it(catalog); ...` as above.
 
 // MQB
-
 #include <mqbcfg_messages.h>
 #include <mqbi_cluster.h>
 #include <mqbi_domain.h>
+#include <mqbnet_multirequestmanager.h>
 #include <mqbnet_session.h>
 
-// MWC
-#include <mwcma_countingallocatorstore.h>
+// BMQ
+#include <bmqma_countingallocatorstore.h>
 
 // BDE
 #include <ball_log.h>
@@ -117,7 +120,7 @@ class NegotiatorContext;
 namespace mqbnet {
 class TransportManager;
 }
-namespace mwcst {
+namespace bmqst {
 class StatContext;
 }
 
@@ -142,22 +145,12 @@ class ClusterCatalog {
   public:
     // TYPES
 
-    /// Pool of shared pointers to Blobs
-    typedef bdlcc::SharedObjectPool<
-        bdlbb::Blob,
-        bdlcc::ObjectPoolFunctors::DefaultCreator,
-        bdlcc::ObjectPoolFunctors::RemoveAll<bdlbb::Blob> >
-        BlobSpPool;
-
-  public:
-    // TYPES
-
-    /// Struct holding some context state used during negotiation: refer to
-    /// the `mqba::SessionNegotiator` for usage of that struct.  This
+    /// Struct holding some context state used during negotiation: refer to the
+    /// @bbref{ mqba::SessionNegotiator} for usage of that struct.  This
     /// `userData` is created here, passed to `mqbnet` to hold on to it and
-    /// deliver it back to the `Negotiator` ~ this hackery mechanism is
-    /// needed in order to avoid dependency cycles and keep `mqbnet` layer
-    /// abstracted away from this logic.
+    /// deliver it back to the `Negotiator` ~ this hackery mechanism is needed
+    /// in order to avoid dependency cycles and keep `mqbnet` layer abstracted
+    /// away from this logic.
     struct NegotiationUserData {
         bsl::string d_clusterName;
         int         d_myNodeId;
@@ -169,14 +162,22 @@ class ClusterCatalog {
     /// {internal-ticket D39833134}
     struct ClusterInfo {
         // PUBLIC DATA
-        bsl::shared_ptr<mqbi::Cluster> d_cluster_sp;
-        // Cluster created, owned by this
-        // struct.
 
+        /// Cluster created, owned by this struct.
+        bsl::shared_ptr<mqbi::Cluster> d_cluster_sp;
+
+        /// Event processor associated to this cluster.
         mqbnet::SessionEventProcessor* d_eventProcessor_p;
-        // Event processor associated to this
-        // cluster.
     };
+
+    typedef bmqp::RequestManager<bmqp_ctrlmsg::ControlMessage,
+                                 bmqp_ctrlmsg::ControlMessage>
+        RequestManagerType;
+
+    typedef mqbnet::MultiRequestManager<bmqp_ctrlmsg::ControlMessage,
+                                        bmqp_ctrlmsg::ControlMessage,
+                                        bsl::shared_ptr<mqbnet::Session> >
+        StopRequestManagerType;
 
   private:
     // PRIVATE TYPES
@@ -200,85 +201,73 @@ class ClusterCatalog {
     typedef bsl::unordered_map<bsl::string, int> VirtualClustersMap;
 
     /// Map of stat context names to StatContext pointers
-    typedef bsl::unordered_map<bsl::string, mwcst::StatContext*>
+    typedef bsl::unordered_map<bsl::string, bmqst::StatContext*>
         StatContextsMap;
 
   private:
     // DATA
+
+    /// Allocator to use.
     bslma::Allocator* d_allocator_p;
-    // Allocator to use
 
-    mwcma::CountingAllocatorStore d_allocators;
-    // Allocator store to spawn new
-    // allocators for sub-components
+    /// Allocator store to spawn new allocators for sub-components.
+    bmqma::CountingAllocatorStore d_allocators;
 
+    /// True if this component is started.
     bool d_isStarted;
-    // True if this component is started
 
-    bdlmt::EventScheduler* d_scheduler_p;
-    // EventScheduler to use
-
+    /// Dispatcher to use.
     mqbi::Dispatcher* d_dispatcher_p;
-    // Dispatcher to use
 
-    bdlbb::BlobBufferFactory* d_bufferFactory_p;
-    // Blob buffer factory to use
-
-    BlobSpPool* d_blobSpPool_p;
-    // Pool of shared pointers to blob to
-    // use.
-
+    /// TransportManager for creating @bbref{mqbnet::Cluster}.
     mqbnet::TransportManager* d_transportManager_p;
-    // TransportManager for creating
-    // mqbnet::Cluster
 
+    /// The domain factory to use, held not owned.
     mqbi::DomainFactory* d_domainFactory_p;
-    // The domain factory to use, held not
-    // owned.
 
+    /// Mutex for synchronizing usage of this component.
     mutable bslmt::Mutex d_mutex;
-    // Mutex for synchronizing usage of
-    // this component
 
     mqbcfg::ClustersDefinition d_clustersDefinition;
 
+    /// Cluster this machine belongs to (or empty if not part of any).
     bsl::unordered_set<bsl::string> d_myClusters;
-    // Cluster this machine belongs to (or
-    // empty if not part of any)
 
+    /// This map contains the list of all virtual clusters this machine belongs
+    /// to (if any) as well as its nodeId in that virtual cluster.  While a
+    /// virtual cluster is only meaningful at the downstream client, as a means
+    /// to establish a multi-hop chained connection path to the upstream, the
+    /// "virtual cluster member" needs to be aware of the nodeId the downstream
+    /// clients refer it to, so that upon reception of the negotiation response
+    /// they can map it back to their internal `ClusterNode` object.
     VirtualClustersMap d_myVirtualClusters;
-    // This map contains the list of all
-    // virtual clusters this machine
-    // belongs to (if any) as well as its
-    // nodeId in that virtual cluster.
-    // While a virtual cluster is only
-    // meaningful at the downstream client,
-    // as a mean to establish a multi-hop
-    // chained connection path to the
-    // upstream, the 'virtual cluster
-    // member' needs to be aware of what
-    // nodeId the downstream clients refer
-    // it to, so that upon reception of the
-    // negotiation response they can map it
-    // back to their internal ClusterNode
-    // object.
 
+    /// Clusters that should be created at startup, expecting remote nodes
+    /// connecting to this machine.
     bsl::unordered_set<bsl::string> d_myReverseClusters;
-    // Clusters that should be created at
-    // startup, expecting remote nodes
-    // connecting to this machine.
 
+    /// List of reversed connections that should be established by this broker,
+    /// if any.
     ReversedClusterConnectionArray d_reversedClusterConnections;
-    // List of reversed connections that
-    // should be established by this
-    // broker, if any.
 
+    /// Container for the @bbref{mqbi::Cluster}s that have been created.
     ClustersMap d_clusters;
-    // Container for the 'mqbi::Cluster'
-    // that have been created.
 
+    /// Map of stat contexts.
     StatContextsMap d_statContexts;
-    // Map of stat contexts
+
+    const mqbi::ClusterResources d_resources;
+
+    /// Callback function to enqueue admin commands.
+    mqbnet::Session::AdminCommandEnqueueCb d_adminCb;
+
+    /// Request manager to use.
+    RequestManagerType d_requestManager;
+
+    /// Request manager to send stop requests to connected brokers.
+    ///
+    /// @note Should be part of `ClusterResources`.
+    StopRequestManagerType d_stopRequestsManager;
 
   private:
     // NOT IMPLEMENTED
@@ -331,26 +320,23 @@ class ClusterCatalog {
 
     // CREATORS
 
-    /// Create a new object using the specified `scheduler`, `dispatcher`,
-    /// `transportManager`, `bufferFactory`, `blobSpPool`, and the specified
+    /// Create a new object using the specified `dispatcher`,
+    /// `transportManager`, `statContexts`, `resources`, and the specified
     /// `allocator`.
-    ClusterCatalog(bdlmt::EventScheduler*    scheduler,
-                   mqbi::Dispatcher*         dispatcher,
-                   mqbnet::TransportManager* transportManager,
-                   const StatContextsMap&    statContexts,
-                   bdlbb::BlobBufferFactory* bufferFactory,
-                   BlobSpPool*               blobSpPool,
-                   bslma::Allocator*         allocator);
+    ClusterCatalog(mqbi::Dispatcher*             dispatcher,
+                   mqbnet::TransportManager*     transportManager,
+                   const StatContextsMap&        statContexts,
+                   const mqbi::ClusterResources& resources,
+                   bslma::Allocator*             allocator);
 
     /// Destructor.
     ~ClusterCatalog();
 
     // MANIPULATORS
 
-    /// Execute the `bmq_clusters.py` script to retrieve the cluster config
-    /// of this broker.  Return 0 on success or a non-zero value and
-    /// populate the specified `errorDescription` with a description of the
-    /// error otherwise.
+    /// Retrieve the cluster config of this broker.  Return 0 on success or a
+    /// non-zero value and populate the specified `errorDescription` with a
+    /// description of the error otherwise.
     int loadBrokerClusterConfig(bsl::ostream& errorDescription);
 
     /// Start this component, which implies executing the script to retrieve
@@ -383,8 +369,8 @@ class ClusterCatalog {
     bool findCluster(bsl::shared_ptr<mqbi::Cluster>* out,
                      const bslstl::StringRef&        name);
 
+    /// Return number of clusters in the catalog.
     int count();
-    // Return number of clusters in the catalog.
 
     /// Method invoked by the session negotiator when a new session,
     /// corresponding to the specified `nodeId` in the specified
@@ -407,6 +393,14 @@ class ClusterCatalog {
     /// otherwise.
     int processCommand(mqbcmd::ClustersResult*        result,
                        const mqbcmd::ClustersCommand& command);
+
+    StopRequestManagerType& stopRequestManger();
+    void processStopResponse(const bmqp_ctrlmsg::ControlMessage& message);
+
+    /// Sets the callback, `value`, to pass to created clusters in this catalog
+    /// that runs when an admin command is received by the cluster.
+    void setAdminCommandEnqueueCallback(
+        const mqbnet::Session::AdminCommandEnqueueCb& value);
 
     // ACCESSORS
 
@@ -504,6 +498,18 @@ inline bool ClusterCatalog::isMemberOf(const bsl::string& clusterName) const
     return (d_myClusters.find(clusterName) != d_myClusters.end());
 }
 
+inline ClusterCatalog::StopRequestManagerType&
+ClusterCatalog::stopRequestManger()
+{
+    return d_stopRequestsManager;
+}
+
+inline void ClusterCatalog::processStopResponse(
+    const bmqp_ctrlmsg::ControlMessage& message)
+{
+    d_requestManager.processResponse(message);
+}
+
 // ----------------------------
 // class ClusterCatalogIterator
 // ----------------------------
@@ -546,6 +552,12 @@ inline mqbi::Cluster* ClusterCatalogIterator::cluster() const
     BSLS_ASSERT_SAFE(*this);
 
     return d_iterator->second.d_cluster_sp.get();
+}
+
+inline void ClusterCatalog::setAdminCommandEnqueueCallback(
+    const mqbnet::Session::AdminCommandEnqueueCb& value)
+{
+    d_adminCb = value;
 }
 
 }  // close package namespace

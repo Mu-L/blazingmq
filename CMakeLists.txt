@@ -14,7 +14,11 @@ project( BMQ LANGUAGES C CXX )
 list( APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/etc/cmake" )
 
 include( BBVendor )
+include( BMQPlugins )
 include( TargetBMQStyleUor )
+include( BmqPackageProvider )
+
+setup_package_provider()
 
 # -----------------------------------------------------------------------------
 #                                INITIALIZATION
@@ -33,6 +37,7 @@ if( "${CMAKE_CXX_COMPILER_ID}" MATCHES "(Apple)?Clang" )
           "-Wno-padded"
           "-Wno-global-constructors"    # bmqp_protocol mask constants
           "-Wno-conversion"
+          "-Wno-undef"                  # BSLS_COMPILERFEATURES_SIMULATE_CPP11_FEATURES
           "-Wno-float-equal"            # operator== in generated classes
   )
 
@@ -82,8 +87,13 @@ if( "${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|(Apple)?Clang" )
   endif()
 endif()
 
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+  # In Debug build, ensure that BSLS_ASSERT_SAFE macro is enabled
+  add_definitions("-DBSLS_ASSERT_LEVEL_ASSERT_SAFE")
+endif()
+
 # This repo contains the canonical source of multiple, independently released,
-# UORs (mwc, bmq, bmqbrkr, bmqbrkrcfg, bmqtool).  When releasing a UOR, that
+# UORs (bmq, bmqbrkr, bmqbrkrcfg, bmqtool).  When releasing a UOR, that
 # specific target is selected through injection of the 'INSTALL_TARGETS'
 # variable.  Many static analysis tool leverage the generated
 # 'compile_commands.json' in order to know which sources to work with.
@@ -94,20 +104,21 @@ endif()
 # that we will only add targets to the intended ones, based on what is
 # currently being built.  We will set a "BMQ_TARGET_<xyz>_NEEDED" value to
 # YES/NO.
-# - if INSTALL_TARGETS is empty, this means we are not doing a DPKG build, but
-#   just a normal developer build, therefore include all targets
+# - if INSTALL_TARGETS is empty, this means we are not doing an integration
+#   build, but just a normal developer build, therefore include all targets
 # - otherwise, selectively enable targets based on what is being built
 
 if (NOT DEFINED INSTALL_TARGETS)
   # If no specic install targets has been set, then enable them all
-  set(BMQ_TARGET_BMQBRKR_NEEDED    YES)
-  set(BMQ_TARGET_BMQBRKRCFG_NEEDED YES)
-  set(BMQ_TARGET_BMQTOOL_NEEDED    YES)
-  set(BMQ_TARGET_MWC_NEEDED        YES)
-  set(BMQ_TARGET_BMQ_NEEDED        YES)
-  set(BMQ_TARGET_MQB_NEEDED        YES)
-  set(BMQ_TARGET_E_BMQBRKR_NEEDED  YES)
-  set(BMQ_TARGET_TUTORIAL_NEEDED   YES)
+  set(BMQ_TARGET_BMQBRKR_NEEDED        YES)
+  set(BMQ_TARGET_BMQBRKRCFG_NEEDED     YES)
+  set(BMQ_TARGET_BMQTOOL_NEEDED        YES)
+  set(BMQ_TARGET_BMQSTORAGETOOL_NEEDED YES)
+  set(BMQ_TARGET_BMQ_NEEDED            YES)
+  set(BMQ_TARGET_MQB_NEEDED            YES)
+  set(BMQ_TARGET_E_BMQBRKR_NEEDED      YES)
+  set(BMQ_TARGET_TUTORIAL_NEEDED       YES)
+  set(BMQ_TARGET_PROMETHEUS_NEEDED     NO)
 else()
   bbproject_check_install_target("bmqbrkr"         installBMQBRKR)
   bbproject_check_install_target("BMQBRKR_NIGHTLY" installNightly)
@@ -121,25 +132,21 @@ else()
 
   # Disable all by default, and then we'll enable selectively based on the
   # content of INSTALL_TARGETS
-  set(BMQ_TARGET_BMQBRKR_NEEDED    NO)
-  set(BMQ_TARGET_BMQBRKRCFG_NEEDED NO)
-  set(BMQ_TARGET_BMQTOOL_NEEDED    NO)
-  set(BMQ_TARGET_MWC_NEEDED        NO)
-  set(BMQ_TARGET_BMQ_NEEDED        NO)
-  set(BMQ_TARGET_MQB_NEEDED        NO)
-  set(BMQ_TARGET_TUTORIAL_NEEDED   NO)
+  set(BMQ_TARGET_BMQBRKR_NEEDED        NO)
+  set(BMQ_TARGET_BMQBRKRCFG_NEEDED     NO)
+  set(BMQ_TARGET_BMQTOOL_NEEDED        NO)
+  set(BMQ_TARGET_BMQSTORAGETOOL_NEEDED NO)
+  set(BMQ_TARGET_BMQ_NEEDED            NO)
+  set(BMQ_TARGET_MQB_NEEDED            NO)
+  set(BMQ_TARGET_TUTORIAL_NEEDED       NO)
+  set(BMQ_TARGET_PROMETHEUS_NEEDED     NO)
 
-  bbproject_check_install_target("mwc"        installMWC)
-  bbproject_check_install_target("bmq"        installBMQ)
-  bbproject_check_install_target("mqb"        installMQB)
-  bbproject_check_install_target("bmqbrkrcfg" installBMQBRKRCFG)
-  bbproject_check_install_target("bmqtool"    installBMQTOOL)
-
-  # NOTE: All targets should get 'mwc' from DPKG, except for the 'mwc' release
-  #       itself (and the development work).
-  if (installMWC)
-    set(BMQ_TARGET_MWC_NEEDED YES)
-  endif()
+  bbproject_check_install_target("bmq"            installBMQ)
+  bbproject_check_install_target("mqb"            installMQB)
+  bbproject_check_install_target("bmqbrkrcfg"     installBMQBRKRCFG)
+  bbproject_check_install_target("bmqtool"        installBMQTOOL)
+  bbproject_check_install_target("bmqstoragetool" installBMQSTORAGETOOL)
+  bbproject_check_install_target("prometheus"     installPROMETHEUS)
 
   if (installBMQ)
     set(BMQ_TARGET_BMQ_NEEDED YES)
@@ -162,21 +169,120 @@ else()
   endif()
 
   if (installBMQTOOL)
-    set(BMQ_TARGET_BMQ_NEEDED      YES)
-    set(BMQ_TARGET_MQB_NEEDED      YES)
-    set(BMQ_TARGET_BMQTOOL_NEEDED  YES)
+    set(BMQ_TARGET_BMQ_NEEDED     YES)
+    set(BMQ_TARGET_MQB_NEEDED     YES)
+    set(BMQ_TARGET_BMQTOOL_NEEDED YES)
+  endif()
+
+  if (installBMQSTORAGETOOL)
+    set(BMQ_TARGET_BMQ_NEEDED            YES)
+    set(BMQ_TARGET_MQB_NEEDED            YES)
+    set(BMQ_TARGET_BMQSTORAGETOOL_NEEDED YES)
+  endif()
+
+  if (installPROMETHEUS)
+    set(BMQ_TARGET_BMQ_NEEDED        YES)
+    set(BMQ_TARGET_MQB_NEEDED        YES)
+    set(BMQ_TARGET_PROMETHEUS_NEEDED YES)
   endif()
 endif()
 
-# TBD: TEMPORARY >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-if (NOT installBMQ)
-  # Enable MSG GroupId public APIs ONLY if not doing a DPKG build (i.e., a
-  # release) of libbmq; until the feature is fully implemented.
-  add_definitions("-DBMQ_ENABLE_MSG_GROUPID")
-else()
-  message(STATUS "Message GroupId APIs *NOT* exposed!")
+find_package(Git)
+if(GIT_FOUND)
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} describe HEAD
+    WORKING_DIRECTORY "${local_dir}"
+    OUTPUT_VARIABLE PROJECT_VERSION
+    ERROR_QUIET
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
 endif()
-# TBD: TEMPORARY <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+# -----------------------------------------------------------------------------
+#                                DOCUMENTATION
+# -----------------------------------------------------------------------------
+
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+  add_custom_target(docs
+    COMMENT "Build public and internal documentation"
+  )
+
+  # API Documentation for libbmq
+
+  # Each CMake variable `DOXYGEN_something` becomes a Doxygen configuration
+  # named `something`.
+  set(DOXYGEN_ALIASES
+    "bbref{1}=@ref BloombergLP::\\1 \\\"\\1\\\""
+  )
+  set(DOXYGEN_EXTRACT_ALL            YES)
+  set(DOXYGEN_EXTRACT_STATIC         YES)
+  set(DOXYGEN_EXCLUDE_PATTERNS       *.t.cpp *.cpp)
+  set(DOXYGEN_EXCLUDE_SYMBOLS
+    BloombergLP::bmqimp
+    BloombergLP::bmqp
+    BloombergLP::bslmt
+    BloombergLP::bmqst
+  )
+  set(DOXYGEN_SHOW_INCLUDE_FILES     NO)
+  set(DOXYGEN_SORT_MEMBER_DOCS       NO)
+  set(DOXYGEN_MACRO_EXPANSION        YES)
+  set(DOXYGEN_PREDEFINED
+    "BSLS_KEYWORD_FINAL=final"
+    "BSLS_KEYWORD_DELETED=delete"
+    "BSLS_KEYWORD_OVERRIDE=override"
+    "BSLMF_NESTED_TRAIT_DECLARATION(...)="
+  )
+  set(DOXYGEN_EXPAND_AS_DEFINED
+    "BSLS_ASSERT_SAFE_IS_ACTIVE=1"
+    "BSLS_COMPILER_FEATURES_SUPPORT_GENERALIZED_INITIALIZERS"
+    "BSLS_LIBRARYFEATURES_HAS_CPP17_BASELINE_LIBRARY"
+    "BSLS_LIBRARYFEATURES_HAS_CPP11_UNIQUE_PTR"
+  )
+  set(DOXYGEN_SHOW_NAMESPACES        NO)
+  set(DOXYGEN_REPEAT_BRIEF           YES)
+  set(DOXYGEN_INLINE_INHERITED_MEMB  YES)
+  set(DOXYGEN_STRIP_FROM_PATH        src/groups/bmq)
+  set(DOXYGEN_OUTPUT_DIRECTORY       apidocs)
+  set(DOXYGEN_IMAGE_PATH             docs/assets/images)
+  set(DOXYGEN_PROJECT_ICON           docs/favicon.ico)
+  set(DOXYGEN_PROJECT_LOGO           docs/assets/images/blazingmq_logo.svg)
+  set(DOXYGEN_PROJECT_NAME           libbmq)
+  set(DOXYGEN_PROJECT_BRIEF
+    "C++ SDK for BlazingMQ clients and plugins"
+  )
+  set(DOXYGEN_USE_MDFILE_AS_MAINPAGE ./README.md)
+  set(DOXYGEN_REFERENCED_BY_RELATION YES)
+  set(DOXYGEN_REFERENCES             YES)
+  set(DOXYGEN_ALPHABETICAL_INDEX     NO)
+  set(DOXYGEN_FULL_SIDEBAR           YES)
+  set(DOXYGEN_GENERATE_TREEVIEW      YES)
+  doxygen_add_docs(
+    apidocs
+    src/groups/bmq/bmqa
+    src/groups/bmq/bmqt
+    src/groups/bmq/bmqpi
+    README.md
+    COMMENT "Generate public Doxygen documentation for libbmq"
+  )
+  add_dependencies(docs apidocs)
+
+  # Internal documentation for both libbmq and libmqb.
+
+  unset(DOXYGEN_EXCLUDE_SYMBOLS)
+  set(DOXYGEN_EXTRACT_PRIVATE        YES)
+  set(DOXYGEN_SHOW_INCLUDE_FILES     YES)
+  set(DOXYGEN_SHOW_NAMESPACES        YES)
+  set(DOXYGEN_GENERATE_TODOLIST      YES)
+  set(DOXYGEN_STRIP_FROM_PATH        src/groups)
+  set(DOXYGEN_OUTPUT_DIRECTORY       internaldocs)
+  doxygen_add_docs(
+    internaldocs
+    src/groups/
+    COMMENT "Generate internal Doxygen documentation for libbmq and libmqb"
+  )
+  add_dependencies(docs internaldocs)
+endif()
 
 # -----------------------------------------------------------------------------
 #                                   PROJECTS
@@ -184,3 +290,4 @@ endif()
 add_subdirectory( "src/groups" )
 add_subdirectory( "src/applications" )
 add_subdirectory( "src/tutorials" )
+add_subdirectory( "src/plugins" )
