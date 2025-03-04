@@ -17,18 +17,14 @@
 #ifndef INCLUDED_MQBCMD_HUMANPRINTER
 #define INCLUDED_MQBCMD_HUMANPRINTER
 
-//@PURPOSE: Provide a namespace of utilities to human-friendly print results.
-//
-//@CLASSES:
-//  HumanPrinter: Utilities to print results in a human-friendly way.
-//
-//@DESCRIPTION:
-// This component provides a namespace, 'mqbcmd::HumanPrinter', containing
-// utilities to print results in a human-friendly way.
-//
+/// @file mqbcmd_humanprinter
+///
+/// @brief Provide a namespace of utilities to human-friendly print results.
+///
+/// This component provides a namespace, @bbref{mqbcmd::HumanPrinter},
+/// containing utilities to print results in a human-friendly way.
 
 // MQB
-
 #include <mqbcmd_messages.h>
 
 // BDE
@@ -57,6 +53,18 @@ struct HumanPrinter {
                                const Result& result,
                                int           level          = 0,
                                int           spacesPerLevel = 4);
+
+    /// Pretty-print the specified `responses` to the specified `os` at the
+    /// (absolute value of) the optionally specified indentation `level` and
+    /// return a reference to `stream`.  If `level` is specified, optionally
+    /// specify `spacesPerLevel`, the number of spaces per indentation level
+    /// for this and all of its nested objects.  If `level` is negative,
+    /// suppress indentation of the first line.  If `spacesPerLevel` is
+    /// negative format the entire output on one line, suppressing all but
+    /// the initial indentation (as governed by `level`).  If `stream` is
+    /// not valid on entry, this operation has no effect.
+    static bsl::ostream& printResponses(bsl::ostream&            os,
+                                        const RouteResponseList& responseList);
 };
 
 }  // close package namespace

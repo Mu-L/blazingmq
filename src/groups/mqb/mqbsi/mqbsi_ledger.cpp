@@ -121,6 +121,7 @@ const char* LedgerOpResult::toAscii(LedgerOpResult::Enum value)
         CASE(LOG_OPEN_FAILURE)
         CASE(LOG_CLOSE_FAILURE)
         CASE(LOG_FLUSH_FAILURE)
+        CASE(LOG_ROLLOVER_CB_FAILURE)
         CASE(LOG_CLEANUP_FAILURE)
         CASE(LOG_NOT_FOUND)
         CASE(LOG_INVALID)
@@ -141,7 +142,7 @@ bool LedgerOpResult::fromAscii(LedgerOpResult::Enum*    out,
 #define CHECKVALUE(M)                                                         \
     if (bdlb::String::areEqualCaseless(toAscii(LedgerOpResult::e_##M),        \
                                        str.data(),                            \
-                                       str.length())) {                       \
+                                       static_cast<int>(str.length()))) {     \
         *out = LedgerOpResult::e_##M;                                         \
         return true;                                                          \
     }
@@ -157,6 +158,7 @@ bool LedgerOpResult::fromAscii(LedgerOpResult::Enum*    out,
     CHECKVALUE(LOG_OPEN_FAILURE)
     CHECKVALUE(LOG_CLOSE_FAILURE)
     CHECKVALUE(LOG_FLUSH_FAILURE)
+    CHECKVALUE(LOG_ROLLOVER_CB_FAILURE)
     CHECKVALUE(LOG_CLEANUP_FAILURE)
     CHECKVALUE(LOG_NOT_FOUND)
     CHECKVALUE(LOG_INVALID)
@@ -185,6 +187,7 @@ LedgerConfig::LedgerConfig(bslma::Allocator* allocator)
 , d_keepOldLogs(false)
 , d_logFactory_sp()
 , d_logIdGenerator_sp()
+, d_scheduler_p()
 , d_extractLogIdCallback(bsl::allocator_arg, allocator)
 , d_validateLogCallback(bsl::allocator_arg, allocator)
 , d_rolloverCallback(bsl::allocator_arg, allocator)
@@ -203,6 +206,7 @@ LedgerConfig::LedgerConfig(const LedgerConfig& other,
 , d_keepOldLogs(other.d_keepOldLogs)
 , d_logFactory_sp(other.d_logFactory_sp)
 , d_logIdGenerator_sp(other.d_logIdGenerator_sp)
+, d_scheduler_p(other.d_scheduler_p)
 , d_extractLogIdCallback(bsl::allocator_arg,
                          allocator,
                          other.d_extractLogIdCallback)
@@ -263,6 +267,16 @@ LedgerConfig& LedgerConfig::setLogIdGenerator(
     const bsl::shared_ptr<mqbsi::LogIdGenerator>& value)
 {
     d_logIdGenerator_sp = value;
+    return *this;
+}
+
+LedgerConfig& LedgerConfig::setScheduler(bdlmt::EventScheduler* value)
+{
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(value);
+    BSLS_ASSERT_SAFE(value->clockType() == bsls::SystemClockType::e_MONOTONIC);
+
+    d_scheduler_p = value;
     return *this;
 }
 
@@ -330,6 +344,11 @@ mqbsi::LogFactory* LedgerConfig::logFactory() const
 mqbsi::LogIdGenerator* LedgerConfig::logIdGenerator() const
 {
     return d_logIdGenerator_sp.get();
+}
+
+bdlmt::EventScheduler* LedgerConfig::scheduler() const
+{
+    return d_scheduler_p;
 }
 
 const LedgerConfig::ExtractLogIdCb& LedgerConfig::extractLogIdCallback() const

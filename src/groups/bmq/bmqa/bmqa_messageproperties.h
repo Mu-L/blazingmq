@@ -17,46 +17,45 @@
 #ifndef INCLUDED_BMQA_MESSAGEPROPERTIES
 #define INCLUDED_BMQA_MESSAGEPROPERTIES
 
-//@PURPOSE: Provide a VST representing message properties.
-//
-//@CLASSES:
-//  bmqa::MessageProperties:         VST representing message properties.
-//  bmqa::MessagePropertiesIterator: Mechanism to iterate over properties.
-//
-//@SEE ALSO: bmqt::PropertyType
-//
-//@DESCRIPTION: 'bmqa::MessageProperties' provides a VST representing message
-// properties.  Message properties are a collection of name-value pairs that
-// producer can associate with a message, and consumer can retrieve from the
-// corresponding message.  In order to keep their usage flexible, no schema is
-// enforced for the message properties, and their format (names and data types)
-// should be negotiated by producers and consumers.  Message properties can be
-// used for routing, pipelining or filtering messages within the application.
-// It can be efficient to specify such message attributes in the properties
-// instead of the message payload, because application does not have to decode
-// entire payload to retrieve these attributes.
-// 'bmqa::MessagePropertiesIterator' provides a mechanism to iterate over all
-// the properties of a 'bmqa::MessageProperties' object.
-//
-/// Restrictions on Property Names
-///------------------------------
-//
-//: o Length of a property name must be greater than zero and must *not* exceed
-//:   'bmqa::MessageProperties::k_MAX_PROPERTY_NAME_LENGTH'
-//
-//: o First character of the property name must be alpha-numeric.
-//
-/// Restrictions on Property Values
-///-------------------------------
-//
-//: o Length of a property value must be non-negative (ie, can be zero) and
-//:   must *not* exceed 'bmqa::MessageProperties::k_MAX_PROPERTY_VALUE_LENGTH'.
-//:   Note that this restriction is obviously applicable to property values
-//:   with types 'bmqt::PropertyType::e_STRING' and
-//:   'bmqt::PropertyType::e_BINARY', because for all other property value
-//:   types, size is implicitly applicable based on the type (see 'Data Types
-//:   and Size' section in 'bmqt::PropertyType' component).
-//
+/// @file bmqa_messageproperties.h
+///
+/// @brief Provide a VST representing message properties.
+///
+/// @bbref{bmqa::MessageProperties} provides a VST representing message
+/// properties.  Message properties are a collection of name-value pairs that
+/// producer can associate with a message, and consumer can retrieve from the
+/// corresponding message.  In order to keep their usage flexible, no schema is
+/// enforced for the message properties, and their format (names and data
+/// types) should be negotiated by producers and consumers.  Message properties
+/// can be used for routing, pipelining or filtering messages within the
+/// application.  It can be efficient to specify such message attributes in the
+/// properties instead of the message payload, because application does not
+/// have to decode entire payload to retrieve these attributes.
+/// @bbref{bmqa::MessagePropertiesIterator} provides a mechanism to iterate
+/// over all the properties of a @bbref{bmqa::MessageProperties} object.
+///
+/// Restrictions on Property Names   {#bmqa_messageproperties_namerestrictions}
+/// ==============================
+///
+///   - Length of a property name must be greater than zero and must *not*
+///     exceed @bbref{bmqa::MessageProperties::k_MAX_PROPERTY_NAME_LENGTH}.
+///
+///   - First character of the property name must be alpha-numeric.
+///
+/// Restrictions on Property Values {#bmqa_messageproperties_valuerestrictions}
+/// ===============================
+///
+///   - Length of a property value must be non-negative (ie, can be zero) and
+///     must *not* exceed
+///     @bbref{bmqa::MessageProperties::k_MAX_PROPERTY_VALUE_LENGTH}.  Note
+///     that this restriction is obviously applicable to property values with
+///     types @bbref{bmqt::PropertyType::e_STRING} and
+///     @bbref{bmqt::PropertyType::e_BINARY}, because for all other property
+///     value types, size is implicitly applicable based on the type (see @ref
+///     bmqt_propertytype_types section in @bbref{bmqt::PropertyType}
+///     component).
+///
+/// @see @bbref{bmqt::PropertyType}
 
 // BMQ
 
@@ -97,9 +96,9 @@ class MessageProperties {
   private:
     // PRIVATE CONSTANTS
 
-    // Constant representing the maximum size of a
-    // `bmqp::MessageProperties` object, so that the below AlignedBuffer
-    // is big enough.
+    /// Constant representing the maximum size of a
+    /// `bmqp::MessageProperties` object, so that the below AlignedBuffer
+    /// is big enough.
     static const int k_MAX_SIZEOF_BMQP_MESSAGEPROPERTIES = 184;
 
     // PRIVATE TYPES
@@ -108,18 +107,15 @@ class MessageProperties {
 
   private:
     // DATA
-    mutable bmqp::MessageProperties* d_impl_p;
-    // Pointer to the implementation object
-    // in 'd_buffer', providing a shortcut
-    // type safe cast to that object.  This
-    // variable *must* *be* the first
-    // member of this class, as other
-    // components in bmqa package may
-    // reinterpret_cast to that variable.
 
+    /// Pointer to the implementation object in `d_buffer`, providing a
+    /// shortcut type safe cast to that object. This variable *must* *be* the
+    /// first member of this class, as other components in bmqa package may
+    /// reinterpret_cast to that variable.
+    mutable bmqp::MessageProperties* d_impl_p;
+
+    /// Buffer containing the implementation object, maximally aligned.
     ImplBuffer d_buffer;
-    // Buffer containing the implementation
-    // object, maximally aligned.
 
     bslma::Allocator* d_allocator_p;
 
@@ -129,21 +125,20 @@ class MessageProperties {
     /// Maximum number of properties that can appear in a `bmqa::Message`.
     static const int k_MAX_NUM_PROPERTIES = 255;
 
+    /// Maximum length of all the properties (including their names, values
+    /// and the wire protocol overhead).  Note that this value is just under
+    /// 64 MB.
     static const int k_MAX_PROPERTIES_AREA_LENGTH = (64 * 1024 * 1024) - 8;
-    // Maximum length of all the properties (including their names, values
-    // and the wire protocol overhead).  Note that this value is just under
-    // 64 MB.
 
     /// Maximum length of a property name.
     static const int k_MAX_PROPERTY_NAME_LENGTH = 4095;
 
-    static const int k_MAX_PROPERTY_VALUE_LENGTH =
-        67104745;  // ~64 MB
-                   // Maximum length of a property value.  Note that this value
-                   // is just under 64 MB.  Also note that this value is
-                   // calculated assuming that there is only one property and
-                   // property's name has maximum allowable length, and also
-                   // takes into consideration the protocol overhead.
+    /// ~64 MB
+    /// Maximum length of a property value.  Note that this value is just under
+    /// 64 MB.  Also note that this value is calculated assuming that there is
+    /// only one property and property's name has maximum allowable length, and
+    /// also takes into consideration the protocol overhead.
+    static const int k_MAX_PROPERTY_VALUE_LENGTH = 67104745;
 
   public:
     // TRAITS

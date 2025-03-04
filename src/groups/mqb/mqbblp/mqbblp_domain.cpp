@@ -14,6 +14,7 @@
 // limitations under the License.
 
 // mqbblp_domain.cpp                                                  -*-C++-*-
+#include <bsls_nullptr.h>
 #include <mqbblp_domain.h>
 
 #include <mqbscm_version.h>
@@ -30,11 +31,10 @@
 #include <bmqp_queueutil.h>
 #include <bmqp_routingconfigurationutils.h>
 
-// MWC
-#include <mwctsk_alarmlog.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_printutil.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <baljsn_encoder.h>
@@ -57,7 +57,8 @@ namespace mqbblp {
 namespace {
 const char k_LOG_CATEGORY[] = "MQBBLP.DOMAIN";
 
-const char k_NODE_IS_STOPPING[] = "Node is stopping";
+const char k_NODE_IS_STOPPING[]              = "Node is stopping";
+const char k_DOMAIN_IS_REMOVING_OR_REMOVED[] = "Domain is removing or removed";
 
 /// This method does nothing.. it's just used so that we can control the
 /// destruction of the specified `queue` to happen once we guarantee the
@@ -69,44 +70,48 @@ void queueHolderDummy(const bsl::shared_ptr<mqbi::Queue>& queue)
     BALL_LOG_INFO << "Deleted queue '" << queue->uri().canonical() << "'";
 }
 
-void afterAppIdRegisteredDispatched(mqbi::Queue*       queue,
-                                    const bsl::string& appId)
+/// Validates an application subscription.
+bool validdateSubscriptionExpression(bsl::ostream& errorDescription,
+                                     const mqbconfm::Expression& expression,
+                                     bslma::Allocator*           allocator)
 {
-    // executed by the *QUEUE DISPATCHER* thread
+    if (mqbconfm::ExpressionVersion::E_VERSION_1 == expression.version()) {
+        if (!expression.text().empty()) {
+            bmqeval::CompilationContext context(allocator);
 
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(queue->dispatcher()->inDispatcherThread(queue));
+            if (!bmqeval::SimpleEvaluator::validate(expression.text(),
+                                                    context)) {
+                errorDescription
+                    << "Expression validation failed: [ expression: "
+                    << expression << ", rc: " << context.lastError()
+                    << ", reason: \"" << context.lastErrorMessage() << "\" ]";
+                return false;  // RETURN
+            }
+        }
+    }
+    else {
+        errorDescription << "Unsupported version: [ expression: " << expression
+                         << " ]";
+        return false;  // RETURN
+    }
 
-    queue->queueEngine()->afterAppIdRegistered(
-        mqbi::Storage::AppIdKeyPair(appId, mqbu::StorageKey()));
-}
-
-void afterAppIdUnregisteredDispatched(mqbi::Queue*       queue,
-                                      const bsl::string& appId)
-{
-    // executed by the *QUEUE DISPATCHER* thread
-
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(queue->dispatcher()->inDispatcherThread(queue));
-
-    // Note: Inputing nullKey here is okay since this routine will be removed
-    //       when we switch to CSL workflow.
-    queue->queueEngine()->afterAppIdUnregistered(
-        mqbi::Storage::AppIdKeyPair(appId, mqbu::StorageKey()));
+    return true;
 }
 
 /// Validates a domain configuration. If `previousDefn` is provided, also
 /// checks that the implied reconfiguration is also valid.
 int validateConfig(bsl::ostream& errorDescription,
                    const bdlb::NullableValue<mqbconfm::Domain>& previousDefn,
-                   const mqbconfm::Domain&                      newConfig)
+                   const mqbconfm::Domain&                      newConfig,
+                   bslma::Allocator*                            allocator)
 {
     enum RcEnum {
         // Value for the various RC error categories
         rc_SUCCESS              = 0,
         rc_NON_BLOOMBERG_CFG    = -1,
         rc_CHANGED_DOMAIN_MODE  = -2,
-        rc_CHANGED_STORAGE_TYPE = -3
+        rc_CHANGED_STORAGE_TYPE = -3,
+        rc_INVALID_SUBSCRIPTION = -4
     };
 
     if (previousDefn.isNull()) {
@@ -136,7 +141,21 @@ int validateConfig(bsl::ostream& errorDescription,
         return rc_CHANGED_STORAGE_TYPE;  // RETURN
     }
 
-    return 0;
+    // Validate newConfig.subscriptions()
+
+    bsl::size_t size                     = newConfig.subscriptions().size();
+    bool        allSubscriptionsAreValid = true;
+
+    for (bsl::size_t i = 0; i < size; ++i) {
+        if (!validdateSubscriptionExpression(
+                errorDescription,
+                newConfig.subscriptions()[i].expression(),
+                allocator)) {
+            allSubscriptionsAreValid = false;
+        }
+    }
+
+    return allSubscriptionsAreValid ? 0 : rc_INVALID_SUBSCRIPTION;
 }
 
 /// Given a definition `defn` for `domain`, ensures that the values provided
@@ -150,34 +169,6 @@ int normalizeConfig(mqbconfm::Domain* defn,
                     const Domain&     domain)
 {
     int updatedValues = 0;
-
-    const unsigned int maxDeliveryAttempts = defn->maxDeliveryAttempts();
-    const mqbcfg::MessageThrottleConfig& messageThrottleConfig =
-        domain.cluster()->isClusterMember()
-            ? domain.cluster()->clusterConfig()->messageThrottleConfig()
-            : domain.cluster()->clusterProxyConfig()->messageThrottleConfig();
-
-    const unsigned int highThresh = messageThrottleConfig.highThreshold();
-    const unsigned int minValue   = highThresh + 1;
-
-    // 'maxDeliveryAttempts' can be zero, which indicates unlimited attempts.
-    if (maxDeliveryAttempts && maxDeliveryAttempts < minValue) {
-        errorDescription << domain.cluster()->name() << ", " << domain.name()
-                         << ": maxDeliveryAttempts is less than message "
-                            "throttling high threshold value. "
-                            "maxDeliveryAttempts: "
-                         << maxDeliveryAttempts
-                         << ", highThreshold: " << highThresh
-                         << ". Updated "
-                            "maxDeliveryAttempts to have a value of "
-                         << minValue
-                         << ". Please update the value of "
-                            "maxDeliveryAttempts in this domain's config to "
-                            "have a value of at least "
-                         << minValue << ".\n";
-        defn->maxDeliveryAttempts() = minValue;
-        ++updatedValues;
-    }
 
     if (defn->mode().isBroadcastValue() &&
         defn->consistency().selectionId() ==
@@ -203,160 +194,34 @@ int normalizeConfig(mqbconfm::Domain* defn,
 
 void Domain::onOpenQueueResponse(
     const bmqp_ctrlmsg::Status&                       status,
-    mqbi::Queue*                                      queue,
+    mqbi::QueueHandle*                                queuehandle,
     const bmqp_ctrlmsg::OpenQueueResponse&            openQueueResponse,
     const mqbi::Cluster::OpenQueueConfirmationCookie& confirmationCookie,
-    const bsl::shared_ptr<mqbi::QueueHandleRequesterContext>& clientContext,
-    const bmqp_ctrlmsg::QueueHandleParameters&                handleParameters,
-    const mqbi::Domain::OpenQueueCallback&                    callback)
+    const mqbi::Domain::OpenQueueCallback&            callback)
 {
-    // executed by the associated CLUSTER's DISPATCHER thread
-
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(
-        d_cluster_sp->dispatcher()->inDispatcherThread(d_cluster_sp.get()));
+    // executed by *ANY* thread
 
     --d_pendingRequests;
-    if (status.category() != bmqp_ctrlmsg::StatusCategory::E_SUCCESS) {
-        // Failed to open queue
-        callback(status,
-                 static_cast<mqbi::QueueHandle*>(0),
-                 openQueueResponse,
-                 confirmationCookie);
-        return;  // RETURN
+    if (status.category() == bmqp_ctrlmsg::StatusCategory::E_SUCCESS) {
+        // VALIDATION: The queue must exist at this point, i.e., have been
+        //             registered.
+        BSLS_ASSERT_SAFE(queuehandle);
+        BSLS_ASSERT_SAFE(queuehandle->queue());
+        BSLS_ASSERT_SAFE(lookupQueue(0, queuehandle->queue()->uri()) == 0);
+    }
+    else {
+        queuehandle = 0;
     }
 
-    // VALIDATION: The queue must exist at this point, i.e., have been
-    //             registered.
-    BSLS_ASSERT_SAFE(queue);
-    BSLS_ASSERT_SAFE(lookupQueue(0, queue->uri()) == 0);
-
-    const bmqp_ctrlmsg::QueueHandleParameters& upstreamHandleParams =
-        openQueueResponse.originalRequest().handleParameters();
-    const unsigned int upstreamSubQueueId = bmqp::QueueUtil::extractSubQueueId(
-        upstreamHandleParams);
-
-    queue->getHandle(clientContext,
-                     handleParameters,
-                     upstreamSubQueueId,
-                     bdlf::BindUtil::bind(callback,
-                                          bdlf::PlaceHolders::_1,  // status
-                                          bdlf::PlaceHolders::_2,  // handle
-                                          openQueueResponse,
-                                          confirmationCookie));
-}
-
-void Domain::updateAuthorizedAppIds(const AppIdInfos& addedAppIds,
-                                    const AppIdInfos& removedAppIds)
-{
-    mqbconfm::QueueMode& queueMode = d_config.value().mode();
-    if (!queueMode.isFanoutValue()) {
-        return;  // RETURN
-    }
-    bsl::vector<bsl::string>& authorizedAppIds = queueMode.fanout().appIDs();
-
-    const AppIdKeyPairs addedIdKeyPairs(addedAppIds.cbegin(),
-                                        addedAppIds.cend());
-    for (AppIdKeyPairsCIter cit = addedIdKeyPairs.cbegin();
-         cit != addedIdKeyPairs.cend();
-         ++cit) {
-        if (bsl::find(authorizedAppIds.begin(),
-                      authorizedAppIds.end(),
-                      cit->first) != authorizedAppIds.end()) {
-            // No need to log error here. When a new appId is registered for a
-            // domain, multiple queues will be affected, so duplicate calls to
-            // this method is expected.
-
-            continue;  // CONTINUE
-        }
-        authorizedAppIds.push_back(cit->first);
-    }
-
-    const AppIdKeyPairs removedIdKeyPairs(removedAppIds.cbegin(),
-                                          removedAppIds.cend());
-    for (AppIdKeyPairsCIter cit = removedIdKeyPairs.cbegin();
-         cit != removedIdKeyPairs.cend();
-         ++cit) {
-        const bsl::vector<bsl::string>::const_iterator it = bsl::find(
-            authorizedAppIds.begin(),
-            authorizedAppIds.end(),
-            cit->first);
-        if (it == authorizedAppIds.end()) {
-            // No need to log error here. When an appId is unregistered from a
-            // domain, multiple queues will be affected, so duplicate calls to
-            // this method is expected.
-
-            continue;  // CONTINUE
-        }
-        authorizedAppIds.erase(it);
-    }
-}
-
-void Domain::onQueueAssigned(const mqbc::ClusterStateQueueInfo& info)
-{
-    // executed by the associated CLUSTER's DISPATCHER thread
-
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(
-        d_cluster_sp->dispatcher()->inDispatcherThread(d_cluster_sp.get()));
-
-    if (!d_cluster_sp->isCSLModeEnabled()) {
-        return;  // RETURN
-    }
-
-    if (d_state != e_STARTED) {
-        return;  // RETURN
-    }
-
-    if (info.uri().domain() != d_name) {
-        // Note: This method will fire on all domains which belong to the
-        //       cluster having the queue assignment, but we examine the domain
-        //       name from the 'uri' to guarantee that only one domain is
-        //       updated.
-
-        return;  // RETURN
-    }
-
-    updateAuthorizedAppIds(info.appIdInfos());
-}
-
-void Domain::onQueueUpdated(const bmqt::Uri&   uri,
-                            const bsl::string& domain,
-                            const AppIdInfos&  addedAppIds,
-                            const AppIdInfos&  removedAppIds)
-{
-    // executed by the associated CLUSTER's DISPATCHER thread
-
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(
-        d_cluster_sp->dispatcher()->inDispatcherThread(d_cluster_sp.get()));
-
-    if (!d_cluster_sp->isCSLModeEnabled()) {
-        return;  // RETURN
-    }
-
-    if (d_state != e_STARTED) {
-        return;  // RETURN
-    }
-
-    if (uri.isValid()) {
-        BSLS_ASSERT_SAFE(uri.qualifiedDomain() == domain);
-    }
-
-    // Note: This method will fire on all domains which belong to the cluster
-    //       having the queue update, but we examine the domain name to
-    //       guarantee that only one domain is updated.
-    if (d_name == domain) {
-        updateAuthorizedAppIds(addedAppIds, removedAppIds);
-    }
+    callback(status, queuehandle, openQueueResponse, confirmationCookie);
 }
 
 Domain::Domain(const bsl::string&                     name,
                mqbi::Dispatcher*                      dispatcher,
                bdlbb::BlobBufferFactory*              blobBufferFactory,
                const bsl::shared_ptr<mqbi::Cluster>&  cluster,
-               mwcst::StatContext*                    domainsStatContext,
-               bslma::ManagedPtr<mwcst::StatContext>& queuesStatContext,
+               bmqst::StatContext*                    domainsStatContext,
+               bslma::ManagedPtr<bmqst::StatContext>& queuesStatContext,
                bslma::Allocator*                      allocator)
 : d_allocator_p(allocator)
 , d_state(e_STOPPED)
@@ -371,6 +236,7 @@ Domain::Domain(const bsl::string&                     name,
 , d_queues(allocator)
 , d_pendingRequests(0)
 , d_teardownCb()
+, d_teardownRemoveCb()
 , d_mutex()
 {
     if (d_cluster_sp->isRemote()) {
@@ -381,13 +247,11 @@ Domain::Domain(const bsl::string&                     name,
 
     // Initialize stats
     d_domainsStats.initialize(this, d_domainsStatContext_p, allocator);
-
-    d_cluster_sp->registerStateObserver(this);
 }
 
 Domain::~Domain()
 {
-    BSLS_ASSERT_SAFE(e_STARTED != d_state &&
+    BSLS_ASSERT_SAFE((e_STOPPING == d_state || e_STOPPED == d_state) &&
                      "'teardown' must be called before the destructor");
 }
 
@@ -410,10 +274,10 @@ int Domain::configure(bsl::ostream&           errorDescription,
     // Certain invalid values might need to be updated in the configuration.
     mqbconfm::Domain finalConfig(config);
     {
-        mwcu::MemOutStream err;
+        bmqu::MemOutStream err;
         if (normalizeConfig(&finalConfig, err, *this)) {
-            MWCTSK_ALARMLOG_ALARM("DOMAIN")
-                << err.str() << MWCTSK_ALARMLOG_END;
+            BMQTSK_ALARMLOG_ALARM("DOMAIN")
+                << err.str() << BMQTSK_ALARMLOG_END;
         }
     }
 
@@ -429,7 +293,10 @@ int Domain::configure(bsl::ostream&           errorDescription,
     }
 
     // Validate config. Return early if the configuration is not valid.
-    if (int rc = validateConfig(errorDescription, d_config, finalConfig)) {
+    if (const int rc = validateConfig(errorDescription,
+                                      d_config,
+                                      finalConfig,
+                                      d_allocator_p)) {
         return (rc * 10 + rc_VALIDATION_FAILED);  // RETURN
     }
 
@@ -441,56 +308,14 @@ int Domain::configure(bsl::ostream&           errorDescription,
     d_capacityMeter.setLimits(limits.messages(), limits.bytes())
         .setWatermarkThresholds(limits.messagesWatermarkRatio(),
                                 limits.bytesWatermarkRatio());
-    d_domainsStats.onEvent(mqbstat::DomainStats::EventType::e_CFG_MSGS,
-                           limits.messages());
-    d_domainsStats.onEvent(mqbstat::DomainStats::EventType::e_CFG_BYTES,
-                           limits.bytes());
+    d_domainsStats.onEvent<mqbstat::DomainStats::EventType::e_CFG_MSGS>(
+        limits.messages());
+    d_domainsStats.onEvent<mqbstat::DomainStats::EventType::e_CFG_BYTES>(
+        limits.bytes());
 
     if (isReconfigure) {
         BSLS_ASSERT_OPT(oldConfig.has_value());
         BSLS_ASSERT_OPT(d_config.has_value());
-
-        // In non-CSL mode, manually dispatch AppId registration callbacks.
-        if (!d_cluster_sp->isCSLModeEnabled() &&
-            d_config.value().mode().isFanoutValue()) {
-            // Compute list of added and removed App IDs.
-            bsl::vector<bsl::string> oldCfgAppIds(
-                oldConfig.value().mode().fanout().appIDs(),
-                d_allocator_p);
-            bsl::vector<bsl::string> newCfgAppIds(
-                d_config.value().mode().fanout().appIDs(),
-                d_allocator_p);
-
-            bsl::vector<bsl::string> addedIds, removedIds;
-            mqbc::StorageUtil::loadAddedAndRemovedEntries(&addedIds,
-                                                          &removedIds,
-                                                          oldCfgAppIds,
-                                                          newCfgAppIds);
-
-            bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);
-
-            // Invoke callbacks for each added and removed ID on each queue.
-            bsl::vector<bsl::string>::const_iterator it = addedIds.cbegin();
-            QueueMap::const_iterator                 qIt;
-            for (; it != addedIds.cend(); it++) {
-                for (qIt = d_queues.cbegin(); qIt != d_queues.cend(); ++qIt) {
-                    d_dispatcher_p->execute(
-                        bdlf::BindUtil::bind(afterAppIdRegisteredDispatched,
-                                             qIt->second.get(),
-                                             *it),
-                        qIt->second.get());
-                }
-            }
-            for (it = removedIds.cbegin(); it != removedIds.cend(); ++it) {
-                for (qIt = d_queues.cbegin(); qIt != d_queues.cend(); ++qIt) {
-                    d_dispatcher_p->execute(
-                        bdlf::BindUtil::bind(afterAppIdUnregisteredDispatched,
-                                             qIt->second.get(),
-                                             *it),
-                        qIt->second.get());
-                }
-            }
-        }
 
         // Notify the 'cluster' of the updated configuration, so it can write
         // any needed update-advisories to the CSL.
@@ -514,6 +339,7 @@ int Domain::configure(bsl::ostream&           errorDescription,
                       << " queues from "
                          "domain "
                       << d_name;
+
         QueueMap::iterator it = d_queues.begin();
         for (; it != d_queues.end(); it++) {
             bsl::function<int()> reconfigureQueueFn = bdlf::BindUtil::bind(
@@ -525,8 +351,7 @@ int Domain::configure(bsl::ostream&           errorDescription,
             d_dispatcher_p->execute(reconfigureQueueFn, cluster());
         }
     }
-    BALL_LOG_INFO << "Domain '" << d_name << "' successfully "
-                  << (isReconfigure ? "reconfigured" : "configured");
+    // 'wait==false', so the result of reconfiguration is not known
 
     d_state = e_STARTED;
     return rc_SUCCESS;
@@ -535,7 +360,7 @@ int Domain::configure(bsl::ostream&           errorDescription,
 void Domain::teardown(const mqbi::Domain::TeardownCb& teardownCb)
 {
     // PRECONDITIONS
-    BSLS_ASSERT_SAFE(d_state != e_STOPPING && d_state != e_STOPPED);
+    BSLS_ASSERT_SAFE(d_state != e_STOPPING);
     BSLS_ASSERT_SAFE(!d_teardownCb);
     BSLS_ASSERT_SAFE(teardownCb);
 
@@ -553,11 +378,36 @@ void Domain::teardown(const mqbi::Domain::TeardownCb& teardownCb)
     d_teardownCb = teardownCb;
     d_state      = e_STOPPING;
 
-    d_cluster_sp->unregisterStateObserver(this);
-
     if (d_queues.empty()) {
         d_teardownCb(d_name);
-        d_state = e_STOPPED;
+        d_teardownCb = bsl::nullptr_t();
+        d_state      = e_STOPPED;
+        return;  // RETURN
+    }
+
+    for (QueueMap::iterator it = d_queues.begin(); it != d_queues.end();
+         ++it) {
+        it->second->close();
+    }
+}
+
+void Domain::teardownRemove(const TeardownCb& teardownCb)
+{
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(!d_teardownRemoveCb);
+    BSLS_ASSERT_SAFE(teardownCb);
+
+    bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // d_mutex LOCKED
+
+    BALL_LOG_INFO << "Removing domain '" << d_name << "' having "
+                  << d_queues.size() << " registered queues.";
+
+    d_teardownRemoveCb = teardownCb;
+
+    if (d_queues.empty()) {
+        d_teardownRemoveCb(d_name);
+        d_teardownRemoveCb = bsl::nullptr_t();
+        d_state            = e_STOPPED;
         return;  // RETURN
     }
 
@@ -579,22 +429,35 @@ void Domain::openQueue(
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(uri.asString() == handleParameters.uri());
 
-    if (d_state != e_STARTED) {
-        // Reject this open-queue request with a soft failure status.
+    {
+        bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // LOCK
 
-        bmqp_ctrlmsg::Status status;
-        status.category() = bmqp_ctrlmsg::StatusCategory::E_REFUSED;
-        status.code()     = mqbi::ClusterErrorCode::e_STOPPING;
-        status.message()  = k_NODE_IS_STOPPING;
+        if (d_state != e_STARTED) {
+            // Reject this open-queue request with a soft failure status.
 
-        callback(status,
-                 static_cast<mqbi::QueueHandle*>(0),
-                 bmqp_ctrlmsg::OpenQueueResponse(),
-                 mqbi::Cluster::OpenQueueConfirmationCookie());
-        return;  // RETURN
+            bmqp_ctrlmsg::Status status;
+
+            if (d_state == e_REMOVING || d_state == e_STOPPED) {
+                status.category() = bmqp_ctrlmsg::StatusCategory::E_REFUSED;
+                status.code()     = mqbi::ClusterErrorCode::e_UNKNOWN;
+                status.message()  = k_DOMAIN_IS_REMOVING_OR_REMOVED;
+            }
+            else {
+                status.category() = bmqp_ctrlmsg::StatusCategory::E_REFUSED;
+                status.code()     = mqbi::ClusterErrorCode::e_STOPPING;
+                status.message()  = k_NODE_IS_STOPPING;
+            }
+
+            callback(status,
+                     static_cast<mqbi::QueueHandle*>(0),
+                     bmqp_ctrlmsg::OpenQueueResponse(),
+                     mqbi::Cluster::OpenQueueConfirmationCookie());
+            return;  // RETURN
+        }
+
+        ++d_pendingRequests;
     }
 
-    ++d_pendingRequests;
     d_cluster_sp->openQueue(
         uri,
         this,
@@ -606,8 +469,6 @@ void Domain::openQueue(
                              bdlf::PlaceHolders::_2,  // queue
                              bdlf::PlaceHolders::_3,  // openQueueResponse
                              bdlf::PlaceHolders::_4,  // confirmationCookie
-                             clientContext,
-                             handleParameters,
                              callback));
 }
 
@@ -656,7 +517,7 @@ int Domain::registerQueue(bsl::ostream&                       errorDescription,
         d_queues[queueSp->uri().queue()] = queueSp;
     }
     bdlma::LocalSequentialAllocator<1024> localAllocator(d_allocator_p);
-    mwcu::MemOutStream                    error(&localAllocator);
+    bmqu::MemOutStream                    error(&localAllocator);
 
     int rc = queueSp->configure(error,
                                 false,  // isReconfigure
@@ -739,59 +600,16 @@ void Domain::unregisterQueue(mqbi::Queue* queue)
 
     // Refer to note in 'teardown' routine to see why 'd_state' is updated
     // while 'd_mutex' is acquired.
-    if (d_state == e_STOPPING) {
-        BSLS_ASSERT_SAFE(d_teardownCb);
-
-        if (d_queues.empty()) {
+    if (d_queues.empty()) {
+        if (d_teardownCb) {
             d_teardownCb(d_name);
-            d_state = e_STOPPED;
+            d_teardownCb = bsl::nullptr_t();
+            d_state      = e_STOPPED;
         }
-    }
-}
-
-void Domain::purgeAllQueues(
-    bsl::vector<bsl::vector<mqbcmd::PurgeQueueResult> >* purgedQueuesVec,
-    const mqbi::Dispatcher::ProcessorHandle&             pHandle)
-{
-    // executed by each of the QUEUES dispatcher thread
-
-    // Grab the element (vector) corresponding to the 'pHandle' which needs to
-    // be populated.  Note that other vectors in 'purgedQueuesVec' are being
-    // manipulated by other dispatcher threads.
-    bsl::vector<mqbcmd::PurgeQueueResult>& purgedQueues =
-        (*purgedQueuesVec)[pHandle];
-
-    // Collect queues which need to be purged for this processor handle.  We
-    // don't want to invoke 'purge' on queue objects while hold 'd_mutex' lock
-    // as purging can be a long operation if a lot of messages need to be
-    // merged.  Doing so while holding the lock will lead to contention across
-    // all queue-dispatcher threads attempting to purge queues.
-    bsl::vector<bsl::shared_ptr<mqbi::Queue> > queues;
-
-    {
-        bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // LOCK
-
-        for (QueueMap::const_iterator it = d_queues.begin();
-             it != d_queues.end();
-             ++it) {
-            const mqbi::Dispatcher::ProcessorHandle currentPHandle =
-                it->second->dispatcherClientData().processorHandle();
-            if (currentPHandle != pHandle) {
-                continue;  // CONTINUE
-            }
-
-            queues.push_back(it->second);
-        }
-    }
-
-    // Now invoke purge on all collected queues.
-    for (size_t i = 0; i < queues.size(); ++i) {
-        mqbcmd::PurgeQueueResult purgeQueueResult;
-        queues[i]->purge(&purgeQueueResult, "");  // "" means ALL appIds
-
-        if (!purgeQueueResult.isUndefinedValue()) {
-            // A purge action has been attempted if the queue was local
-            purgedQueues.push_back(purgeQueueResult);
+        if (d_teardownRemoveCb) {
+            d_teardownRemoveCb(d_name);
+            d_teardownRemoveCb = bsl::nullptr_t();
+            d_state            = e_STOPPED;
         }
     }
 }
@@ -802,33 +620,30 @@ int Domain::processCommand(mqbcmd::DomainResult*        result,
     // executed by *any* thread
 
     if (command.isPurgeValue()) {
-        bslmt::Semaphore                                    finalizePurgeSem;
-        bsl::vector<bsl::vector<mqbcmd::PurgeQueueResult> > purgedQueuesVec;
-        purgedQueuesVec.resize(d_dispatcher_p->numProcessors(
-            mqbi::DispatcherClientType::e_QUEUE));
+        // Some queues might be inactive.  They don't have associated
+        // mqbi::Queue objects registered in Domain.  To purge these queues, we
+        // need to send purge command to the storage level.
+        mqbcmd::ClusterCommand clusterCommand;
+        mqbcmd::StorageDomain& domain =
+            clusterCommand.makeStorage().makeDomain();
+        domain.name() = d_name;
+        domain.command().makePurge();
 
-        d_dispatcher_p->execute(
-            bdlf::BindUtil::bind(&Domain::purgeAllQueues,
-                                 this,
-                                 &purgedQueuesVec,
-                                 bdlf::PlaceHolders::_1),
-            mqbi::DispatcherClientType::e_QUEUE,
-            bdlf::MemFnUtil::memFn(static_cast<void (bslmt::Semaphore::*)()>(
-                                       &bslmt::Semaphore::post),
-                                   &finalizePurgeSem));
+        mqbcmd::ClusterResult clusterResult;
+        const int             rc = d_cluster_sp->processCommand(&clusterResult,
+                                                    clusterCommand);
 
-        finalizePurgeSem.wait();
+        if (clusterResult.isErrorValue()) {
+            result->makeError(clusterResult.error());
+            return rc;  // RETURN
+        }
+
+        BSLS_ASSERT_SAFE(clusterResult.isStorageResultValue());
+        BSLS_ASSERT_SAFE(clusterResult.storageResult().isPurgedQueuesValue());
 
         mqbcmd::PurgedQueues& purgedQueues = result->makePurgedQueues();
-
-        for (size_t i = 0; i < purgedQueuesVec.size(); ++i) {
-            const bsl::vector<mqbcmd::PurgeQueueResult>& purgedQs =
-                purgedQueuesVec[i];
-
-            purgedQueues.queues().insert(purgedQueues.queues().begin(),
-                                         purgedQs.begin(),
-                                         purgedQs.end());
-        }
+        purgedQueues.queues() =
+            clusterResult.storageResult().purgedQueues().queues();
 
         return 0;  // RETURN
     }
@@ -841,13 +656,15 @@ int Domain::processCommand(mqbcmd::DomainResult*        result,
             baljsn::Encoder                       encoder;
             bdlma::LocalSequentialAllocator<1024> localAllocator(
                 d_allocator_p);
-            mwcu::MemOutStream out(&localAllocator);
+            bmqu::MemOutStream out(&localAllocator);
 
             baljsn::EncoderOptions options;
             options.setEncodingStyle(baljsn::EncoderOptions::e_PRETTY);
             options.setSpacesPerLevel(2);
 
-            const int rc = encoder.encode(out, d_config.value(), options);
+            BSLA_MAYBE_UNUSED const int rc = encoder.encode(out,
+                                                            d_config.value(),
+                                                            options);
             BSLS_ASSERT_SAFE(rc == 0);
             domainInfo.configJson() = out.str();
         }
@@ -896,17 +713,54 @@ int Domain::processCommand(mqbcmd::DomainResult*        result,
         int         rc = uriBuilder.uri(&uri, &uriError);
 
         if (rc != 0) {
-            mwcu::MemOutStream os;
+            bmqu::MemOutStream os;
             os << "Unable to build queue uri with error '" << uriError << "'";
             result->makeError().message() = os.str();
             return -1;  // RETURN
+        }
+
+        if (command.queue().command().isPurgeAppIdValue()) {
+            const bsl::string& purgeAppId =
+                command.queue().command().purgeAppId();
+
+            if (purgeAppId.empty()) {
+                mqbcmd::Error& error = result->makeError();
+                error.message() = "Queue Purge requires a non-empty appId ("
+                                  "Specify '*' to purge the entire queue).";
+                return -1;  // RETURN
+            }
+
+            // Some queues might be inactive.  They don't have associated
+            // mqbi::Queue objects registered in Domain.  The only way to purge
+            // both active/inactive queues is to execute purge on the storage
+            // level.
+            mqbcmd::ClusterCommand clusterCommand;
+            mqbcmd::StorageQueue&  queue =
+                clusterCommand.makeStorage().makeQueue();
+            queue.canonicalUri()             = uri.canonical();
+            queue.command().makePurgeAppId() = purgeAppId;
+
+            mqbcmd::ClusterResult clusterResult;
+            rc = d_cluster_sp->processCommand(&clusterResult, clusterCommand);
+            if (clusterResult.isErrorValue()) {
+                result->makeError(clusterResult.error());
+                return rc;  // RETURN
+            }
+
+            BSLS_ASSERT_SAFE(clusterResult.isStorageResultValue());
+            BSLS_ASSERT_SAFE(
+                clusterResult.storageResult().isPurgedQueuesValue());
+
+            result->makeQueueResult().makePurgedQueues().queues() =
+                clusterResult.storageResult().purgedQueues().queues();
+            return rc;  // RETURN
         }
 
         bsl::shared_ptr<mqbi::Queue> queue;
         rc = lookupQueue(&queue, uri);
 
         if (rc != 0) {
-            mwcu::MemOutStream os;
+            bmqu::MemOutStream os;
             os << "Queue '" << command.queue().name() << "'"
                << " was not found on domain '" << name() << "'";
             result->makeError().message() = os.str();
@@ -925,7 +779,7 @@ int Domain::processCommand(mqbcmd::DomainResult*        result,
     }
 
     bdlma::LocalSequentialAllocator<256> localAllocator(d_allocator_p);
-    mwcu::MemOutStream                   os(&localAllocator);
+    bmqu::MemOutStream                   os(&localAllocator);
     os << "Unknown command '" << command << "'";
     result->makeError().message() = os.str();
     return -1;
@@ -1024,6 +878,31 @@ void Domain::loadRoutingConfiguration(
                        << "'.";
     }
     }
+}
+
+bool Domain::tryRemove()
+{
+    bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // LOCK
+
+    if (d_state == e_STOPPING) {
+        return false;
+    }
+
+    if (d_pendingRequests != 0) {
+        return false;
+    }
+
+    // Reset d_teardownRemoveCb in case the first round of
+    // DOMAINS REMOVE fails and we want to call it again
+    d_state            = e_REMOVING;
+    d_teardownRemoveCb = bsl::nullptr_t();
+
+    return true;
+}
+
+bool Domain::isRemoveComplete() const
+{
+    return d_state == e_STOPPED;
 }
 
 }  // close package namespace

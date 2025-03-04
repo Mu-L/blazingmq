@@ -4017,19 +4017,26 @@ const char* StatusCategory::toString(StatusCategory::Value value)
 
 const char StopRequest::CLASS_NAME[] = "StopRequest";
 
+const int StopRequest::DEFAULT_INITIALIZER_VERSION = 1;
+
 const bdlat_AttributeInfo StopRequest::ATTRIBUTE_INFO_ARRAY[] = {
     {ATTRIBUTE_ID_CLUSTER_NAME,
      "clusterName",
      sizeof("clusterName") - 1,
      "",
-     bdlat_FormattingMode::e_TEXT}};
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_VERSION,
+     "version",
+     sizeof("version") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC}};
 
 // CLASS METHODS
 
 const bdlat_AttributeInfo* StopRequest::lookupAttributeInfo(const char* name,
                                                             int nameLength)
 {
-    for (int i = 0; i < 1; ++i) {
+    for (int i = 0; i < 2; ++i) {
         const bdlat_AttributeInfo& attributeInfo =
             StopRequest::ATTRIBUTE_INFO_ARRAY[i];
 
@@ -4047,6 +4054,8 @@ const bdlat_AttributeInfo* StopRequest::lookupAttributeInfo(int id)
     switch (id) {
     case ATTRIBUTE_ID_CLUSTER_NAME:
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CLUSTER_NAME];
+    case ATTRIBUTE_ID_VERSION:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION];
     default: return 0;
     }
 }
@@ -4055,25 +4064,29 @@ const bdlat_AttributeInfo* StopRequest::lookupAttributeInfo(int id)
 
 StopRequest::StopRequest(bslma::Allocator* basicAllocator)
 : d_clusterName(basicAllocator)
+, d_version(DEFAULT_INITIALIZER_VERSION)
 {
 }
 
 StopRequest::StopRequest(const StopRequest& original,
                          bslma::Allocator*  basicAllocator)
 : d_clusterName(original.d_clusterName, basicAllocator)
+, d_version(original.d_version)
 {
 }
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
 StopRequest::StopRequest(StopRequest&& original) noexcept
-: d_clusterName(bsl::move(original.d_clusterName))
+: d_clusterName(bsl::move(original.d_clusterName)),
+  d_version(bsl::move(original.d_version))
 {
 }
 
 StopRequest::StopRequest(StopRequest&&     original,
                          bslma::Allocator* basicAllocator)
 : d_clusterName(bsl::move(original.d_clusterName), basicAllocator)
+, d_version(bsl::move(original.d_version))
 {
 }
 #endif
@@ -4088,6 +4101,7 @@ StopRequest& StopRequest::operator=(const StopRequest& rhs)
 {
     if (this != &rhs) {
         d_clusterName = rhs.d_clusterName;
+        d_version     = rhs.d_version;
     }
 
     return *this;
@@ -4099,6 +4113,7 @@ StopRequest& StopRequest::operator=(StopRequest&& rhs)
 {
     if (this != &rhs) {
         d_clusterName = bsl::move(rhs.d_clusterName);
+        d_version     = bsl::move(rhs.d_version);
     }
 
     return *this;
@@ -4108,6 +4123,7 @@ StopRequest& StopRequest::operator=(StopRequest&& rhs)
 void StopRequest::reset()
 {
     bdlat_ValueTypeFunctions::reset(&d_clusterName);
+    d_version = DEFAULT_INITIALIZER_VERSION;
 }
 
 // ACCESSORS
@@ -4118,6 +4134,7 @@ StopRequest::print(bsl::ostream& stream, int level, int spacesPerLevel) const
     bslim::Printer printer(&stream, level, spacesPerLevel);
     printer.start();
     printer.printAttribute("clusterName", this->clusterName());
+    printer.printAttribute("version", this->version());
     printer.end();
     return stream;
 }
@@ -8958,6 +8975,10 @@ const char BrokerResponse::CLASS_NAME[] = "BrokerResponse";
 
 const bool BrokerResponse::DEFAULT_INITIALIZER_IS_DEPRECATED_SDK = false;
 
+const int BrokerResponse::DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS = 3000;
+
+const int BrokerResponse::DEFAULT_INITIALIZER_MAX_MISSED_HEARTBEATS = 10;
+
 const bdlat_AttributeInfo BrokerResponse::ATTRIBUTE_INFO_ARRAY[] = {
     {ATTRIBUTE_ID_RESULT,
      "result",
@@ -8983,14 +9004,24 @@ const bdlat_AttributeInfo BrokerResponse::ATTRIBUTE_INFO_ARRAY[] = {
      "brokerIdentity",
      sizeof("brokerIdentity") - 1,
      "",
-     bdlat_FormattingMode::e_DEFAULT}};
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS,
+     "heartbeatIntervalMs",
+     sizeof("heartbeatIntervalMs") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC},
+    {ATTRIBUTE_ID_MAX_MISSED_HEARTBEATS,
+     "maxMissedHeartbeats",
+     sizeof("maxMissedHeartbeats") - 1,
+     "",
+     bdlat_FormattingMode::e_DEC}};
 
 // CLASS METHODS
 
 const bdlat_AttributeInfo*
 BrokerResponse::lookupAttributeInfo(const char* name, int nameLength)
 {
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 7; ++i) {
         const bdlat_AttributeInfo& attributeInfo =
             BrokerResponse::ATTRIBUTE_INFO_ARRAY[i];
 
@@ -9016,6 +9047,10 @@ const bdlat_AttributeInfo* BrokerResponse::lookupAttributeInfo(int id)
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_IS_DEPRECATED_SDK];
     case ATTRIBUTE_ID_BROKER_IDENTITY:
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_BROKER_IDENTITY];
+    case ATTRIBUTE_ID_HEARTBEAT_INTERVAL_MS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_HEARTBEAT_INTERVAL_MS];
+    case ATTRIBUTE_ID_MAX_MISSED_HEARTBEATS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_MAX_MISSED_HEARTBEATS];
     default: return 0;
     }
 }
@@ -9027,6 +9062,8 @@ BrokerResponse::BrokerResponse(bslma::Allocator* basicAllocator)
 , d_brokerIdentity(basicAllocator)
 , d_protocolVersion()
 , d_brokerVersion()
+, d_heartbeatIntervalMs(DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS)
+, d_maxMissedHeartbeats(DEFAULT_INITIALIZER_MAX_MISSED_HEARTBEATS)
 , d_isDeprecatedSdk(DEFAULT_INITIALIZER_IS_DEPRECATED_SDK)
 {
 }
@@ -9037,6 +9074,8 @@ BrokerResponse::BrokerResponse(const BrokerResponse& original,
 , d_brokerIdentity(original.d_brokerIdentity, basicAllocator)
 , d_protocolVersion(original.d_protocolVersion)
 , d_brokerVersion(original.d_brokerVersion)
+, d_heartbeatIntervalMs(original.d_heartbeatIntervalMs)
+, d_maxMissedHeartbeats(original.d_maxMissedHeartbeats)
 , d_isDeprecatedSdk(original.d_isDeprecatedSdk)
 {
 }
@@ -9048,6 +9087,8 @@ BrokerResponse::BrokerResponse(BrokerResponse&& original) noexcept
   d_brokerIdentity(bsl::move(original.d_brokerIdentity)),
   d_protocolVersion(bsl::move(original.d_protocolVersion)),
   d_brokerVersion(bsl::move(original.d_brokerVersion)),
+  d_heartbeatIntervalMs(bsl::move(original.d_heartbeatIntervalMs)),
+  d_maxMissedHeartbeats(bsl::move(original.d_maxMissedHeartbeats)),
   d_isDeprecatedSdk(bsl::move(original.d_isDeprecatedSdk))
 {
 }
@@ -9058,6 +9099,8 @@ BrokerResponse::BrokerResponse(BrokerResponse&&  original,
 , d_brokerIdentity(bsl::move(original.d_brokerIdentity), basicAllocator)
 , d_protocolVersion(bsl::move(original.d_protocolVersion))
 , d_brokerVersion(bsl::move(original.d_brokerVersion))
+, d_heartbeatIntervalMs(bsl::move(original.d_heartbeatIntervalMs))
+, d_maxMissedHeartbeats(bsl::move(original.d_maxMissedHeartbeats))
 , d_isDeprecatedSdk(bsl::move(original.d_isDeprecatedSdk))
 {
 }
@@ -9076,7 +9119,9 @@ BrokerResponse& BrokerResponse::operator=(const BrokerResponse& rhs)
         d_protocolVersion = rhs.d_protocolVersion;
         d_brokerVersion   = rhs.d_brokerVersion;
         d_isDeprecatedSdk = rhs.d_isDeprecatedSdk;
-        d_brokerIdentity  = rhs.d_brokerIdentity;
+        d_brokerIdentity      = rhs.d_brokerIdentity;
+        d_heartbeatIntervalMs = rhs.d_heartbeatIntervalMs;
+        d_maxMissedHeartbeats = rhs.d_maxMissedHeartbeats;
     }
 
     return *this;
@@ -9091,7 +9136,9 @@ BrokerResponse& BrokerResponse::operator=(BrokerResponse&& rhs)
         d_protocolVersion = bsl::move(rhs.d_protocolVersion);
         d_brokerVersion   = bsl::move(rhs.d_brokerVersion);
         d_isDeprecatedSdk = bsl::move(rhs.d_isDeprecatedSdk);
-        d_brokerIdentity  = bsl::move(rhs.d_brokerIdentity);
+        d_brokerIdentity      = bsl::move(rhs.d_brokerIdentity);
+        d_heartbeatIntervalMs = bsl::move(rhs.d_heartbeatIntervalMs);
+        d_maxMissedHeartbeats = bsl::move(rhs.d_maxMissedHeartbeats);
     }
 
     return *this;
@@ -9105,6 +9152,8 @@ void BrokerResponse::reset()
     bdlat_ValueTypeFunctions::reset(&d_brokerVersion);
     d_isDeprecatedSdk = DEFAULT_INITIALIZER_IS_DEPRECATED_SDK;
     bdlat_ValueTypeFunctions::reset(&d_brokerIdentity);
+    d_heartbeatIntervalMs = DEFAULT_INITIALIZER_HEARTBEAT_INTERVAL_MS;
+    d_maxMissedHeartbeats = DEFAULT_INITIALIZER_MAX_MISSED_HEARTBEATS;
 }
 
 // ACCESSORS
@@ -9120,6 +9169,8 @@ bsl::ostream& BrokerResponse::print(bsl::ostream& stream,
     printer.printAttribute("brokerVersion", this->brokerVersion());
     printer.printAttribute("isDeprecatedSdk", this->isDeprecatedSdk());
     printer.printAttribute("brokerIdentity", this->brokerIdentity());
+    printer.printAttribute("heartbeatIntervalMs", this->heartbeatIntervalMs());
+    printer.printAttribute("maxMissedHeartbeats", this->maxMissedHeartbeats());
     printer.end();
     return stream;
 }

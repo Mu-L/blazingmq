@@ -17,25 +17,21 @@
 #ifndef INCLUDED_MQBBLP_MESSAGEGROUPIDHELPER
 #define INCLUDED_MQBBLP_MESSAGEGROUPIDHELPER
 
-//@PURPOSE: Provide a mechanism to map Message Group Ids to Handles.
-//
-//@CLASSES:
-//  mqbblp::MessageGroupIdHelper: Map Message Group Ids to Handles
-//
-//@DESCRIPTION: This component provides a class 'mqbblp::MessageGroupIdHelper'
-// which given a collection of Handles, and an opaque MsgGroupId, returns a
-// QueueHandle.
+/// @file mqbblp_messagegroupidhelper.h
+///
+/// @brief Provide a mechanism to map Message Group Ids to Handles.
+///
+/// This component provides a class @bbref{mqbblp::MessageGroupIdHelper} which
+/// given a collection of Handles, and an opaque MsgGroupId, returns a
+/// QueueHandle.
 
 // MQB
-
 #include <mqbblp_messagegroupidmanager.h>
 #include <mqbconfm_messages.h>
 
 // BMQ
 #include <bmqp_protocol.h>
-
-// MWC
-#include <mwcsys_time.h>
+#include <bmqsys_time.h>
 
 // BDE
 #include <bslma_allocator.h>
@@ -59,8 +55,9 @@ namespace mqbblp {
 class MessageGroupIdHelper {
   private:
     // DATA
+
+    /// Manager providing the required functionality.
     MessageGroupIdManager d_manager;
-    // Manager providing the required functionality
 
   private:
     // NOT IMPLEMENTED
@@ -129,12 +126,12 @@ inline mqbi::QueueHandle*
 MessageGroupIdHelper::getHandle(const bmqp::Protocol::MsgGroupId& msgGroupId)
 {
     return d_manager.getHandle(msgGroupId,
-                               mwcsys::Time::highResolutionTimer());
+                               bmqsys::Time::highResolutionTimer());
 }
 
 inline void MessageGroupIdHelper::addHandle(mqbi::QueueHandle* handle)
 {
-    d_manager.addHandle(handle, mwcsys::Time::highResolutionTimer());
+    d_manager.addHandle(handle, bmqsys::Time::highResolutionTimer());
 }
 
 inline void MessageGroupIdHelper::removeHandle(mqbi::QueueHandle* handle)
@@ -146,7 +143,7 @@ inline void MessageGroupIdHelper::removeHandle(mqbi::QueueHandle* handle)
 inline void
 MessageGroupIdHelper::loadInternals(mqbcmd::MessageGroupIdHelper* out) const
 {
-    d_manager.loadInternals(out, mwcsys::Time::highResolutionTimer());
+    d_manager.loadInternals(out, bmqsys::Time::highResolutionTimer());
 }
 
 }  // close package namespace

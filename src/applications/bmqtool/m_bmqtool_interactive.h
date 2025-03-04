@@ -27,6 +27,7 @@
 
 // BMQTOOL
 #include <m_bmqtool_messages.h>
+#include <m_bmqtool_poster.h>
 
 // BMQ
 #include <bmqa_closequeuestatus.h>
@@ -35,8 +36,8 @@
 #include <bmqa_openqueuestatus.h>
 #include <bmqt_messageguid.h>
 
-// MWC
-#include <mwcc_orderedhashmap.h>
+// BMQ
+#include <bmqc_orderedhashmap.h>
 
 // BDE
 #include <ball_log.h>
@@ -72,7 +73,7 @@ class Interactive {
     // PRIVATE TYPES
 
     /// Must be ordered by msgGUID to have them oldest first when iterating
-    typedef mwcc::OrderedHashMap<bmqt::MessageGUID,
+    typedef bmqc::OrderedHashMap<bmqt::MessageGUID,
                                  bmqa::Message,
                                  bslh::Hash<bmqt::MessageGUIDHashAlgo> >
         MessagesMap;
@@ -108,8 +109,9 @@ class Interactive {
     // Session handler to use for events
     // processing, if using custom event handler
 
-    Parameters* d_parameters_p;
-    // Parameters to use
+    /// Parameters to use, the object under this reference is owned by
+    /// the Application that uses this Interactive object
+    const Parameters& d_parameters;
 
     bslmt::Mutex d_mutex;
     // Mutex to protect below map
@@ -128,8 +130,13 @@ class Interactive {
     // interactive mode.  Note that this string is
     // of the format '/path/to/this/bmqtool:<PID>'.
 
+    Poster* d_poster_p;
+    // A factory for posting series of messages.
+    // Held, not owned
+
     bslma::Allocator* d_allocator_p;
     // Held, not owned
+
   private:
     // PRIVATE MANIPULATORS
     void printHelp();
@@ -143,6 +150,8 @@ class Interactive {
     void processCommand(const PostCommand& command, bool hasMPs);
     void processCommand(const ConfirmCommand& command);
     void processCommand(const ListCommand& command);
+    void processCommand(const BatchPostCommand& command);
+    void processCommand(const LoadPostCommand& command);
 
     /// Create and insert an entry keyed on the specified `uri` into the map
     /// of full uri to unconfirmed messages contained in this object.  The
@@ -161,8 +170,11 @@ class Interactive {
   public:
     // CREATORS
 
-    /// Constructor using the specified `parameters` and `allocator`.
-    Interactive(Parameters* parameters, bslma::Allocator* allocator);
+    /// Constructor using the specified `parameters`, 'poster',
+    /// and `allocator`.
+    Interactive(const Parameters& parameters,
+                Poster*           poster,
+                bslma::Allocator* allocator);
 
     // MANIPULATORS
 

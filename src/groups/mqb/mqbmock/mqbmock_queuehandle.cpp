@@ -26,10 +26,9 @@
 // BMQ
 #include <bmqt_queueflags.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
-#include <mwcu_outstreamformatsaver.h>
-#include <mwcu_printutil.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_outstreamformatsaver.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bdlbb_blobutil.h>
@@ -282,7 +281,8 @@ void QueueHandle::deliverMessage(
     const bmqt::MessageGUID&            msgGUID,
     BSLS_ANNOTATION_UNUSED const mqbi::StorageMessageAttributes& attributes,
     BSLS_ANNOTATION_UNUSED const bmqp::Protocol::MsgGroupId& msgGroupId,
-    const bmqp::Protocol::SubQueueInfosArray&                subscriptions)
+    const bmqp::Protocol::SubQueueInfosArray&                subscriptions,
+    BSLS_ANNOTATION_UNUSED bool                              isOutOfOrder)
 {
     // PRECONDITIONS
     BSLS_ASSERT_OPT(
@@ -317,7 +317,12 @@ void QueueHandle::deliverMessageNoTrack(
     const bmqp::Protocol::SubQueueInfosArray& subscriptions)
 {
     // Delegate, from a simplified mock perspective.
-    deliverMessage(message, msgGUID, attributes, msgGroupId, subscriptions);
+    deliverMessage(message,
+                   msgGUID,
+                   attributes,
+                   msgGroupId,
+                   subscriptions,
+                   false);
 }
 
 void QueueHandle::configure(
@@ -567,7 +572,7 @@ bsls::Types::Int64 QueueHandle::countUnconfirmed(unsigned int subId) const
 
 void QueueHandle::loadInternals(mqbcmd::QueueHandle* out) const
 {
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << d_handleParameters;
     out->parametersJson() = os.str();
 
@@ -624,7 +629,7 @@ bsl::string QueueHandle::_messages(const bsl::string& appId) const
     }
 
     // bsl::vector<bsl::string> msgs(d_allocator_p);
-    mwcu::MemOutStream out(d_allocator_p);
+    bmqu::MemOutStream out(d_allocator_p);
     for (GUIDMap::const_iterator msgCiter =
              cit->second.d_unconfirmedMessages.begin();
          msgCiter != cit->second.d_unconfirmedMessages.end();
@@ -667,7 +672,7 @@ size_t QueueHandle::_numActiveSubstreams() const
 
 const bsl::string QueueHandle::_appIds() const
 {
-    mwcu::MemOutStream       out(d_allocator_p);
+    bmqu::MemOutStream       out(d_allocator_p);
     bsl::vector<bsl::string> appIds(d_allocator_p);
 
     for (SubStreams::const_iterator citer = d_subStreamInfos.begin();

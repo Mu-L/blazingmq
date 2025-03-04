@@ -25,10 +25,9 @@
 #include <mqbs_storageutil.h>
 #include <mqbu_storagekey.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
+#include <bmqsys_time.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
 
 // BMQ
 #include <bmqp_protocolutil.h>
@@ -72,7 +71,7 @@ int StoragePrintUtil::listMessage(mqbcmd::Message*             message,
     int msgSize = -1;
     storage->getMessageSize(&msgSize, storageIter.guid());
 
-    mwcu::MemOutStream guid;
+    bmqu::MemOutStream guid;
     guid << storageIter.guid();
     message->guid()             = guid.str();
     message->arrivalTimestamp() = bdlt::DatetimeTz(arrivalDatetime, 0);
@@ -130,8 +129,8 @@ int StoragePrintUtil::listMessages(mqbcmd::QueueContents* queueContents,
     queueContents->messages().reserve(count);
     for (; listed < count && !it->atEnd(); ++i, ++listed, it->advance()) {
         queueContents->messages().resize(queueContents->messages().size() + 1);
-        mqbcmd::Message& message = queueContents->messages().back();
-        int              rc      = listMessage(&message, storage, *it);
+        mqbcmd::Message&            message = queueContents->messages().back();
+        BSLA_MAYBE_UNUSED const int rc = listMessage(&message, storage, *it);
         BSLS_ASSERT_SAFE(rc == 0);
     }
 
@@ -139,12 +138,12 @@ int StoragePrintUtil::listMessages(mqbcmd::QueueContents* queueContents,
 }
 
 void StoragePrintUtil::printRecoveredStorages(
-    bsl::ostream&       out,
-    bslmt::Mutex*       storagesLock,
-    const StorageSpMap& storageMap,
-    int                 partitionId,
-    const bsl::string&  clusterDescription,
-    bsls::Types::Int64  recoveryStartTime)
+    bsl::ostream&            out,
+    bslmt::Mutex*            storagesLock,
+    const StorageSpMap&      storageMap,
+    int                      partitionId,
+    const bsl::string&       clusterDescription,
+    const bsls::Types::Int64 recoveryStartTime)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(storagesLock);
@@ -153,11 +152,11 @@ void StoragePrintUtil::printRecoveredStorages(
     // Needed to protect access to `storageMap` and its elements.
     bslmt::LockGuard<bslmt::Mutex> guard(storagesLock);  // LOCK
 
-    out << clusterDescription << ": PartitionId [" << partitionId
+    out << clusterDescription << ": Partition [" << partitionId
         << "]: Number of recovered storages: " << storageMap.size()
         << ". Time taken for recovery: "
-        << mwcu::PrintUtil::prettyTimeInterval(
-               (mwcsys::Time::highResolutionTimer() - recoveryStartTime))
+        << bmqu::PrintUtil::prettyTimeInterval(
+               (bmqsys::Time::highResolutionTimer() - recoveryStartTime))
         << ". Summary: \n(format: [QueueUri] [QueueKey] "
         << "[Num Msgs] [Num Virtual Storages] "
         << "[Virtual Storages Details])";
@@ -175,11 +174,11 @@ void StoragePrintUtil::printRecoveredStorages(
             out << " [";
         }
 
-        AppIdKeyPairs appIdKeyPairs;
+        AppInfos appIdKeyPairs;
         rs->loadVirtualStorageDetails(&appIdKeyPairs);
         BSLS_ASSERT_SAFE(numVS == appIdKeyPairs.size());
 
-        for (AppIdKeyPairsCIter vit = appIdKeyPairs.begin();
+        for (AppInfosCIter vit = appIdKeyPairs.begin();
              vit != appIdKeyPairs.end();
              ++vit) {
             BSLS_ASSERT_SAFE(rs->hasVirtualStorage(vit->second));
@@ -207,7 +206,7 @@ bool StoragePrintUtil::printStorageRecoveryCompletion(
     for (unsigned int i = 0; i < fileStores.size(); ++i) {
         const bool  isOpen    = fileStores[i]->isOpen();
         const char* isOpenStr = isOpen ? "opened" : "closed";
-        out << "\nPartitionId [" << i << "] status: " << isOpenStr;
+        out << "\nPartition [" << i << "] status: " << isOpenStr;
         success = success && isOpen;
     }
 

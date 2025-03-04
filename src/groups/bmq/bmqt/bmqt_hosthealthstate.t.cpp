@@ -16,15 +16,14 @@
 // bmqt_hosthealthstate.t.cpp                                         -*-C++-*-
 #include <bmqt_hosthealthstate.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bsl_ios.h>
 #include <bsl_string.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -36,7 +35,7 @@ using namespace bsl;
 
 static void test1_breathingTest()
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     bmqt::HostHealthState::Enum obj;
     bsl::string                 str;
@@ -44,32 +43,32 @@ static void test1_breathingTest()
 
     PV("Testing toAscii");
     str = bmqt::HostHealthState::toAscii(bmqt::HostHealthState::e_HEALTHY);
-    ASSERT_EQ(str, "HEALTHY");
+    BMQTST_ASSERT_EQ(str, "HEALTHY");
 
     PV("Testing fromAscii");
     res = bmqt::HostHealthState::fromAscii(&obj, "HEALTHY");
-    ASSERT_EQ(res, true);
-    ASSERT_EQ(obj, bmqt::HostHealthState::e_HEALTHY);
+    BMQTST_ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(obj, bmqt::HostHealthState::e_HEALTHY);
     res = bmqt::HostHealthState::fromAscii(&obj, "invalid");
-    ASSERT_EQ(res, false);
+    BMQTST_ASSERT_EQ(res, false);
 
     PV("Testing: fromAscii(toAscii(value)) = value");
     res = bmqt::HostHealthState::fromAscii(
         &obj,
         bmqt::HostHealthState::toAscii(bmqt::HostHealthState::e_HEALTHY));
-    ASSERT_EQ(res, true);
-    ASSERT_EQ(obj, bmqt::HostHealthState::e_HEALTHY);
+    BMQTST_ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(obj, bmqt::HostHealthState::e_HEALTHY);
 
     PV("Testing: toAscii(fromAscii(value)) = value");
     res = bmqt::HostHealthState::fromAscii(&obj, "UNHEALTHY");
-    ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(res, true);
     str = bmqt::HostHealthState::toAscii(obj);
-    ASSERT_EQ(str, "UNHEALTHY");
+    BMQTST_ASSERT_EQ(str, "UNHEALTHY");
 }
 
 static void test2_printTest()
 {
-    mwctst::TestHelper::printTestName("PRINT");
+    bmqtst::TestHelper::printTestName("PRINT");
 
     PV("Testing print");
 
@@ -86,25 +85,25 @@ static void test2_printTest()
 
     for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
         const Test&        test = k_DATA[idx];
-        mwcu::MemOutStream out(s_allocator_p);
-        mwcu::MemOutStream expected(s_allocator_p);
+        bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+        bmqu::MemOutStream expected(bmqtst::TestHelperUtil::allocator());
 
         expected << test.d_expected;
 
         out.setstate(bsl::ios_base::badbit);
         bmqt::HostHealthState::print(out, test.d_type, 0, -1);
 
-        ASSERT_EQ(out.str(), "");
+        BMQTST_ASSERT_EQ(out.str(), "");
 
         out.clear();
         bmqt::HostHealthState::print(out, test.d_type, 0, -1);
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
 
         out.reset();
         out << test.d_type;
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
     }
 }
 
@@ -114,7 +113,7 @@ static void test2_printTest()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -122,9 +121,9 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

@@ -26,7 +26,7 @@
 #endif
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 #include <bdlma_localsequentialallocator.h>
 #include <bsl_sstream.h>
@@ -61,9 +61,9 @@ class MockPropertiesReader : public PropertiesReader {
     // MANIPULATORS
 
     /// Return a `bdld::Datum` object with value for the specified `name`.
-    /// Use the specified `allocator` for any memory allocation.
-    virtual bdld::Datum get(const bsl::string& name,
-                            bslma::Allocator*  allocator)
+    /// The `bslma::Allocator*` argument is unused.
+    bdld::Datum get(const bsl::string& name,
+                    bslma::Allocator*) BSLS_KEYWORD_OVERRIDE
     {
         bsl::unordered_map<bsl::string, bdld::Datum>::const_iterator iter =
             d_map.find(name);
@@ -79,7 +79,7 @@ class MockPropertiesReader : public PropertiesReader {
 #ifdef BSLS_PLATFORM_OS_LINUX
 static void testN1_SimpleEvaluator_GoogleBenchmark(benchmark::State& state)
 {
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK: SimpleEvaluator");
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK: SimpleEvaluator");
 
     bdlma::LocalSequentialAllocator<2048> localAllocator;
     MockPropertiesReader                  reader(&localAllocator);
@@ -88,10 +88,10 @@ static void testN1_SimpleEvaluator_GoogleBenchmark(benchmark::State& state)
     CompilationContext compilationContext(&localAllocator);
     SimpleEvaluator    evaluator;
 
-    ASSERT(evaluator.compile("false | (i64_42=42 & s_foo=\"foo\")",
-                             compilationContext) == 0);
+    BMQTST_ASSERT(evaluator.compile("false || (i64_42==42 && s_foo==\"foo\")",
+                                    compilationContext) == 0);
 
-    ASSERT_EQ(evaluator.evaluate(evaluationContext), true);
+    BMQTST_ASSERT_EQ(evaluator.evaluate(evaluationContext), true);
 
     // <time>
     for (auto _ : state) {
@@ -102,7 +102,7 @@ static void testN1_SimpleEvaluator_GoogleBenchmark(benchmark::State& state)
 #else
 static void testN1_SimpleEvaluator()
 {
-    mwctst::TestHelper::printTestName("GOOGLE BENCHMARK: SimpleEvaluator");
+    bmqtst::TestHelper::printTestName("GOOGLE BENCHMARK: SimpleEvaluator");
     PV("GoogleBenchmark is not supported on this platform, skipping...")
 }
 #endif
@@ -113,10 +113,34 @@ static void testN1_SimpleEvaluator()
 
 static bsl::string makeTooManyOperators()
 {
-    mwcu::MemOutStream os(s_allocator_p);
+    bmqu::MemOutStream os(bmqtst::TestHelperUtil::allocator());
 
     for (size_t i = 0; i < SimpleEvaluator::k_MAX_OPERATORS + 1; ++i) {
         os << "!";
+    }
+
+    os << "x";
+
+    return os.str();
+}
+
+static bsl::string makeTooLongExpression()
+{
+    bmqu::MemOutStream os(bmqtst::TestHelperUtil::allocator());
+
+    // Note that we want to create `k_STACK_SIZE` nested NOT objects in AST,
+    // and when we call destructor chain for all these objects, we'll need
+    // much more memory on a stack, since each destructor address is not a
+    // single byte, and also we need to call shared_ptr and Not destructors in
+    // pairs. But the initial guess of `k_STACK_SIZE` is more than sufficient
+    // to cause segfault if this case is not handled properly.
+    const size_t k_STACK_SIZE = 1024 * 1024;
+    BMQTST_ASSERT(SimpleEvaluator::k_MAX_EXPRESSION_LENGTH < k_STACK_SIZE);
+
+    for (size_t i = 0; i < k_STACK_SIZE; i += 16) {
+        // Combining `!` and `~` differently in case we want to introduce
+        // "NOT" optimization one day (remove double sequential "NOTs")
+        os << "!!!!~~~~!~!~!!~~";
     }
 
     os << "x";
@@ -139,10 +163,13 @@ static void test1_compilationErrors()
          "syntax error, unexpected invalid character at offset 3"},
         {makeTooManyOperators(),
          ErrorType::e_TOO_COMPLEX,
-         "too many operators"},
+         "too many operators (12), max allowed operators: 10"},
         {"true && true",
          ErrorType::e_NO_PROPERTIES,
          "expression does not use any properties"},
+        {makeTooLongExpression(),
+         ErrorType::e_TOO_LONG,
+         "expression is too long (1048577), max allowed length: 128"},
 
         // only C-style operator variants supported
         {"val = 42",
@@ -157,6 +184,27 @@ static void test1_compilationErrors()
         {"val <> 42",
          ErrorType::e_SYNTAX,
          "syntax error, unexpected > at offset 5"},
+
+        // unsupported_ints
+        {"i_0 != 9223372036854775808",
+         ErrorType::e_SYNTAX,
+         "integer overflow at offset 7"},  // 2 ** 63
+        {"i_0 != -170141183460469231731687303715884105728",
+         ErrorType::e_SYNTAX,
+         "integer overflow at offset 7"},  // -(2 ** 127)
+        {"i_0 != 170141183460469231731687303715884105727",
+         ErrorType::e_SYNTAX,
+         "integer overflow at offset 7"},  // 2 ** 127 - 1
+        {"i_0 != "
+         "-5789604461865809771178549250434395392663499233282028201972879200395"
+         "6564819968",
+         ErrorType::e_SYNTAX,
+         "integer overflow at offset 7"},  // -(2 ** 255)
+        {"i_0 != "
+         "57896044618658097711785492504343953926634992332820282019728792003956"
+         "564819967",
+         ErrorType::e_SYNTAX,
+         "integer overflow at offset 7"},  // 2 ** 255 - 1
     };
     const TestParameters* testParametersEnd = testParameters +
                                               sizeof(testParameters) /
@@ -168,14 +216,15 @@ static void test1_compilationErrors()
         PV(bsl::string("TESTING ") + parameters->expression);
 
         {
-            CompilationContext compilationContext(s_allocator_p);
+            CompilationContext compilationContext(
+                bmqtst::TestHelperUtil::allocator());
             SimpleEvaluator    evaluator;
 
             evaluator.compile(parameters->expression, compilationContext);
             PV(compilationContext.lastErrorMessage());
-            ASSERT(!evaluator.isValid());
-            ASSERT_EQ(compilationContext.lastErrorMessage(),
-                      parameters->errorMessage);
+            BMQTST_ASSERT(!evaluator.isValid());
+            BMQTST_ASSERT_EQ(compilationContext.lastErrorMessage(),
+                             parameters->errorMessage);
         }
     }
 }
@@ -234,6 +283,42 @@ static void test2_propertyNames()
         {"aaa_111BBBaaa222__BBBaaa3_3_3BBB > 0", true},
         {"B_a_1_B_a_2_B_a_3_B_a_4_B_a_5_B_ > 0", true},
 
+        // letters + dot
+        {"name. > 0", true},
+        {"NA.ME > 0", true},
+        {"Na.me. > 0", true},
+        {"name.Name > 0", true},
+        {"Name.Name. > 0", true},
+        {"n. > 0", true},
+        {"N. > 0", true},
+        {"aB.aB..aB...aB....aB..... > 0", true},
+        {"aaa.BBBaaa..BBBaaa...BBBaaa > 0", true},
+        {"B.a.B.a.B.a.B.a.B.a.B.a.B.a. > 0", true},
+
+        // letters + digits + dots
+        {"n1a2m3e4. > 0", true},
+        {"N1A2.M3E4 > 0", true},
+        {"N1a2.m3e4. > 0", true},
+        {"n1a2m3e4.N5a6m7e8 > 0", true},
+        {"N1a2m3e4.N5a6m7e8. > 0", true},
+        {"n0. > 0", true},
+        {"N.0 > 0", true},
+        {"aB1.aB..2a...B3aB4.... > 0", true},
+        {"aaa.111BBBaaa222..BBBaaa3.3.3BBB > 0", true},
+        {"B.a.1.B.a.2.B.a.3.B.a.4.B.a.5.B. > 0", true},
+
+        // letters + digits + dots + underscores
+        {"n1a2m3e4._ > 0", true},
+        {"N1A2.M3E4_ > 0", true},
+        {"N1a2_m3e4. > 0", true},
+        {"n1a2m3e4_N5a6m7e8. > 0", true},
+        {"N1a2m3e4.N5a6m7e8_ > 0", true},
+        {"n0_. > 0", true},
+        {"N_0. > 0", true},
+        {"aB1_aB._2a__.B3aB4..._ > 0", true},
+        {"aaa.111BBBaaa222__BBBaaa3.3_3BBB > 0", true},
+        {"B.a_1_B.a_2.B_a.3.B.a_4.B_a.5.B. > 0", true},
+
         // readable examples
         {"camelCase > 0", true},
         {"snake_case > 0", true},
@@ -243,10 +328,11 @@ static void test2_propertyNames()
         {"firmId > 0", true},
         {"TheStandardAndPoor500 > 0", true},
         {"SPX_IND > 0", true},
+        {"organization.repository > 0", true},
 
         // all available characters
-        {"abcdefghijklmnopqrstuvwxyz_0123456789 > 0", true},
-        {"ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 > 0", true},
+        {"abcdefghijklmnopqrstuvwxyz_.0123456789 > 0", true},
+        {"ABCDEFGHIJKLMNOPQRSTUVWXYZ_.0123456789 > 0", true},
 
         // negative examples
         {"0name > 0", false},
@@ -259,11 +345,18 @@ static void test2_propertyNames()
         {"_ > 0", false},
         {"_11111111111111111111111111111 > 0", false},
         {"22222222222222222222222222222_ > 0", false},
+        {".nameName > 0", false},
+        {"0.NameName > 0", false},
+        {".1n > 0", false},
+        {"1.N > 0", false},
+        {". > 0", false},
+        {".11111111111111111111111111111 > 0", false},
+        {"22222222222222222222222222222. > 0", false},
     };
     const TestParameters* testParametersEnd = testParameters +
                                               sizeof(testParameters) /
                                                   sizeof(*testParameters);
-    CompilationContext compilationContext(s_allocator_p);
+    CompilationContext compilationContext(bmqtst::TestHelperUtil::allocator());
 
     for (const TestParameters* parameters = testParameters;
          parameters < testParametersEnd;
@@ -272,22 +365,22 @@ static void test2_propertyNames()
         {
             bool valid = SimpleEvaluator::validate(parameters->expression,
                                                    compilationContext);
-            ASSERT_EQ(valid, parameters->valid);
+            BMQTST_ASSERT_EQ(valid, parameters->valid);
         }
     }
 }
 
 static void test3_evaluation()
 {
-    MockPropertiesReader reader(s_allocator_p);
-    EvaluationContext    evaluationContext(&reader, s_allocator_p);
+    MockPropertiesReader reader(bmqtst::TestHelperUtil::allocator());
+    EvaluationContext    evaluationContext(&reader,
+                                        bmqtst::TestHelperUtil::allocator());
 
     const bool runtimeErrorResult = false;
 
     struct TestParameters {
         const char* expression;
         bool        expected;
-        bool        expectCompilationFailure;
     } testParameters[] = {
         {"b_true", true},
 
@@ -427,25 +520,6 @@ static void test3_evaluation()
         {"i_0 != -9223372036854775807", true},  // -(2 ** 63) + 1
         {"i_0 != 9223372036854775807", true},   // 2 ** 63 - 1
         {"i_0 != -9223372036854775808", true},  // -(2 ** 63)
-
-        // unsupported_ints
-        {"i_0 != 9223372036854775808", false, true},  // 2 ** 63
-        {"i_0 != -170141183460469231731687303715884105728",
-         false,
-         true},  // -(2 ** 127)
-        {"i_0 != 170141183460469231731687303715884105727",
-         false,
-         true},  // 2 ** 127 - 1
-        {"i_0 != "
-         "-5789604461865809771178549250434395392663499233282028201972879200395"
-         "6564819968",
-         false,
-         true},  // -(2 ** 255)
-        {"i_0 != "
-         "57896044618658097711785492504343953926634992332820282019728792003956"
-         "564819967",
-         false,
-         true},  // 2 ** 255 - 1
     };
     const TestParameters* testParametersEnd = testParameters +
                                               sizeof(testParameters) /
@@ -456,28 +530,21 @@ static void test3_evaluation()
          ++parameters) {
         PV(bsl::string("TESTING ") + parameters->expression);
 
-        CompilationContext compilationContext(s_allocator_p);
+        CompilationContext compilationContext(
+            bmqtst::TestHelperUtil::allocator());
         SimpleEvaluator    evaluator;
 
-        ASSERT(!evaluator.isValid());
+        BMQTST_ASSERT(!evaluator.isValid());
 
-        if (int rc = evaluator.compile(parameters->expression,
-                                       compilationContext)) {
-            if (!parameters->expectCompilationFailure) {
-                PV(bsl::string("UNEXPECTED: ") +
-                   compilationContext.lastErrorMessage());
-                ASSERT(false);
-            }
+        if (evaluator.compile(parameters->expression, compilationContext)) {
+            PV(bsl::string("UNEXPECTED: ") +
+               compilationContext.lastErrorMessage());
+            BMQTST_ASSERT(false);
         }
         else {
-            if (parameters->expectCompilationFailure) {
-                PV("Expected compilation failure");
-                ASSERT(false);
-            }
-
-            ASSERT(evaluator.isValid());
-            ASSERT_EQ(evaluator.evaluate(evaluationContext),
-                      parameters->expected);
+            BMQTST_ASSERT(evaluator.isValid());
+            BMQTST_ASSERT_EQ(evaluator.evaluate(evaluationContext),
+                             parameters->expected);
         }
     }
 }
@@ -488,17 +555,17 @@ static void test3_evaluation()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
     case 3: test3_evaluation(); break;
     case 2: test2_propertyNames(); break;
     case 1: test1_compilationErrors(); break;
-    case -1: MWC_BENCHMARK(testN1_SimpleEvaluator); break;
+    case -1: BMQTST_BENCHMARK(testN1_SimpleEvaluator); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
@@ -509,5 +576,5 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_GBL_ALLOC);
 }

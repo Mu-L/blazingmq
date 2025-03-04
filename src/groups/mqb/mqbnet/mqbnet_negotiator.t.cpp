@@ -19,15 +19,14 @@
 // MQB
 #include <mqbnet_session.h>
 
-// MWC
-#include <mwcio_channel.h>
+#include <bmqio_channel.h>
 
 // BDE
 #include <bsls_platform.h>
 #include <bsls_protocoltest.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -54,7 +53,7 @@ using namespace bsl;
 /// A test implementation of the `mqbnet::Negotiator` protocol
 struct NegotiatorTestImp : bsls::ProtocolTestImp<mqbnet::Negotiator> {
     void negotiate(mqbnet::NegotiatorContext*               context,
-                   const bsl::shared_ptr<mwcio::Channel>&   channel,
+                   const bsl::shared_ptr<bmqio::Channel>&   channel,
                    const mqbnet::Negotiator::NegotiationCb& negotiationCb)
         BSLS_KEYWORD_OVERRIDE
     {
@@ -118,25 +117,26 @@ static void test1_Negotiator()
 //   PROTOCOL TEST
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("Negotiator");
+    bmqtst::TestHelper::printTestName("Negotiator");
 
     PV("Creating a test object");
-    bsls::ProtocolTest<NegotiatorTestImp> testObj(s_verbosityLevel > 2);
+    bsls::ProtocolTest<NegotiatorTestImp> testObj(
+        bmqtst::TestHelperUtil::verbosityLevel() > 2);
 
     PV("Verify that the protocol is abstract");
-    ASSERT(testObj.testAbstract());
+    BMQTST_ASSERT(testObj.testAbstract());
 
     PV("Verify that there are no data members");
-    ASSERT(testObj.testNoDataMembers());
+    BMQTST_ASSERT(testObj.testNoDataMembers());
 
     PV("Verify that the destructor is virtual");
-    ASSERT(testObj.testVirtualDestructor());
+    BMQTST_ASSERT(testObj.testVirtualDestructor());
 
     {
         PV("Verify that methods are public and virtual");
 
         mqbnet::NegotiatorContext*        dummyNegotiatorContext_p = 0;
-        bsl::shared_ptr<mwcio::Channel>   dummyChannelSp;
+        bsl::shared_ptr<bmqio::Channel>   dummyChannelSp;
         mqbnet::Negotiator::NegotiationCb dummyNegotiationCb;
 
         BSLS_PROTOCOLTEST_ASSERT(testObj,
@@ -148,19 +148,19 @@ static void test1_Negotiator()
 
 static void test2_NegotiatorContext()
 {
-    mwctst::TestHelper::printTestName("NegotiatorContext");
+    bmqtst::TestHelper::printTestName("NegotiatorContext");
 
     {
         PV("Constructor");
         mqbnet::NegotiatorContext obj1(true);
-        ASSERT_EQ(obj1.isIncoming(), true);
-        ASSERT_EQ(obj1.maxMissedHeartbeat(), 0);
-        ASSERT_EQ(obj1.eventProcessor(), static_cast<void*>(0));
-        ASSERT_EQ(obj1.resultState(), static_cast<void*>(0));
-        ASSERT_EQ(obj1.userData(), static_cast<void*>(0));
+        BMQTST_ASSERT_EQ(obj1.isIncoming(), true);
+        BMQTST_ASSERT_EQ(obj1.maxMissedHeartbeat(), 0);
+        BMQTST_ASSERT_EQ(obj1.eventProcessor(), static_cast<void*>(0));
+        BMQTST_ASSERT_EQ(obj1.resultState(), static_cast<void*>(0));
+        BMQTST_ASSERT_EQ(obj1.userData(), static_cast<void*>(0));
 
         mqbnet::NegotiatorContext obj2(false);
-        ASSERT_EQ(obj2.isIncoming(), false);
+        BMQTST_ASSERT_EQ(obj2.isIncoming(), false);
     }
 
     {
@@ -170,26 +170,26 @@ static void test2_NegotiatorContext()
 
         {  // MaxMissedHeartbeat
             const char value = 5;
-            ASSERT_EQ(&(obj.setMaxMissedHeartbeat(value)), &obj);
-            ASSERT_EQ(obj.maxMissedHeartbeat(), value);
+            BMQTST_ASSERT_EQ(&(obj.setMaxMissedHeartbeat(value)), &obj);
+            BMQTST_ASSERT_EQ(obj.maxMissedHeartbeat(), value);
         }
 
         {  // UserData
             int value = 7;
-            ASSERT_EQ(&(obj.setUserData(&value)), &obj);
-            ASSERT_EQ(obj.userData(), &value);
+            BMQTST_ASSERT_EQ(&(obj.setUserData(&value)), &obj);
+            BMQTST_ASSERT_EQ(obj.userData(), &value);
         }
 
         {  // ResultState
             int value = 9;
-            ASSERT_EQ(&(obj.setResultState(&value)), &obj);
-            ASSERT_EQ(obj.resultState(), &value);
+            BMQTST_ASSERT_EQ(&(obj.setResultState(&value)), &obj);
+            BMQTST_ASSERT_EQ(obj.resultState(), &value);
         }
 
         {  // EventProcessor
             MockSessionEventProcessor value;
-            ASSERT_EQ(&(obj.setEventProcessor(&value)), &obj);
-            ASSERT_EQ(obj.eventProcessor(), &value);
+            BMQTST_ASSERT_EQ(&(obj.setEventProcessor(&value)), &obj);
+            BMQTST_ASSERT_EQ(obj.eventProcessor(), &value);
         }
     }
 }
@@ -200,7 +200,7 @@ static void test2_NegotiatorContext()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -208,9 +208,9 @@ int main(int argc, char* argv[])
     case 1: test1_Negotiator(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

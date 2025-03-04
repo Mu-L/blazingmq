@@ -24,11 +24,10 @@
 #include <bsl_ios.h>
 #include <bsl_string.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -55,7 +54,7 @@ struct PrintTestData {
 
 static void test1_breathingTest()
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
     PV("Testing GenericResult");
     bmqt::GenericResult::Enum obj;
@@ -64,59 +63,68 @@ static void test1_breathingTest()
 
     PV("Testing toAscii");
     str = bmqt::GenericResult::toAscii(bmqt::GenericResult::e_TIMEOUT);
-    ASSERT_EQ(bsl::strncmp(str, "TIMEOUT", k_MAX_ENUM_NAME_LENGTH), 0);
+    BMQTST_ASSERT_EQ(bsl::strncmp(str, "TIMEOUT", k_MAX_ENUM_NAME_LENGTH), 0);
 
     PV("Testing fromAscii");
     res = bmqt::GenericResult::fromAscii(&obj, "NOT_CONNECTED");
-    ASSERT_EQ(res, true);
-    ASSERT_EQ(obj, bmqt::GenericResult::e_NOT_CONNECTED);
+    BMQTST_ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(obj, bmqt::GenericResult::e_NOT_CONNECTED);
     res = bmqt::GenericResult::fromAscii(&obj, "invalid");
-    ASSERT_EQ(res, false);
+    BMQTST_ASSERT_EQ(res, false);
 
     PV("Testing: fromAscii(toAscii(value)) = value");
     res = bmqt::GenericResult::fromAscii(
         &obj,
         bmqt::GenericResult::toAscii(bmqt::GenericResult::e_REFUSED));
-    ASSERT_EQ(res, true);
-    ASSERT_EQ(obj, bmqt::GenericResult::e_REFUSED);
+    BMQTST_ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(obj, bmqt::GenericResult::e_REFUSED);
 
     PV("Testing: toAscii(fromAscii(value)) = value");
     res = bmqt::GenericResult::fromAscii(&obj, "CANCELED");
-    ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(res, true);
     str = bmqt::GenericResult::toAscii(obj);
-    ASSERT_EQ(bsl::strncmp(str, "CANCELED", k_MAX_ENUM_NAME_LENGTH), 0);
+    BMQTST_ASSERT_EQ(bsl::strncmp(str, "CANCELED", k_MAX_ENUM_NAME_LENGTH), 0);
 }
 
 static void test2_schemaConsistency()
 {
-    mwctst::TestHelper::printTestName("SCHEMA CONSISTENCY");
+    bmqtst::TestHelper::printTestName("SCHEMA CONSISTENCY");
 
     PV("Ensuring GenericResult and bmqp_ctrlmsg::StatusCategory in sync");
 
     // We need to ensure that e_LAST == e_NOT_READY, to make sure that no new
     // values have been added..
-    ASSERT_EQ(bmqt::GenericResult::e_LAST, bmqt::GenericResult::e_NOT_READY);
+    BMQTST_ASSERT_EQ(bmqt::GenericResult::e_LAST,
+                     bmqt::GenericResult::e_NOT_READY);
 
     // Validate each values to be equal
-    ASSERT_EQ(static_cast<int>(bmqt::GenericResult::e_SUCCESS),
-              static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_SUCCESS));
-    ASSERT_EQ(static_cast<int>(bmqt::GenericResult::e_UNKNOWN),
-              static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_UNKNOWN));
-    ASSERT_EQ(static_cast<int>(bmqt::GenericResult::e_TIMEOUT),
-              static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_TIMEOUT));
-    ASSERT_EQ(static_cast<int>(bmqt::GenericResult::e_NOT_CONNECTED),
-              static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_NOT_CONNECTED));
-    ASSERT_EQ(static_cast<int>(bmqt::GenericResult::e_CANCELED),
-              static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_CANCELED));
-    ASSERT_EQ(static_cast<int>(bmqt::GenericResult::e_NOT_SUPPORTED),
-              static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_NOT_SUPPORTED));
-    ASSERT_EQ(static_cast<int>(bmqt::GenericResult::e_REFUSED),
-              static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_REFUSED));
-    ASSERT_EQ(
+    BMQTST_ASSERT_EQ(
+        static_cast<int>(bmqt::GenericResult::e_SUCCESS),
+        static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_SUCCESS));
+    BMQTST_ASSERT_EQ(
+        static_cast<int>(bmqt::GenericResult::e_UNKNOWN),
+        static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_UNKNOWN));
+    BMQTST_ASSERT_EQ(
+        static_cast<int>(bmqt::GenericResult::e_TIMEOUT),
+        static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_TIMEOUT));
+    BMQTST_ASSERT_EQ(
+        static_cast<int>(bmqt::GenericResult::e_NOT_CONNECTED),
+        static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_NOT_CONNECTED));
+    BMQTST_ASSERT_EQ(
+        static_cast<int>(bmqt::GenericResult::e_CANCELED),
+        static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_CANCELED));
+    BMQTST_ASSERT_EQ(
+        static_cast<int>(bmqt::GenericResult::e_NOT_SUPPORTED),
+        static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_NOT_SUPPORTED));
+    BMQTST_ASSERT_EQ(
+        static_cast<int>(bmqt::GenericResult::e_REFUSED),
+        static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_REFUSED));
+    BMQTST_ASSERT_EQ(
         static_cast<int>(bmqt::GenericResult::e_INVALID_ARGUMENT),
         static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_INVALID_ARGUMENT));
-    ASSERT_EQ(static_cast<int>(bmqt::GenericResult::e_NOT_READY),
-              static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_NOT_READY));
+    BMQTST_ASSERT_EQ(
+        static_cast<int>(bmqt::GenericResult::e_NOT_READY),
+        static_cast<int>(bmqp_ctrlmsg::StatusCategory::E_NOT_READY));
 }
 
 template <typename ENUM_TYPE, typename ARRAY, int SIZE>
@@ -127,8 +135,8 @@ static void printEnumHelper(ARRAY (&data)[SIZE])
 
         PVVV("Line [" << test.d_line << "]");
 
-        mwcu::MemOutStream out(s_allocator_p);
-        mwcu::MemOutStream expected(s_allocator_p);
+        bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+        bmqu::MemOutStream expected(bmqtst::TestHelperUtil::allocator());
 
         typedef typename ENUM_TYPE::Enum T;
 
@@ -139,23 +147,23 @@ static void printEnumHelper(ARRAY (&data)[SIZE])
         out.setstate(bsl::ios_base::badbit);
         ENUM_TYPE::print(out, obj, 0, -1);
 
-        ASSERT_EQ(out.str(), "");
+        BMQTST_ASSERT_EQ(out.str(), "");
 
         out.clear();
         ENUM_TYPE::print(out, obj, 0, -1);
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
 
         out.reset();
         out << obj;
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
     }
 }
 
 static void test3_printTest()
 {
-    mwctst::TestHelper::printTestName("PRINT");
+    bmqtst::TestHelper::printTestName("PRINT");
 
     PV("Testing bmqt::GenericResult print");
     {
@@ -330,15 +338,15 @@ static void idempotenceHelper(typename RESULT_TYPE::Enum enumVal,
     const char*                str;
     bool                       res;
     res = RESULT_TYPE::fromAscii(&obj, enumValName);
-    ASSERT_EQ(res, true);
-    ASSERT_EQ(obj, enumVal);
+    BMQTST_ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(obj, enumVal);
     str = RESULT_TYPE::toAscii(obj);
-    ASSERT_EQ(str, enumValName);
+    BMQTST_ASSERT_EQ(str, enumValName);
 }
 
 static void test4_idempotence()
 {
-    mwctst::TestHelper::printTestName("IDEMPOTENCE");
+    bmqtst::TestHelper::printTestName("IDEMPOTENCE");
 #define TEST_IDEMPOTENCE(ENUM_TYPE, ENUM_VAL)                                 \
     {                                                                         \
         PV("Testing idempotence for " #ENUM_VAL " value of " #ENUM_TYPE       \
@@ -418,12 +426,12 @@ static void invalidValueFromAsciiHelper()
     bool                       res;
     PVV("Invalid enum value for fromAscii method")
     res = RESULT_TYPE::fromAscii(&obj, "IMPOSSIBLE_RETURN_CODE");
-    ASSERT_EQ(res, false);
+    BMQTST_ASSERT_EQ(res, false);
 }
 
 static void test5_invalidValueFromAscii()
 {
-    mwctst::TestHelper::printTestName("INVALID VALUES FOR 'fromAscii'");
+    bmqtst::TestHelper::printTestName("INVALID VALUES FOR 'fromAscii'");
     invalidValueFromAsciiHelper<bmqt::GenericResult>();
     invalidValueFromAsciiHelper<bmqt::OpenQueueResult>();
     invalidValueFromAsciiHelper<bmqt::PostResult>();
@@ -438,7 +446,7 @@ static void test5_invalidValueFromAscii()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -449,9 +457,9 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

@@ -1,4 +1,4 @@
-// Copyright 2014-2023 Bloomberg Finance L.P.
+// Copyright 2014-2024 Bloomberg Finance L.P.
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,21 +17,22 @@
 #ifndef INCLUDED_MQBA_APPLICATION
 #define INCLUDED_MQBA_APPLICATION
 
-//@PURPOSE: Provide an Application class to control object lifetime/creation.
-//
-//@CLASSES:
-//  mqba::Application: BlazingMQ broker application top level component
-//
-//@DESCRIPTION: This component defines a mechanism, 'mqba::Application',
-// responsible for instantiating and destroying the top-level BlazingMQ objects
-// used by the BlazingMQ broker.
+/// @file mqba_application.h
+///
+/// @brief Provide an `Application` class to control object lifetime/creation.
+///
+/// This component defines a mechanism, @bbref{mqba::Application}, responsible
+/// for instantiating and destroying the top-level BlazingMQ objects used by
+/// the BlazingMQ broker.
 
 // MQB
-
+#include <mqba_commandrouter.h>
+#include <mqbcmd_messages.h>
 #include <mqbconfm_messages.h>
+#include <mqbi_cluster.h>
 
-// MWC
-#include <mwcma_countingallocatorstore.h>
+// BMQ
+#include <bmqma_countingallocatorstore.h>
 
 // BDE
 #include <ball_log.h>
@@ -68,7 +69,7 @@ class PluginManager;
 namespace mqbstat {
 class StatController;
 }
-namespace mwcst {
+namespace bmqst {
 class StatContext;
 }
 
@@ -109,30 +110,37 @@ class Application {
         BlobSpPool;
 
     // Data members
-    mwcma::CountingAllocatorStore d_allocators;
-    // Allocator store to spawn new allocators
-    // for sub-components
 
+    /// Allocator store to spawn new allocators for sub components.
+    bmqma::CountingAllocatorStore d_allocators;
+
+    /// Event scheduler (held not owned to use, sharde with all interested
+    /// components.
     bdlmt::EventScheduler* d_scheduler_p;
-    // Event scheduler (held not owned) to use,
-    // shared with all interested components.
 
+    /// Thread pool for admin commands execution.
     bdlmt::ThreadPool d_adminExecutionPool;
-    // Thread pool for admin commands
-    // execution.
+
+    /// Thread pool for routed admin commands execution.  Ensuring rerouted
+    /// commands always execute on their own dedicated thread prevents a case
+    /// where two nodes are simultaneously waiting for each other to process a
+    /// routed command, but cannot make progress because the calling thread is
+    /// blocked ("deadlock").  Note that rerouted commands never route again.
+    bdlmt::ThreadPool d_adminRerouteExecutionPool;
 
     bdlbb::PooledBlobBufferFactory d_bufferFactory;
 
     BlobSpPool d_blobSpPool;
 
-    mwcst::StatContext* d_allocatorsStatContext_p;
-    // Stat context of the counting allocators,
-    // if used
+    bdlma::ConcurrentPool d_pushElementsPool;
+
+    /// Stat context of the counting allocators, if used.
+    bmqst::StatContext* d_allocatorsStatContext_p;
 
     PluginManagerMp d_pluginManager_mp;
 
+    /// Statistics controller component.
     StatControllerMp d_statController_mp;
-    // Statistics controller component
 
     ConfigProviderMp d_configProvider_mp;
 
@@ -144,8 +152,8 @@ class Application {
 
     DomainManagerMp d_domainManager_mp;
 
+    /// Allocator to use.
     bslma::Allocator* d_allocator_p;
-    // Allocator to use
 
   private:
     // PRIVATE MANIPULATORS
@@ -157,6 +165,14 @@ class Application {
 
     /// Pendant operation of the `oneTimeInit` one.
     void oneTimeShutdown();
+
+    /// Attempt to execute graceful shutdown logic v2.
+    ///
+    /// If any node or proxy does not support the v2 graceful shutdown logic,
+    /// do not perform any shutdown actions and return `false`.  Otherwise,
+    /// send v2 shutdown requests to all nodes, shutdown clients and proxies,
+    /// and return `true`.
+    bool initiateShutdown();
 
   private:
     // NOT IMPLEMENTED
@@ -171,7 +187,7 @@ class Application {
     /// Create a new `Application` object, using the specified `scheduler`
     /// and the specified `allocatorsStatContext` and `allocator`.
     Application(bdlmt::EventScheduler* scheduler,
-                mwcst::StatContext*    allocatorsStatContext,
+                bmqst::StatContext*    allocatorsStatContext,
                 bslma::Allocator*      allocator);
 
     /// Destructor.
@@ -182,7 +198,7 @@ class Application {
     /// Load into the specified `contexts` all root top level stat contexts
     /// (allocators, systems, domains, clients, ...).
     void loadStatContexts(
-        bsl::unordered_map<bsl::string, mwcst::StatContext*>* contexts) const;
+        bsl::unordered_map<bsl::string, bmqst::StatContext*>* contexts) const;
 
     // MANIPULATORS
 
@@ -194,27 +210,51 @@ class Application {
     /// Stop the application.
     void stop();
 
-    /// Process the command in the specified `cmd` coming from the specified
-    /// `source`, and write the result of the command in the specified `os`.
+    /// Process the command `cmd` coming from the specified `source`, and write
+    /// the result of the command in the given output stream, `os`.
+    /// Mark `fromReroute` as true if executing the command from a reroute to
+    /// ensure proper routing logic. Returns 0 on success, -1 on early exit,
+    /// -2 on error, and some non-zero error code on parse failure.
     int processCommand(const bslstl::StringRef& source,
                        const bsl::string&       cmd,
-                       bsl::ostream&            os);
+                       bsl::ostream&            os,
+                       bool                     fromReroute = false);
 
-    /// Process the command in the specified `cmd` coming from the specified
-    /// `source`, and send the result of the command in the specified
-    /// `onProcessedCb`.
+    /// Process the command `cmd` coming from the specified `source` node, and
+    /// send the result of the command in the given `onProcessedCb`. Mark
+    /// `fromReroute` as true if executing command from a reroute to ensure
+    /// proper routing logic. Returns the error code of calling
+    /// `processCommand` with the given `cmd`, `source`, and `fromReroute`.
     int processCommandCb(
         const bslstl::StringRef&                            source,
         const bsl::string&                                  cmd,
-        const bsl::function<void(int, const bsl::string&)>& onProcessedCb);
+        const bsl::function<void(int, const bsl::string&)>& onProcessedCb,
+        bool fromReroute = false);
 
     /// Enqueue for execution the command in the specified `cmd` coming from
     /// the specified `source`.  The specified `onProcessedCb` callback is
-    /// used to send result of the command after execution.
+    /// used to send result of the command after execution. Mark `fromReroute`
+    /// as true if executing command from a reroute to ensure proper routing
+    /// logic.
     int enqueueCommand(
         const bslstl::StringRef&                            source,
         const bsl::string&                                  cmd,
-        const bsl::function<void(int, const bsl::string&)>& onProcessedCb);
+        const bsl::function<void(int, const bsl::string&)>& onProcessedCb,
+        bool fromReroute = false);
+
+  private:
+    /// Returns a pointer to the cluster instance that the given `command`
+    /// needs to execute for. Fails when the given command does not have a
+    /// cluster associated with it or the cluster cannot be found. On failure,
+    /// this function returns a nullptr and populates `errorDescription` with
+    /// a reason.
+    mqbi::Cluster* getRelevantCluster(bsl::ostream&          errorDescription,
+                                      const mqbcmd::Command& command) const;
+
+    /// Executes the logic of the given `command` and outputs the result in
+    /// `cmdResult`. Returns 0 on success and -1 on early exit
+    int executeCommand(const mqbcmd::Command&  command,
+                       mqbcmd::InternalResult* cmdResult);
 };
 
 }  // close package namespace

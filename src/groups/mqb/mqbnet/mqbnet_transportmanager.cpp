@@ -22,16 +22,16 @@
 
 // MQB
 #include <mqbcfg_brokerconfig.h>
+#include <mqbcfg_messages.h>
 #include <mqbnet_cluster.h>
 #include <mqbnet_clusterimp.h>
 #include <mqbnet_session.h>
 #include <mqbnet_tcpsessionfactory.h>
 
-// MWC
-#include <mwcio_status.h>
-#include <mwcsys_time.h>
-#include <mwcu_printutil.h>
-#include <mwcu_stringutil.h>
+#include <bmqio_status.h>
+#include <bmqsys_time.h>
+#include <bmqu_printutil.h>
+#include <bmqu_stringutil.h>
 
 // BDE
 #include <bdlf_bind.h>
@@ -53,7 +53,7 @@ namespace mqbnet {
 
 namespace {
 
-bsl::ostream& operator<<(bsl::ostream& os, const mwcio::Channel* channel)
+bsl::ostream& operator<<(bsl::ostream& os, const bmqio::Channel* channel)
 {
     // 'pretty-print' the specified 'channel' to the specified 'os'.  The
     // printed channel from that function includes the address of the channel
@@ -104,7 +104,7 @@ void TransportManager::onClusterReleased(void* object, void* transportManager)
     cluster->closeChannels();
 
     // And delete the cluster
-    self->d_allocator_p->deleteObject(cluster);
+    self->d_allocators.get(cluster->name())->deleteObject(cluster);
 }
 
 int TransportManager::createAndStartTcpInterface(
@@ -113,14 +113,16 @@ int TransportManager::createAndStartTcpInterface(
 {
     // executed by the *MAIN* thread
 
-    d_tcpSessionFactory_mp.load(new (*d_allocator_p)
+    bslma::Allocator* alloc = d_allocators.get("Interface" +
+                                               bsl::to_string(config.port()));
+    d_tcpSessionFactory_mp.load(new (*alloc)
                                     TCPSessionFactory(config,
                                                       d_scheduler_p,
                                                       d_blobBufferFactory_p,
                                                       d_negotiator_mp.get(),
                                                       d_statController_p,
-                                                      d_allocator_p),
-                                d_allocator_p);
+                                                      alloc),
+                                alloc);
 
     return d_tcpSessionFactory_mp->start(errorDescription);
 }
@@ -129,7 +131,7 @@ bool TransportManager::processSession(
     Cluster*                            cluster,
     ConnectionState*                    state,
     const bsl::shared_ptr<Session>&     session,
-    const mwcio::Channel::ReadCallback& readCb)
+    const bmqio::Channel::ReadCallback& readCb)
 {
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(session);
@@ -164,14 +166,14 @@ bool TransportManager::processSession(
                 d_tcpSessionFactory_mp->setNodeWriteQueueWatermarks(*session);
 
                 // Notify the node it now has a channel
-                bsl::weak_ptr<mwcio::Channel> channel(session->channel());
+                bsl::weak_ptr<bmqio::Channel> channel(session->channel());
                 state->d_node_p->setChannel(channel, peerIdentity, readCb);
             }
         }
 
         // Add self as observer of the channel (so that we can monitor when it
         // goes down, and eventually initiate a reconnection).
-        mwcu::MemOutStream channelDescription;
+        bmqu::MemOutStream channelDescription;
         channelDescription << session->channel().get();
 
         session->channel()->onClose(
@@ -201,7 +203,7 @@ bool TransportManager::processSession(
                       << session->channel().get() << "']";
     }
 
-    mwcio::Status readStatus;
+    bmqio::Status readStatus;
     session->channel()->read(&readStatus,
                              bmqp::Protocol::k_PACKET_MIN_SIZE,
                              readCb);
@@ -218,12 +220,12 @@ bool TransportManager::processSession(
 }
 
 bool TransportManager::sessionResult(
-    mwcio::ChannelFactoryEvent::Enum    event,
-    const mwcio::Status&                status,
+    bmqio::ChannelFactoryEvent::Enum    event,
+    const bmqio::Status&                status,
     const bsl::shared_ptr<Session>&     session,
     Cluster*                            cluster,
     void*                               resultState,
-    const mwcio::Channel::ReadCallback& readCb,
+    const bmqio::Channel::ReadCallback& readCb,
     bool                                isListen)
 {
     // executed by one of the *IO* threads
@@ -236,13 +238,13 @@ bool TransportManager::sessionResult(
     bool result = false;
 
     switch (event) {
-    case mwcio::ChannelFactoryEvent::e_CHANNEL_UP: {
+    case bmqio::ChannelFactoryEvent::e_CHANNEL_UP: {
         result = processSession(cluster, state, session, readCb);
     } break;
-    case mwcio::ChannelFactoryEvent::e_CONNECT_ATTEMPT_FAILED: {
+    case bmqio::ChannelFactoryEvent::e_CONNECT_ATTEMPT_FAILED: {
         // Nothing to do, it will keep retrying automatically
     } break;
-    case mwcio::ChannelFactoryEvent::e_CONNECT_FAILED: {
+    case bmqio::ChannelFactoryEvent::e_CONNECT_FAILED: {
         if (isListen) {
             BALL_LOG_INFO << "Accept failed: " << status;
             return result;  // RETURN
@@ -349,11 +351,10 @@ TransportManager::TransportManager(bdlmt::EventScheduler*    scheduler,
                                    bslma::ManagedPtr<Negotiator>& negotiator,
                                    mqbstat::StatController* statController,
                                    bslma::Allocator*        allocator)
-: d_allocator_p(allocator)
+: d_allocators(allocator)
 , d_state(e_STOPPED)
 , d_scheduler_p(scheduler)
 , d_blobBufferFactory_p(blobBufferFactory)
-, d_itemPool(Channel::k_ITEM_SIZE, allocator)
 , d_negotiator_mp(negotiator)
 , d_statController_p(statController)
 , d_tcpSessionFactory_mp(0)
@@ -389,6 +390,9 @@ int TransportManager::start(bsl::ostream& errorDescription)
 
     // Create and start the TCPInterface, if any
     const mqbcfg::AppConfig& brkrCfg = mqbcfg::BrokerConfig::get();
+
+    // If the new network interfaces exist, use them. Otherwise, fall back to
+    // the old network interface config.
     if (!brkrCfg.networkInterfaces().tcpInterface().isNull()) {
         rc = createAndStartTcpInterface(
             errorDescription,
@@ -488,6 +492,9 @@ int TransportManager::createCluster(
     ConnectionMode                          connectionMode,
     bslma::ManagedPtr<void>*                userData)
 {
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(out);
+
     enum RcEnum {
         // Value for the various RC error categories
         rc_SUCCESS           = 0,
@@ -508,7 +515,7 @@ int TransportManager::createCluster(
                                << "' (selfNodeId: " << myNodeId
                                << "), using mode " << connectionMode
                                << " and config: ";
-        mwcu::Printer<bsl::vector<mqbcfg::ClusterNode> > printer(&nodes);
+        bmqu::Printer<bsl::vector<mqbcfg::ClusterNode> > printer(&nodes);
         BALL_LOG_OUTPUT_STREAM << printer;
     }
 
@@ -518,14 +525,11 @@ int TransportManager::createCluster(
         userDataSp = *userData;
     }
 
-    bslma::ManagedPtr<Cluster> cluster(new (*d_allocator_p)
-                                           ClusterImp(name,
-                                                      nodes,
-                                                      myNodeId,
-                                                      d_blobBufferFactory_p,
-                                                      &d_itemPool,
-                                                      d_allocator_p),
-                                       d_allocator_p);
+    bslma::Allocator*          alloc = d_allocators.get(name);
+    bslma::ManagedPtr<Cluster> cluster(
+        new (*alloc)
+            ClusterImp(name, nodes, myNodeId, d_blobBufferFactory_p, alloc),
+        alloc);
 
     // At the moment, only TCP is supported, validate that
     bsl::vector<mqbcfg::ClusterNode>::const_iterator nodeIt;
@@ -556,7 +560,7 @@ int TransportManager::createCluster(
                                 // config, the node must exist
 
         bsl::shared_ptr<ConnectionState> connectionState;
-        connectionState.createInplace(d_allocator_p);
+        connectionState.createInplace(d_allocators.get("ConnectionStates"));
 
         connectionState->d_endpoint            = tcpConfig.endpoint();
         connectionState->d_isClusterConnection = true;
@@ -628,13 +632,13 @@ int TransportManager::connectOut(bsl::ostream&            errorDescription,
 
     // Validation: At the moment, the only supported protocol is TCP.
     // If/once/when we'll support more, we should use a factory method.
-    if (!mwcu::StringUtil::startsWith(uri, "tcp://")) {
+    if (!bmqu::StringUtil::startsWith(uri, "tcp://")) {
         errorDescription << "Unsupported transport protocol '" << uri << "'";
         return rc_INVALID_PROTOCOL;  // RETURN
     }
 
     bsl::shared_ptr<ConnectionState> state;
-    state.createInplace(d_allocator_p);
+    state.createInplace(d_allocators.get("ConnectionStates"));
 
     {
         bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // d_mutex LOCK
@@ -704,7 +708,7 @@ void* TransportManager::getClusterNodeAndState(
 
 bool TransportManager::isEndpointLoopback(const bslstl::StringRef& uri) const
 {
-    if (mwcu::StringUtil::startsWith(uri, "tcp://")) {
+    if (bmqu::StringUtil::startsWith(uri, "tcp://")) {
         // NOTE: If we ever will listen to multiple TCP interfaces, we should
         //       update here and return true if *any* one returns true.
         return d_tcpSessionFactory_mp &&

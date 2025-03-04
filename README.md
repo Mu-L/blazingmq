@@ -9,7 +9,6 @@
 
 ---
 [![OS Linux](https://img.shields.io/badge/OS-Linux-blue)](#)
-[![OS AIX](https://img.shields.io/badge/OS-AIX-blue)](#)
 [![OS Solaris](https://img.shields.io/badge/OS-Solaris-blue)](#)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue)](LICENSE)
 [![C++](https://img.shields.io/badge/C++-blue)](#)
@@ -39,36 +38,35 @@ themselves from each other by using a message queue to facilitate
 communication.
 
 BlazingMQ's back-end (message brokers) has been implemented in C++, and client
-libraries are available in C++, Java, and Python (the Python SDK will be
-published shortly as open source too!).
+libraries are available in C++, Java, and Python.
 
 BlazingMQ is an actively developed project and has been battle-tested in
 production at Bloomberg for 8+ years.
 
-This repository contains BlazingMQ message broker, BlazingMQ C++ client library
-and a BlazingMQ command line tool, while BlazingMQ Java client library can be
-found in [this](https://github.com/bloomberg/blazingmq-sdk-java) repository.
+This repository the contains BlazingMQ message broker, the BlazingMQ C++ client
+library, and a BlazingMQ command line tool. The BlazingMQ
+[Java client library](https://github.com/bloomberg/blazingmq-sdk-java) and
+[Python client library](https://github.com/bloomberg/blazingmq-sdk-python) are
+maintained in separate repositories.
 
----
 
 ## Menu
 
 - [Documentation](#documentation)
 - [Quick Start](#quick-start)
+- [Building](#building)
 - [Installation](#installation)
 - [Contributions](#contributions)
 - [License](#license)
 - [Code of Conduct](#code-of-conduct)
 - [Security Vulnerability Reporting](#security-vulnerability-reporting)
 
----
 
 ## Documentation
 
 Comprehensive documentation about BlazingMQ can be found
 [here](https://bloomberg.github.io/blazingmq).
 
----
 
 ## Quick Start
 
@@ -81,7 +79,35 @@ In the
 article, readers can learn about some intermediate and advanced features of
 BlazingMQ and see them in action.
 
----
+
+## Building
+
+[bin/build-ubuntu.sh](bin/build-ubuntu.sh) and
+[bin/build-darwin.sh](bin/build-darwin.sh) build BlazingMQ and its dependencies,
+respectively, on Ubuntu 22.04.2 LTS and Darwin 22.6.0. They can serve as a basis
+to build BlazingMQ on other systems.  
+  
+To build BlazingMQ with plugins, pass '--plugins' argument with desired plugin names to the build script, e.g.
+```bash
+bin/build-ubuntu.sh --plugins plugin-1-name,plugin-2-name
+```
+
+### With vcpkg
+
+There is also support for building BlazingMQ with [vpckg](https://vcpkg.io/en/).
+
+Before attempting to build, you will have to acquire `flex`, `bison`, and `bde-tools` for your system, as vcpkg cannot fetch them. Both `flex` and `bison` can likely be installed through your system's package manager. Clone [`bde-tools`](https://github.com/bloomberg/bde-tools.git), we'll assume `blazingmq/thirdparty/bde-tools` for this guide.
+
+Once the prerequisite tools are installed, you should be able to build BlazingMQ with the following:
+
+```sh
+export VCPKG_ROOT=/path/to/vcpkg
+cmake --preset [preset-name] -DCMAKE_PREFIX_PATH=/path/to/thirdparty/bde-tools
+cmake --build cmake.bld
+```
+
+For a list of presets, please look at the `*-vcpkg` configurations in [`CMakePresets.json`](./CMakePresets.json).
+
 
 ## Installation
 
@@ -89,7 +115,6 @@ BlazingMQ and see them in action.
 article describes the steps for installing a BlazingMQ cluster in a set of Docker
 containers, along with a recommended set of configurations.
 
----
 
 ## Contributions
 
@@ -103,13 +128,11 @@ Before sending a [Pull Request](../../pulls), please make sure you have read
 our [Contribution
 Guidelines](https://github.com/bloomberg/.github/blob/main/CONTRIBUTING.md).
 
----
 
 ## License
 
 BlazingMQ is Apache 2.0 licensed, as found in the [LICENSE](LICENSE) file.
 
----
 
 ## Code of Conduct
 
@@ -118,7 +141,6 @@ Conduct](https://github.com/bloomberg/.github/blob/main/CODE_OF_CONDUCT.md).
 If you have any concerns about the Code, or behavior which you have experienced
 in the project, please contact us at opensource@bloomberg.net.
 
----
 
 ## Security Vulnerability Reporting
 
@@ -129,5 +151,3 @@ the suspected issue and any methods you've found to reproduce it.
 Please do NOT open an issue in the GitHub repository, as we'd prefer to keep
 vulnerability reports private until we've had an opportunity to review and
 address them.
-
----

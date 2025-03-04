@@ -19,8 +19,7 @@
 // MQB
 #include <mqbi_storage.h>
 
-// MWC
-#include <mwcsys_time.h>
+#include <bmqsys_time.h>
 
 // BDE
 #include <bdlt_currenttime.h>
@@ -32,7 +31,7 @@
 #include <bsls_types.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -65,16 +64,17 @@ struct Tester {
   public:
     // CREATORS
     Tester()
-    : d_domain1("bmq.random.x", s_allocator_p)
-    , d_domain2("bmq.haha", s_allocator_p)
-    , d_domain3("bmq.random.y", s_allocator_p)
-    , d_d1uri1("bmq://bmq.random.x/q1", s_allocator_p)
-    , d_d1uri2("bmq://bmq.random.x/q2", s_allocator_p)
-    , d_d1uri3("bmq://bmq.random.x/q3", s_allocator_p)
-    , d_d2uri1("bmq://bmq.haha/baddie", s_allocator_p)
-    , d_d2uri2("bmq://bmq.haha/excellent", s_allocator_p)
-    , d_d2uri3("bmq://bmq.haha/soso", s_allocator_p)
-    , d_d3uri1("bmq://bmq.random.y/generic", s_allocator_p)
+    : d_domain1("bmq.random.x", bmqtst::TestHelperUtil::allocator())
+    , d_domain2("bmq.haha", bmqtst::TestHelperUtil::allocator())
+    , d_domain3("bmq.random.y", bmqtst::TestHelperUtil::allocator())
+    , d_d1uri1("bmq://bmq.random.x/q1", bmqtst::TestHelperUtil::allocator())
+    , d_d1uri2("bmq://bmq.random.x/q2", bmqtst::TestHelperUtil::allocator())
+    , d_d1uri3("bmq://bmq.random.x/q3", bmqtst::TestHelperUtil::allocator())
+    , d_d2uri1("bmq://bmq.haha/baddie", bmqtst::TestHelperUtil::allocator())
+    , d_d2uri2("bmq://bmq.haha/excellent", bmqtst::TestHelperUtil::allocator())
+    , d_d2uri3("bmq://bmq.haha/soso", bmqtst::TestHelperUtil::allocator())
+    , d_d3uri1("bmq://bmq.random.y/generic",
+               bmqtst::TestHelperUtil::allocator())
     {
         // NOTHING
     }
@@ -96,7 +96,7 @@ static void test1_queueMessagesCountComparator()
 //   queueMessagesCountComparator(...)
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("QUEUE MESSAGES COMPARATOR");
+    bmqtst::TestHelper::printTestName("QUEUE MESSAGES COMPARATOR");
 
     Tester tester;
 
@@ -108,9 +108,9 @@ static void test1_queueMessagesCountComparator()
     StorageUtil::QueueMessagesCount rhs2(tester.d_d2uri1, 10);
     StorageUtil::QueueMessagesCount rhs3(tester.d_d3uri1, 15);
 
-    ASSERT(StorageUtil::queueMessagesCountComparator(lhs, rhs1));
-    ASSERT(!StorageUtil::queueMessagesCountComparator(lhs, rhs2));
-    ASSERT(!StorageUtil::queueMessagesCountComparator(lhs, rhs3));
+    BMQTST_ASSERT(StorageUtil::queueMessagesCountComparator(lhs, rhs1));
+    BMQTST_ASSERT(!StorageUtil::queueMessagesCountComparator(lhs, rhs2));
+    BMQTST_ASSERT(!StorageUtil::queueMessagesCountComparator(lhs, rhs3));
 }
 
 static void test2_mergeQueueMessagesCountMap()
@@ -124,27 +124,29 @@ static void test2_mergeQueueMessagesCountMap()
 //   mergeQueueMessagesCountMap(...)
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("MERGE QUEUE MESSAGES");
+    bmqtst::TestHelper::printTestName("MERGE QUEUE MESSAGES");
 
     Tester tester;
 
     using namespace mqbs;
 
-    StorageUtil::QueueMessagesCountMap qs1(s_allocator_p);
+    StorageUtil::QueueMessagesCountMap qs1(
+        bmqtst::TestHelperUtil::allocator());
     qs1.insert(bsl::make_pair(tester.d_d1uri1, 10));
     qs1.insert(bsl::make_pair(tester.d_d1uri2, 20));
 
-    StorageUtil::QueueMessagesCountMap qs2(s_allocator_p);
+    StorageUtil::QueueMessagesCountMap qs2(
+        bmqtst::TestHelperUtil::allocator());
     qs2.insert(bsl::make_pair(tester.d_d1uri1, 100));
     qs2.insert(bsl::make_pair(tester.d_d1uri3, 333));
 
     // qs1 = {URI1 -> 10,  URI2 -> 20}
     // qs2 = {URI1 -> 100, URI3 -> 333}
     StorageUtil::mergeQueueMessagesCountMap(&qs1, qs2);
-    ASSERT_EQ(qs1.size(), 3U);  // one entry per URI
-    ASSERT_EQ(qs1[tester.d_d1uri1], 10 + 100);
-    ASSERT_EQ(qs1[tester.d_d1uri2], 20);
-    ASSERT_EQ(qs1[tester.d_d1uri3], 333);
+    BMQTST_ASSERT_EQ(qs1.size(), 3U);  // one entry per URI
+    BMQTST_ASSERT_EQ(qs1[tester.d_d1uri1], 10 + 100);
+    BMQTST_ASSERT_EQ(qs1[tester.d_d1uri2], 20);
+    BMQTST_ASSERT_EQ(qs1[tester.d_d1uri3], 333);
 }
 
 static void test3_mergeDomainQueueMessagesCountMap()
@@ -158,35 +160,42 @@ static void test3_mergeDomainQueueMessagesCountMap()
 //   mergeDomainQueueMessagesCountMap(...)
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("MERGE DOMAIN QUEUE MESSAGES MAP");
+    bmqtst::TestHelper::printTestName("MERGE DOMAIN QUEUE MESSAGES MAP");
 
     Tester tester;
 
     using namespace mqbs;
 
-    StorageUtil::QueueMessagesCountMap qs1(s_allocator_p);
+    StorageUtil::QueueMessagesCountMap qs1(
+        bmqtst::TestHelperUtil::allocator());
     qs1.insert(bsl::make_pair(tester.d_d1uri1, 10));
     qs1.insert(bsl::make_pair(tester.d_d1uri2, 20));
 
-    StorageUtil::QueueMessagesCountMap qs2(s_allocator_p);
+    StorageUtil::QueueMessagesCountMap qs2(
+        bmqtst::TestHelperUtil::allocator());
     qs2.insert(bsl::make_pair(tester.d_d2uri1, 7777));
 
-    StorageUtil::DomainQueueMessagesCountMap map1(s_allocator_p);
+    StorageUtil::DomainQueueMessagesCountMap map1(
+        bmqtst::TestHelperUtil::allocator());
     map1.insert(bsl::make_pair(tester.d_domain1, qs1));
     map1.insert(bsl::make_pair(tester.d_domain2, qs2));
 
-    StorageUtil::QueueMessagesCountMap qs3(s_allocator_p);
+    StorageUtil::QueueMessagesCountMap qs3(
+        bmqtst::TestHelperUtil::allocator());
     qs3.insert(bsl::make_pair(tester.d_d1uri1, 100));
     qs3.insert(bsl::make_pair(tester.d_d1uri3, 333));
 
-    StorageUtil::QueueMessagesCountMap qs4(s_allocator_p);
+    StorageUtil::QueueMessagesCountMap qs4(
+        bmqtst::TestHelperUtil::allocator());
     qs4.insert(bsl::make_pair(tester.d_d2uri2, 8888));
     qs4.insert(bsl::make_pair(tester.d_d2uri3, 9999));
 
-    StorageUtil::QueueMessagesCountMap qs5(s_allocator_p);
+    StorageUtil::QueueMessagesCountMap qs5(
+        bmqtst::TestHelperUtil::allocator());
     qs5.insert(bsl::make_pair(tester.d_d3uri1, 1234567));
 
-    StorageUtil::DomainQueueMessagesCountMap map2(s_allocator_p);
+    StorageUtil::DomainQueueMessagesCountMap map2(
+        bmqtst::TestHelperUtil::allocator());
     map2.insert(bsl::make_pair(tester.d_domain1, qs3));
     map2.insert(bsl::make_pair(tester.d_domain2, qs4));
     map2.insert(bsl::make_pair(tester.d_domain3, qs5));
@@ -202,18 +211,18 @@ static void test3_mergeDomainQueueMessagesCountMap()
 
     StorageUtil::mergeDomainQueueMessagesCountMap(&map1, map2);
 
-    ASSERT_EQ(map1.size(), 3U);
-    ASSERT_EQ(map1[tester.d_domain1].size(), 3U);
-    ASSERT_EQ(map1[tester.d_domain1][tester.d_d1uri1], 10 + 100);
-    ASSERT_EQ(map1[tester.d_domain1][tester.d_d1uri2], 20);
-    ASSERT_EQ(map1[tester.d_domain1][tester.d_d1uri3], 333);
+    BMQTST_ASSERT_EQ(map1.size(), 3U);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain1].size(), 3U);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain1][tester.d_d1uri1], 10 + 100);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain1][tester.d_d1uri2], 20);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain1][tester.d_d1uri3], 333);
 
-    ASSERT_EQ(map1[tester.d_domain2].size(), 3U);
-    ASSERT_EQ(map1[tester.d_domain2][tester.d_d2uri1], 7777);
-    ASSERT_EQ(map1[tester.d_domain2][tester.d_d2uri2], 8888);
-    ASSERT_EQ(map1[tester.d_domain2][tester.d_d2uri3], 9999);
-    ASSERT_EQ(map1[tester.d_domain3].size(), 1U);
-    ASSERT_EQ(map1[tester.d_domain3][tester.d_d3uri1], 1234567);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain2].size(), 3U);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain2][tester.d_d2uri1], 7777);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain2][tester.d_d2uri2], 8888);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain2][tester.d_d2uri3], 9999);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain3].size(), 1U);
+    BMQTST_ASSERT_EQ(map1[tester.d_domain3][tester.d_d3uri1], 1234567);
 }
 
 static void test4_loadArrivalTime()
@@ -227,12 +236,12 @@ static void test4_loadArrivalTime()
 //   loadArrivalTime(...)
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("LOAD ARRIVAL TIME");
+    bmqtst::TestHelper::printTestName("LOAD ARRIVAL TIME");
 
     // Use timepoint if set
     {
         const bsls::Types::Int64 arrivalTimepointNs =
-            mwcsys::Time::highResolutionTimer();
+            bmqsys::Time::highResolutionTimer();
 
         mqbi::StorageMessageAttributes attributes;
         attributes
@@ -248,9 +257,10 @@ static void test4_loadArrivalTime()
         const bsls::Types::Int64 expectedArrivalTimeNs =
             bdlt::EpochUtil::convertToTimeInterval(bdlt::CurrentTime::utc())
                 .totalNanoseconds() -
-            (mwcsys::Time::highResolutionTimer() - arrivalTimepointNs);
-        ASSERT_LE(expectedArrivalTimeNs - arrivalTimeNs,
-                  1 * bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND);
+            (bmqsys::Time::highResolutionTimer() - arrivalTimepointNs);
+        BMQTST_ASSERT_LE(
+            expectedArrivalTimeNs - arrivalTimeNs,
+            1 * bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND);
 
         // 2. bdlt::Datetime variant
         bdlt::Datetime arrivalDatetime;
@@ -264,8 +274,8 @@ static void test4_loadArrivalTime()
 
         // Expect less than 1 millisecond of time elapsed between the
         // calculation of 'arrivalDatetime' and 'expectedArrivalDatetime'.
-        ASSERT_LE(expectedArrivalDatetime - arrivalDatetime,
-                  bdlt::DatetimeInterval(0, 0, 0, 0, 1));  // 1 ms
+        BMQTST_ASSERT_LE(expectedArrivalDatetime - arrivalDatetime,
+                         bdlt::DatetimeInterval(0, 0, 0, 0, 1));  // 1 ms
     }
 
     // If timepoint is unset, use timestamp instead
@@ -282,7 +292,7 @@ static void test4_loadArrivalTime()
 
         const bsls::Types::Int64 expectedArrivalTimeNs =
             arrivalTimeSec * bdlt::TimeUnitRatio::k_NANOSECONDS_PER_SECOND;
-        ASSERT_EQ(arrivalTimeNs, expectedArrivalTimeNs);
+        BMQTST_ASSERT_EQ(arrivalTimeNs, expectedArrivalTimeNs);
 
         // 2. bdlt::Datetime variant
         bdlt::Datetime arrivalDatetime;
@@ -293,7 +303,7 @@ static void test4_loadArrivalTime()
         expectedArrivalTimeInterval.addNanoseconds(expectedArrivalTimeNs);
         bdlt::EpochUtil::convertFromTimeInterval(&expectedArrivalDatetime,
                                                  expectedArrivalTimeInterval);
-        ASSERT_EQ(arrivalDatetime, expectedArrivalDatetime);
+        BMQTST_ASSERT_EQ(arrivalDatetime, expectedArrivalDatetime);
     }
 }
 
@@ -308,12 +318,12 @@ static void test5_loadArrivalTimeDelta()
 //   loadArrivalTimeDelta(...)
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("LOAD ARRIVAL TIME DELTA");
+    bmqtst::TestHelper::printTestName("LOAD ARRIVAL TIME DELTA");
 
     // Use timepoint if set
     {
         const bsls::Types::Int64 arrivalTimepointNs =
-            mwcsys::Time::highResolutionTimer();
+            bmqsys::Time::highResolutionTimer();
 
         mqbi::StorageMessageAttributes attributes;
         attributes
@@ -328,9 +338,10 @@ static void test5_loadArrivalTimeDelta()
         // calculation of 'arrivalTimeDeltaNs' and
         // 'expectedArrivalTimeDeltaNs'.
         const bsls::Types::Int64 expectedArrivalTimeDeltaNs =
-            mwcsys::Time::highResolutionTimer() - arrivalTimepointNs;
-        ASSERT_LE(expectedArrivalTimeDeltaNs - arrivalTimeDeltaNs,
-                  1 * bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND);
+            bmqsys::Time::highResolutionTimer() - arrivalTimepointNs;
+        BMQTST_ASSERT_LE(
+            expectedArrivalTimeDeltaNs - arrivalTimeDeltaNs,
+            1 * bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND);
     }
 
     // If timepoint is unset, use timestamp instead
@@ -352,8 +363,9 @@ static void test5_loadArrivalTimeDelta()
             (bdlt::EpochUtil::convertToTimeT64(bdlt::CurrentTime::utc()) -
              arrivalTimeSec) *
             bdlt::TimeUnitRatio::k_NANOSECONDS_PER_SECOND;
-        ASSERT_LE(expectedArrivalTimeDeltaNs - arrivalTimeDeltaNs,
-                  1 * bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND);
+        BMQTST_ASSERT_LE(
+            expectedArrivalTimeDeltaNs - arrivalTimeDeltaNs,
+            1 * bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND);
     }
 }
 
@@ -363,10 +375,10 @@ static void test5_loadArrivalTimeDelta()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    bmqt::UriParser::initialize(s_allocator_p);
-    mwcsys::Time::initialize();
+    bmqt::UriParser::initialize(bmqtst::TestHelperUtil::allocator());
+    bmqsys::Time::initialize();
 
     switch (_testCase) {
     case 0:
@@ -377,12 +389,12 @@ int main(int argc, char* argv[])
     case 1: test1_queueMessagesCountComparator(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    mwcsys::Time::shutdown();
+    bmqsys::Time::shutdown();
     bmqt::UriParser::shutdown();
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_GBL_ALLOC);
 }

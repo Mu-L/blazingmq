@@ -31,14 +31,13 @@
 // BMQ
 #include <bmqp_ctrlmsg_messages.h>
 
-// MWC
-#include <mwcst_statcontext.h>
-#include <mwcsys_time.h>
-#include <mwctsk_alarmlog.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_sharedresource.h>
-#include <mwcu_stringutil.h>
-#include <mwcu_weakmemfn.h>
+#include <bmqst_statcontext.h>
+#include <bmqsys_time.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_sharedresource.h>
+#include <bmqu_stringutil.h>
+#include <bmqu_weakmemfn.h>
 
 // BDE
 #include <baljsn_decoder.h>
@@ -60,7 +59,35 @@ namespace BloombergLP {
 namespace mqba {
 
 namespace {
-const int k_MAX_WAIT_SECONDS_AT_SHUTDOWN = 20;
+const int k_MAX_WAIT_SECONDS_AT_SHUTDOWN      = 40;
+const int k_MAX_WAIT_SECONDS_AT_DOMAIN_REMOVE = 5;
+
+/// This function is a callback passed to domain manager for
+/// synchronization.  The specified 'status' is a return status
+/// of a function which called this callback.  The specified
+/// 'domain' is optional Domain returned from a caller.
+/// The specified 'latch' is used for synchronization with
+/// external source and called after all the interesting
+/// processing is done.
+void onDomain(const bmqp_ctrlmsg::Status& status,
+              mqbi::Domain*               domain,
+              bslmt::Latch*               latch)
+{
+    // executed by *ANY* thread
+
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(latch);
+
+    if (bmqp_ctrlmsg::StatusCategory::E_SUCCESS != status.category()) {
+        BSLS_ASSERT_SAFE(0 == domain);
+    }
+    else {
+        BSLS_ASSERT_SAFE(domain);
+    }
+
+    latch->arrive();
+}
+
 }  // close unnamed namespace
 
 // ===========================
@@ -222,7 +249,7 @@ void DomainManager::onConfigProviderDomainConfigCb(
 
     // This compiles the message that will be sent to the client. This contains
     // only `d_message` for brevity.
-    mwcu::MemOutStream err;
+    bmqu::MemOutStream err;
     err << "ConfigProvider failed to load domain config "
         << "[ domain = '" << domain << "'"
         << " configProviderError = '" << configProviderError.d_status.message()
@@ -246,7 +273,7 @@ DomainManager::decodeAndUpsert(DecodeAndUpsertValue* out,
                                const bsl::string&    clusterName)
 {
     if (status != 0) {
-        mwcu::MemOutStream err;
+        bmqu::MemOutStream err;
         err << "rc = " << status << " message = '" << result << "'";
         out->makeError(Error(bmqp_ctrlmsg::StatusCategory::E_REFUSED,
                              mqbi::ClusterErrorCode::e_UNKNOWN,
@@ -266,7 +293,7 @@ DomainManager::decodeAndUpsert(DecodeAndUpsertValue* out,
 
     int rc = decoder.decode(jsonStream, &domainVariant, options);
     if (rc != 0) {
-        mwcu::MemOutStream err;
+        bmqu::MemOutStream err;
         err << "rc = " << rc << " error = '" << decoder.loggedMessages() << "'"
             << " from content = '" << jsonStream.str() << "'";
         out->makeError(Error(bmqp_ctrlmsg::StatusCategory::E_REFUSED,
@@ -277,7 +304,7 @@ DomainManager::decodeAndUpsert(DecodeAndUpsertValue* out,
     }
 
     if (!domainVariant.isDefinitionValue()) {
-        mwcu::MemOutStream err;
+        bmqu::MemOutStream err;
         err << "invalid domain configuration for domain '" << domain
             << "' (not a domain definition)";
         out->makeError(Error(bmqp_ctrlmsg::StatusCategory::E_REFUSED,
@@ -350,7 +377,7 @@ DomainManager::upsertDomain(UpsertDomainValue*             out,
                 // cluster description is not backed up and not coming from the
                 // domain configuration, there is no need to try to fall back
                 // if this fails..
-                mwcu::MemOutStream err;
+                bmqu::MemOutStream err;
                 err << "cluster = " << clusterName << " status = " << status;
                 out->makeError(Error(status, err.str(), true));
                 return *out;  // RETURN
@@ -363,9 +390,9 @@ DomainManager::upsertDomain(UpsertDomainValue*             out,
         }
 
         // Create a dedicated stats subcontext for this domain
-        mwcst::StatContextConfiguration statContextCfg(domain);
+        bmqst::StatContextConfiguration statContextCfg(domain);
         statContextCfg.storeExpiredSubcontextValues(true);
-        bslma::ManagedPtr<mwcst::StatContext> queuesStatContext =
+        bslma::ManagedPtr<bmqst::StatContext> queuesStatContext =
             d_queuesStatContext_p->addSubcontext(statContextCfg);
 
         bslma::ManagedPtr<mqbi::Domain> domainMp(
@@ -382,10 +409,10 @@ DomainManager::upsertDomain(UpsertDomainValue*             out,
 
     // Configure the domain
     // - - - - - - - - - -
-    mwcu::MemOutStream configureErrorStream;
+    bmqu::MemOutStream configureErrorStream;
     int rc = domainSp->configure(configureErrorStream, definition);
     if (rc != 0) {
-        mwcu::MemOutStream err;
+        bmqu::MemOutStream err;
         err << "error = '" << configureErrorStream.str() << "'"
             << " config = '" << definition << "'";
         out->makeError(
@@ -430,7 +457,7 @@ void DomainManager::invokeCallback(
         status = response.error().d_status;
 
         // Rework the 'message' field of 'status' for improved format.
-        mwcu::MemOutStream err;
+        bmqu::MemOutStream err;
         err << status.message() << ". Details: " << response.error().d_details;
         status.message().assign(err.str().data(), err.str().length());
         callback(status, 0);
@@ -453,8 +480,8 @@ DomainManager::DomainManager(ConfigProvider*           configProvider,
                              bdlbb::BlobBufferFactory* blobBufferFactory,
                              mqbblp::ClusterCatalog*   clusterCatalog,
                              mqbi::Dispatcher*         dispatcher,
-                             mwcst::StatContext*       domainsStatContext,
-                             mwcst::StatContext*       queuesStatContext,
+                             bmqst::StatContext*       domainsStatContext,
+                             bmqst::StatContext*       queuesStatContext,
                              bslma::Allocator*         allocator)
 : d_configProvider_p(configProvider)
 , d_blobBufferFactory_p(blobBufferFactory)
@@ -518,19 +545,19 @@ void DomainManager::stop()
     }
 
     // Stop all domains (and queues).
-    mwcu::SharedResource<DomainManager> self(this);
+    bmqu::SharedResource<DomainManager> self(this);
     bslmt::Latch latch(d_domains.size(), bsls::SystemClockType::e_MONOTONIC);
 
     for (DomainSpMap::iterator it = d_domains.begin(); it != d_domains.end();
          ++it) {
         it->second->teardown(bdlf::BindUtil::bind(
-            mwcu::WeakMemFnUtil::weakMemFn(&DomainManager::onDomainClosed,
+            bmqu::WeakMemFnUtil::weakMemFn(&DomainManager::onDomainClosed,
                                            self.acquireWeak()),
             bdlf::PlaceHolders::_1,  // Domain Name
             &latch));
     }
 
-    bsls::TimeInterval timeout = mwcsys::Time::nowMonotonicClock().addSeconds(
+    bsls::TimeInterval timeout = bmqsys::Time::nowMonotonicClock().addSeconds(
         k_MAX_WAIT_SECONDS_AT_SHUTDOWN);
     int rc = latch.timedWait(timeout);
     if (0 != rc) {
@@ -539,17 +566,21 @@ void DomainManager::stop()
                        << k_MAX_WAIT_SECONDS_AT_SHUTDOWN
                        << " seconds while shutting down"
                        << " bmqbrkr. rc:  " << rc << ".";
-
-        // Note that 'self' variable will get invalidated when this function
-        // returns, which will ensure that any pending 'onDomainClosed'
-        // callbacks are not invoked.  So there is no need to explicitly call
-        // 'self.invalidate()' here.
     }
 
     if (d_domainResolver_mp) {
         d_domainResolver_mp->stop();
         d_domainResolver_mp.clear();
     }
+
+    // Notice that this invalidation is necessary.
+    // Without this explicit call, `self` will be invalidated
+    // when the function returns, which will ensure that any pending
+    // `onDomainClosed` callbacks are not invoked. But this is not enough
+    // since we want to prevent a (tiny) possibility where `latch` is
+    // destructed before `self` and `onDomainClosed` would be called on an
+    // invalid `latch`.
+    self.invalidate();
 }
 
 int DomainManager::locateDomain(DomainSp*          domain,
@@ -572,6 +603,33 @@ int DomainManager::locateDomain(DomainSp*          domain,
     return rc_SUCCESS;
 }
 
+int DomainManager::locateOrCreateDomain(DomainSp*          domain,
+                                        const bsl::string& domainName)
+{
+    if (0 != locateDomain(domain, domainName)) {
+        BALL_LOG_WARN
+            << "Domain '" << domainName
+            << "' is not opened, trying to initialize from configuration";
+
+        bslmt::Latch latch(1);
+        createDomain(domainName,
+                     bdlf::BindUtil::bind(&onDomain,
+                                          bdlf::PlaceHolders::_1,  // status
+                                          bdlf::PlaceHolders::_2,  // domain*
+                                          &latch));
+
+        // To return a result from command execution, we need to
+        // synchronize with the domain creation attempt
+        latch.wait();
+
+        if (0 != locateDomain(domain, domainName)) {
+            return -1;  // RETURN
+        }
+    }
+
+    return 0;  // RETURN
+}
+
 int DomainManager::processCommand(mqbcmd::DomainsResult*        result,
                                   const mqbcmd::DomainsCommand& command)
 {
@@ -589,11 +647,13 @@ int DomainManager::processCommand(mqbcmd::DomainsResult*        result,
         return rc;  // RETURN
     }
     else if (command.isDomainValue()) {
+        const bsl::string& name = command.domain().name();
+
         DomainSp domainSp;
 
-        if (0 != locateDomain(&domainSp, command.domain().name())) {
-            mwcu::MemOutStream os;
-            os << "Domain '" << command.domain().name() << "' doesn't exist";
+        if (0 != locateOrCreateDomain(&domainSp, name)) {
+            bmqu::MemOutStream os;
+            os << "Domain '" << name << "' doesn't exist";
             result->makeError().message() = os.str();
             return -1;  // RETURN
         }
@@ -614,36 +674,174 @@ int DomainManager::processCommand(mqbcmd::DomainsResult*        result,
         return rc;  // RETURN
     }
     else if (command.isReconfigureValue()) {
+        const bsl::string& name = command.reconfigure().domain();
+
         DomainSp domainSp;
 
-        if (0 != locateDomain(&domainSp, command.reconfigure().domain())) {
-            mwcu::MemOutStream os;
-            os << "Domain '" << command.reconfigure().domain()
-               << "' doesn't exist";
+        if (0 != locateOrCreateDomain(&domainSp, name)) {
+            bmqu::MemOutStream os;
+            os << "Domain '" << name << "' doesn't exist";
             result->makeError().message() = os.str();
             return -1;  // RETURN
         }
 
-        DecodeAndUpsertValue unused;
+        DecodeAndUpsertValue configureResult;
         d_configProvider_p->clearCache(domainSp->name());
         d_configProvider_p->getDomainConfig(
             domainSp->name(),
             bdlf::BindUtil::bind(
                 &DomainManager::decodeAndUpsert,
                 this,
-                &unused,
+                &configureResult,
                 bdlf::PlaceHolders::_1,  // configProviderStatus
                 bdlf::PlaceHolders::_2,  // configProviderResult
                 domainSp->name(),
                 domainSp->cluster()->name()));
-        result->makeSuccess();
-        return 0;  // RETURN
+
+        if (configureResult.isError()) {
+            result->makeError().message() = configureResult.error().d_details;
+            return -1;  // RETURN
+        }
+        else {
+            result->makeSuccess();
+            return 0;  // RETURN
+        }
+    }
+    else if (command.isRemoveValue()) {
+        const bsl::string& name = command.remove().domain();
+
+        // First round
+        if (command.remove().finalize().isNull()) {
+            DomainSp domainSp;
+
+            if (0 != locateOrCreateDomain(&domainSp, name)) {
+                bmqu::MemOutStream os;
+                os << "Domain '" << name << "' doesn't exist";
+                result->makeError().message() = os.str();
+                return -1;  // RETURN
+            }
+
+            // 1. Reject if there's any open queue request on the fly
+            //    Mark DOMAIN PREREMOVE to block openQueue requests
+            if (!domainSp->tryRemove()) {
+                bmqu::MemOutStream os;
+                os << "Trying to remove the domain '" << name
+                   << "' while there are open queue requests on the fly or "
+                      "the domain is shutting down";
+                result->makeError().message() = os.str();
+                return -1;  // RETURN
+            }
+
+            // 2. Purge and GC
+            mqbcmd::DomainResult  domainResult;
+            mqbcmd::ClusterResult clusterResult;
+            mqbi::Cluster*        cluster = domainSp->cluster();
+
+            cluster->purgeAndGCQueueOnDomain(&clusterResult, name);
+
+            if (clusterResult.isErrorValue()) {
+                result->makeError(clusterResult.error());
+                return -1;  // RETURN
+            }
+
+            BSLS_ASSERT_SAFE(clusterResult.isStorageResultValue());
+            BSLS_ASSERT_SAFE(
+                clusterResult.storageResult().isPurgedQueuesValue());
+
+            mqbcmd::PurgedQueues& purgedQueues =
+                domainResult.makePurgedQueues();
+            purgedQueues.queues() =
+                clusterResult.storageResult().purgedQueues().queues();
+            result->makeDomainResult(domainResult);
+
+            // 3. Mark DOMAIN REMOVED to accecpt the second pass
+            bmqu::SharedResource<DomainManager> self(this);
+            bslmt::Latch latch(1, bsls::SystemClockType::e_MONOTONIC);
+
+            domainSp->teardownRemove(bdlf::BindUtil::bind(
+                bmqu::WeakMemFnUtil::weakMemFn(&DomainManager::onDomainClosed,
+                                               self.acquireWeak()),
+                bdlf::PlaceHolders::_1,  // Domain Name
+                &latch));
+
+            bsls::TimeInterval timeout =
+                bmqsys::Time::nowMonotonicClock().addSeconds(
+                    k_MAX_WAIT_SECONDS_AT_DOMAIN_REMOVE);
+
+            int rc = latch.timedWait(timeout);
+            if (0 != rc) {
+                BALL_LOG_ERROR << "DOMAINS REMOVE fail to finish in "
+                               << k_MAX_WAIT_SECONDS_AT_DOMAIN_REMOVE
+                               << " seconds. rc:  " << rc << ".";
+            }
+
+            // Refer to `DomainManager::stop` to see why we need to invalidate
+            // `self` explicitly.
+            self.invalidate();
+            return rc;  // RETURN
+        }
+        // Second round
+        else {
+            DomainSp domainSp;
+
+            int rc = locateDomain(&domainSp, name);
+            if (0 != rc) {
+                bmqu::MemOutStream os;
+                os << "Domain '" << name << "' doesn't exist";
+                result->makeError().message() = os.str();
+                return rc;  // RETURN
+            }
+
+            if (!domainSp->isRemoveComplete()) {
+                bmqu::MemOutStream os;
+                os << "First round of DOMAINS REMOVE '" << name
+                   << "' is not completed.";
+                result->makeError().message() = os.str();
+                return -1;  // RETURN
+            }
+
+            // Clear cache in domainResolver and configProvider
+            d_domainResolver_mp->clearCache(name);
+            d_configProvider_p->clearCache(name);
+
+            rc = removeDomain(name);
+            if (0 != rc) {
+                bmqu::MemOutStream os;
+                os << "Domain '" << name << "' doesn't exist";
+                result->makeError().message() = os.str();
+                return rc;  // RETURN
+            }
+
+            result->makeSuccess();
+            return 0;  // RETURN
+        }
     }
 
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << "Unknown command '" << command << "'";
     result->makeError().message() = os.str();
     return -1;
+}
+
+int DomainManager::removeDomain(const bsl::string& domainName)
+{
+    enum RcEnum {
+        // Value for the various RC error categories
+        rc_SUCCESS          = 0,
+        rc_DOMAIN_NOT_FOUND = -1
+    };
+
+    bslmt::LockGuard<bslmt::Mutex> guard(&d_mutex);  // mutex LOCKED
+
+    DomainSpMap::const_iterator it = d_domains.find(domainName);
+
+    if (it == d_domains.end()) {
+        return rc_DOMAIN_NOT_FOUND;  // RETURN
+    }
+
+    d_domains.erase(domainName);
+
+    return rc_SUCCESS;
 }
 
 void DomainManager::qualifyDomain(
@@ -657,6 +855,8 @@ void DomainManager::createDomain(
     const bsl::string&                         name,
     const mqbi::DomainFactory::CreateDomainCb& callback)
 {
+    // executed by *ANY* thread
+
     if (!d_isStarted) {
         BALL_LOG_INFO << "Not creating domain [" << name << "] at this time "
                       << "because self is stopping.";

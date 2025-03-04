@@ -16,8 +16,7 @@
 // bmqt_encodingtype.t.cpp                                            -*-C++-*-
 #include <bmqt_encodingtype.h>
 
-// MWC
-#include <mwcu_memoutstream.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bsl_ios.h>
@@ -25,7 +24,7 @@
 #include <bslmf_assert.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -37,7 +36,7 @@ using namespace bsl;
 
 static void test1_toAscii()
 {
-    mwctst::TestHelper::printTestName("TO ASCII");
+    bmqtst::TestHelper::printTestName("TO ASCII");
 
     struct Test {
         int         d_line;
@@ -57,16 +56,16 @@ static void test1_toAscii()
     for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
         const Test& test = k_DATA[idx];
 
-        bsl::string ascii(s_allocator_p);
+        bsl::string ascii(bmqtst::TestHelperUtil::allocator());
         ascii = bmqt::EncodingType::toAscii(
             bmqt::EncodingType::Enum(test.d_value));
-        ASSERT_EQ_D(test.d_line, ascii, test.d_expected);
+        BMQTST_ASSERT_EQ_D(test.d_line, ascii, test.d_expected);
     }
 }
 
 static void test2_fromAscii()
 {
-    mwctst::TestHelper::printTestName("FROM ASCII");
+    bmqtst::TestHelper::printTestName("FROM ASCII");
 
     struct Test {
         int         d_line;
@@ -89,46 +88,47 @@ static void test2_fromAscii()
     for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
         const Test& test = k_DATA[idx];
 
-        mwcu::MemOutStream errorDescription(s_allocator_p);
+        bmqu::MemOutStream errorDescription(
+            bmqtst::TestHelperUtil::allocator());
 
-        bsl::string str(test.d_input, s_allocator_p);
+        bsl::string str(test.d_input, bmqtst::TestHelperUtil::allocator());
         bool isValid = bmqt::EncodingType::isValid(&str, errorDescription);
-        ASSERT_EQ_D(test.d_line, isValid, test.d_isValid);
+        BMQTST_ASSERT_EQ_D(test.d_line, isValid, test.d_isValid);
 
         bmqt::EncodingType::Enum obj;
         isValid = bmqt::EncodingType::fromAscii(&obj, test.d_input);
-        ASSERT_EQ_D(test.d_line, isValid, test.d_isValid);
+        BMQTST_ASSERT_EQ_D(test.d_line, isValid, test.d_isValid);
         if (isValid) {
-            ASSERT_EQ_D(test.d_line, obj, test.d_expected);
+            BMQTST_ASSERT_EQ_D(test.d_line, obj, test.d_expected);
         }
     }
 }
 
 static void test3_isomorphism()
 {
-    mwctst::TestHelper::printTestName("ISOMORPHISM");
+    bmqtst::TestHelper::printTestName("ISOMORPHISM");
 
     bmqt::EncodingType::Enum obj;
-    bsl::string              str(s_allocator_p);
+    bsl::string              str(bmqtst::TestHelperUtil::allocator());
     bool                     res;
 
     PV("Testing: fromAscii(toAscii(value)) = value");
     res = bmqt::EncodingType::fromAscii(
         &obj,
         bmqt::EncodingType::toAscii(bmqt::EncodingType::e_TEXT));
-    ASSERT_EQ(res, true);
-    ASSERT_EQ(obj, bmqt::EncodingType::e_TEXT);
+    BMQTST_ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(obj, bmqt::EncodingType::e_TEXT);
 
     PV("Testing: toAscii(fromAscii(value)) = value");
     res = bmqt::EncodingType::fromAscii(&obj, "MULTIPARTS");
-    ASSERT_EQ(res, true);
+    BMQTST_ASSERT_EQ(res, true);
     str = bmqt::EncodingType::toAscii(obj);
-    ASSERT_EQ(str, "MULTIPARTS");
+    BMQTST_ASSERT_EQ(str, "MULTIPARTS");
 }
 
 static void test4_printTest()
 {
-    mwctst::TestHelper::printTestName("PRINT");
+    bmqtst::TestHelper::printTestName("PRINT");
 
     PV("Testing print");
 
@@ -156,25 +156,25 @@ static void test4_printTest()
 
     for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
         const Test&        test = k_DATA[idx];
-        mwcu::MemOutStream out(s_allocator_p);
-        mwcu::MemOutStream expected(s_allocator_p);
+        bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+        bmqu::MemOutStream expected(bmqtst::TestHelperUtil::allocator());
 
         expected << test.d_expected;
 
         out.setstate(bsl::ios_base::badbit);
         bmqt::EncodingType::print(out, test.d_type, 0, -1);
 
-        ASSERT_EQ(out.str(), "");
+        BMQTST_ASSERT_EQ(out.str(), "");
 
         out.clear();
         bmqt::EncodingType::print(out, test.d_type, 0, -1);
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
 
         out.reset();
         out << test.d_type;
 
-        ASSERT_EQ(out.str(), expected.str());
+        BMQTST_ASSERT_EQ(out.str(), expected.str());
     }
 }
 
@@ -184,7 +184,7 @@ static void test4_printTest()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
@@ -194,9 +194,9 @@ int main(int argc, char* argv[])
     case 1: test1_toAscii(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }

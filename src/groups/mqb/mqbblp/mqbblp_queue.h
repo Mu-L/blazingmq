@@ -17,15 +17,13 @@
 #ifndef INCLUDED_MQBBLP_QUEUE
 #define INCLUDED_MQBBLP_QUEUE
 
-//@PURPOSE: Provide a queue implementation for a queue managed by this broker.
-//
-//@CLASSES:
-//
-//
-//@DESCRIPTION:  pseudo-strategy pattern
+/// @file mqbblp_queue.h
+///
+/// @brief Provide a queue implementation for a queue managed by this broker.
+///
+/// @todo Document this component: "pseudo-strategy pattern" (?)
 
 // MQB
-
 #include <mqbblp_localqueue.h>
 #include <mqbblp_queuehandlecatalog.h>
 #include <mqbblp_queuestate.h>
@@ -101,7 +99,7 @@ namespace mqbblp {
 // class Queue
 // ===========
 
-/// TBD:
+/// @todo Document this class
 class Queue BSLS_CPP11_FINAL : public mqbi::Queue {
   private:
     // CLASS-SCOPE CATEGORY
@@ -166,8 +164,7 @@ class Queue BSLS_CPP11_FINAL : public mqbi::Queue {
           int                                       partitionId,
           mqbi::Domain*                             domain,
           mqbi::StorageManager*                     storageManager,
-          bdlbb::BlobBufferFactory*                 blobBufferFactory,
-          bdlmt::EventScheduler*                    scheduler,
+          const mqbi::ClusterResources&             resources,
           bdlmt::FixedThreadPool*                   threadPool,
           const bmqp_ctrlmsg::RoutingConfiguration& routingCfg,
           bslma::Allocator*                         allocator);
@@ -257,21 +254,26 @@ class Queue BSLS_CPP11_FINAL : public mqbi::Queue {
     /// Return the queue engine used by this queue.
     mqbi::QueueEngine* queueEngine() BSLS_KEYWORD_OVERRIDE;
 
-    /// Return the stats associated with this queue.
-    mqbstat::QueueStatsDomain* stats() BSLS_KEYWORD_OVERRIDE;
+    /// Set the stats associated with this queue.
+    void setStats(const bsl::shared_ptr<mqbstat::QueueStatsDomain>& stats)
+        BSLS_KEYWORD_OVERRIDE;
 
     /// Return number of unconfirmed messages across all handles with the
     /// `specified `subId'.
     bsls::Types::Int64
     countUnconfirmed(unsigned int subId) BSLS_KEYWORD_OVERRIDE;
 
+    /// Stop sending PUSHes but continue receiving CONFIRMs, receiving and
+    /// sending PUTs and ACKs.
+    void stopPushing() BSLS_KEYWORD_OVERRIDE;
+
     void onPushMessage(
         const bmqt::MessageGUID&             msgGUID,
         const bsl::shared_ptr<bdlbb::Blob>&  appData,
         const bsl::shared_ptr<bdlbb::Blob>&  options,
         const bmqp::MessagePropertiesInfo&   messagePropertiesInfo,
-        bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType)
-        BSLS_KEYWORD_OVERRIDE;
+        bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType,
+        bool isOutOfOrder) BSLS_KEYWORD_OVERRIDE;
 
     /// Confirm the message with the specified `msgGUID` for the specified
     /// `upstreamSubQueueId` stream of the queue on behalf of the client
@@ -311,10 +313,13 @@ class Queue BSLS_CPP11_FINAL : public mqbi::Queue {
     /// and current upstream `genCount`, then the PUT message gets dropped
     /// to avoid out of order PUTs.  If the `upstreamSubQueueId` is
     /// `k_ANY_SUBQUEUE_ID`, all SubQueues are reopen.
+    /// If the optionally specified isWriterOnly is true, ignore CONFIRMs. This
+    /// should be specified if the upstream is stopping.
     ///
     /// THREAD: This method is called from the Queue's dispatcher thread.
     void onOpenUpstream(bsls::Types::Uint64 genCount,
-                        unsigned int upstreamSubQueueId) BSLS_KEYWORD_OVERRIDE;
+                        unsigned int        upstreamSubQueueId,
+                        bool isWriterOnly = false) BSLS_KEYWORD_OVERRIDE;
 
     /// Notify the (remote) queue about reopen failure.  The queue NACKs all
     /// pending and incoming PUTs and drops CONFIRMs related to to the
@@ -358,12 +363,6 @@ class Queue BSLS_CPP11_FINAL : public mqbi::Queue {
     processCommand(mqbcmd::QueueResult*        result,
                    const mqbcmd::QueueCommand& command) BSLS_KEYWORD_OVERRIDE;
 
-    /// Remove all outstanding messages from that queue and load the details
-    /// of the purged queue into the specified `result` object. Empty
-    /// `appId` means to purge from ALL appIds.
-    void purge(mqbcmd::PurgeQueueResult* result,
-               const bsl::string&        appId = "") BSLS_KEYWORD_OVERRIDE;
-
     // ACCESSORS
     //   (virtual mqbi::Queue)
 
@@ -372,6 +371,10 @@ class Queue BSLS_CPP11_FINAL : public mqbi::Queue {
 
     /// Return the storage used by this queue.
     mqbi::Storage* storage() const BSLS_KEYWORD_OVERRIDE;
+
+    /// Return the stats associated with this queue.
+    const bsl::shared_ptr<mqbstat::QueueStatsDomain>&
+    stats() const BSLS_KEYWORD_OVERRIDE;
 
     /// Return the partitionId assigned to this queue.
     int partitionId() const BSLS_KEYWORD_OVERRIDE;
@@ -395,21 +398,21 @@ class Queue BSLS_CPP11_FINAL : public mqbi::Queue {
     /// has-multiple-sub-streams semantics or `false` otherwise.
     bool hasMultipleSubStreams() const BSLS_KEYWORD_OVERRIDE;
 
+    /// Return a reference not offering modifiable access to the aggregated
+    /// parameters of all currently opened queueHandles on this queue.
     const bmqp_ctrlmsg::QueueHandleParameters&
     handleParameters() const BSLS_KEYWORD_OVERRIDE;
-    // Return a reference not offering modifiable access to the aggregated
-    // parameters of all currently opened queueHandles on this queue.
 
+    /// Return true if the queue has upstream parameters for the specified
+    /// `upstreamSubQueueId` in which case load the parameters into the
+    /// specified `value`.  Return false otherwise.
     bool getUpstreamParameters(bmqp_ctrlmsg::StreamParameters* value,
                                unsigned int upstreamSubQueueId) const
         BSLS_KEYWORD_OVERRIDE;
-    // Return true if the queue has upstream parameters for the specified
-    // 'upstreamSubQueueId' in which case load the parameters into the
-    // specified 'value'.  Return false otherwise.
 
+    /// Return the message throttle config associated with this queue.
     const mqbcfg::MessageThrottleConfig&
     messageThrottleConfig() const BSLS_KEYWORD_OVERRIDE;
-    // Returnt the message throttle config associated with this queue.
 
     // MANIPULATORS
     //   (mqbi::DispatcherClient)
@@ -495,9 +498,15 @@ inline mqbi::QueueEngine* Queue::queueEngine()
     }
 }
 
-inline mqbstat::QueueStatsDomain* Queue::stats()
+inline const bsl::shared_ptr<mqbstat::QueueStatsDomain>& Queue::stats() const
 {
-    return &(d_state.stats());
+    return d_state.stats();
+}
+
+inline void
+Queue::setStats(const bsl::shared_ptr<mqbstat::QueueStatsDomain>& stats)
+{
+    d_state.setStats(stats);
 }
 
 inline mqbi::Domain* Queue::domain() const

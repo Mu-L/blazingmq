@@ -31,21 +31,21 @@
 #include <mqbstat_domainstats.h>
 #include <mqbstat_queuestats.h>
 
-// MWC
-#include <mwcio_statchannelfactory.h>
-#include <mwcst_statcontext.h>
-#include <mwcst_statvalue.h>
-#include <mwcsys_threadutil.h>
-#include <mwcsys_time.h>
-#include <mwctsk_alarmlog.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
-#include <mwcu_stringutil.h>
+#include <bmqio_statchannelfactory.h>
+#include <bmqst_statcontext.h>
+#include <bmqst_statvalue.h>
+#include <bmqsys_threadutil.h>
+#include <bmqsys_time.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
+#include <bmqu_stringutil.h>
 
 // BDE
 #include <ball_context.h>
 #include <ball_log.h>
 #include <ball_loggermanager.h>
+#include <ball_logthrottle.h>
 #include <bdlb_scopeexit.h>
 #include <bdlb_string.h>
 #include <bdlb_stringrefutil.h>
@@ -70,6 +70,13 @@ namespace BloombergLP {
 namespace mqbstat {
 
 namespace {
+
+const int k_MAX_INSTANT_MESSAGES = 1;
+// Maximum messages logged with throttling in a short period of time.
+
+const bsls::Types::Int64 k_NS_PER_MESSAGE = 15 *
+                                            bdlt::TimeUnitRatio::k_NS_PER_M;
+// Time interval between messages logged with throttling.
 
 const char k_PUBLISHINTERVAL_SUFFIX[] = ".PUBLISHINTERVAL";
 
@@ -147,7 +154,7 @@ void StatController::initializeStats()
     // --------
     // Channels
     StatContextSp channels(
-        mwcio::StatChannelFactoryUtil::createStatContext("channels",
+        bmqio::StatChannelFactoryUtil::createStatContext("channels",
                                                          historySize,
                                                          d_allocator_p),
         d_allocator_p);
@@ -155,10 +162,10 @@ void StatController::initializeStats()
         bsl::make_pair(bsl::string("channels"),
                        StatContextDetails(channels, false)));
     d_statContextChannelsLocal_mp = channels->addSubcontext(
-        mwcst::StatContextConfiguration("local").storeExpiredSubcontextValues(
+        bmqst::StatContextConfiguration("local").storeExpiredSubcontextValues(
             true));
     d_statContextChannelsRemote_mp = channels->addSubcontext(
-        mwcst::StatContextConfiguration("remote").storeExpiredSubcontextValues(
+        bmqst::StatContextConfiguration("remote").storeExpiredSubcontextValues(
             true));
 
     // ------
@@ -233,26 +240,54 @@ void StatController::initializeStats()
             false)));
 }
 
-void StatController::captureStats(mqbcmd::StatResult* result)
+void StatController::captureStatsAndSemaphorePost(
+    mqbcmd::StatResult*                  result,
+    bslmt::Semaphore*                    semaphore,
+    const mqbcmd::EncodingFormat::Value& encoding)
 {
-    // This must execute in the *SCHEDULER* thread.
+    // executed by the *SCHEDULER* thread
 
     if (d_allocatorsStatContext_p) {
         // When using test allocator, we don't have a stat context
         d_allocatorsStatContext_p->snapshot();
     }
 
-    mwcu::MemOutStream os;
-    d_printer_mp->printStats(os);
-    result->makeStats(os.str());
-}
+    switch (encoding) {
+    case mqbcmd::EncodingFormat::TEXT: {
+        bmqu::MemOutStream os;
+        d_printer_mp->printStats(os);
+        result->makeStats() = os.str();
+    } break;  // BREAK
 
-void StatController::captureStatsAndSemaphorePost(mqbcmd::StatResult* result,
-                                                  bslmt::Semaphore* semaphore)
-{
-    // executed by the *SCHEDULER* thread
+    case mqbcmd::EncodingFormat::JSON_COMPACT: BSLS_ANNOTATION_FALLTHROUGH;
+    case mqbcmd::EncodingFormat::JSON_PRETTY: {
+        // Make an unscheduled snapshot, but do not notify stats consumers
+        // since it's not necessary.  We typically use this code path to get
+        // the latests stats during integration tests, and this case we
+        // neither want to wait until the next scheduled snapshot nor get the
+        // outdated existing one.
+        const bool savedNextSnapshot = snapshot();
+        if (savedNextSnapshot) {
+            const bool compact = (encoding ==
+                                  mqbcmd::EncodingFormat::JSON_COMPACT);
+            const int  rc = d_jsonPrinter_mp->printStats(&result->makeStats(),
+                                                        compact);
+            if (0 != rc) {
+                result->makeError().message() = "Stats print to json failed";
+            }
+        }
+        else {
+            result->makeError().message() =
+                "Cannot save the recent snapshot, trying to make snapshots "
+                "too often";
+        }
+    } break;  // BREAK
 
-    captureStats(result);
+    default: {
+        BSLS_ASSERT(!"invalid enumerator");
+    } break;  // BREAK
+    }
+
     semaphore->post();
 }
 
@@ -296,7 +331,7 @@ void StatController::setTunable(mqbcmd::StatResult*       result,
             }
         }
         if (!targetConsumerCfg) {
-            mwcu::MemOutStream output;
+            bmqu::MemOutStream output;
             output << "No configuration found for StatConsumer '"
                    << consumerName << "'";
             result->makeError();
@@ -318,7 +353,7 @@ void StatController::setTunable(mqbcmd::StatResult*       result,
             }
         }
         if (!targetConsumer) {
-            mwcu::MemOutStream output;
+            bmqu::MemOutStream output;
             output << "StatConsumer '" << consumerName << "' does not exist";
             result->makeError();
             result->error().message() = output.str();
@@ -331,7 +366,7 @@ void StatController::setTunable(mqbcmd::StatResult*       result,
              (tunable.value().theInteger() < snapshotInterval ||
               (tunable.value().theInteger() % snapshotInterval) != 0 ||
               tunable.value().theInteger() > maxPublishInterval))) {
-            mwcu::MemOutStream output;
+            bmqu::MemOutStream output;
             output << "StatConsumer PUBLISHINTERVAL tunables must be "
                       "multiples of snapshot interval ("
                    << snapshotInterval
@@ -360,7 +395,7 @@ void StatController::setTunable(mqbcmd::StatResult*       result,
                           << consumerName << "']";
         }
 
-        mwcu::MemOutStream tunableConfirmationName;
+        bmqu::MemOutStream tunableConfirmationName;
         {
             bsl::string consumerNameLower(consumerName, d_allocator_p);
             bdlb::String::toLower(&consumerNameLower);
@@ -376,7 +411,7 @@ void StatController::setTunable(mqbcmd::StatResult*       result,
         return;  // RETURN
     }
 
-    mwcu::MemOutStream output;
+    bmqu::MemOutStream output;
     output << "Unsupported tunable '" << tunable << "': Issue the "
            << "LIST_TUNABLES command for the list of supported tunables.";
     result->makeError();
@@ -414,14 +449,14 @@ void StatController::getTunable(mqbcmd::StatResult* result,
             }
         }
         if (!targetConsumer) {
-            mwcu::MemOutStream output;
+            bmqu::MemOutStream output;
             output << "StatConsumer '" << consumerName << "' does not exist";
             result->makeError();
             result->error().message() = output.str();
             return;  // RETURN
         }
 
-        mwcu::MemOutStream tunableConfirmationName;
+        bmqu::MemOutStream tunableConfirmationName;
         {
             bsl::string consumerNameLower(consumerName, d_allocator_p);
             bdlb::String::toLower(&consumerNameLower);
@@ -434,7 +469,7 @@ void StatController::getTunable(mqbcmd::StatResult* result,
         return;  // RETURN
     }
 
-    mwcu::MemOutStream output;
+    bmqu::MemOutStream output;
     output << "Unsupported tunable '" << tunable << "': Issue the "
            << "LIST_TUNABLES command for the list of supported tunables.";
     result->makeError();
@@ -461,7 +496,7 @@ void StatController::listTunables(mqbcmd::StatResult* result,
     for (; it != d_statConsumers.end(); ++it) {
         mqbcmd::Tunable& tunable = tunables.tunables().emplace_back();
 
-        mwcu::MemOutStream tunableConfirmationName;
+        bmqu::MemOutStream tunableConfirmationName;
         {
             bsl::string consumerNameUpper((*it)->name(), d_allocator_p);
             bdlb::String::toUpper(&consumerNameUpper);
@@ -470,7 +505,7 @@ void StatController::listTunables(mqbcmd::StatResult* result,
         tunable.name() = tunableConfirmationName.str();
         tunable.value().makeTheInteger((*it)->publishInterval().seconds());
 
-        mwcu::MemOutStream description;
+        bmqu::MemOutStream description;
         description
             << "non-negative integer value of the publish interval for the '"
             << (*it)->name()
@@ -482,24 +517,20 @@ void StatController::listTunables(mqbcmd::StatResult* result,
     }
 }
 
-void StatController::snapshot()
+bool StatController::snapshot()
 {
     // executed by the *SCHEDULER* thread
+    const bsls::Types::Int64 now = bmqsys::Time::highResolutionTimer();
 
     // Safeguard against too frequent invocation from the scheduler.
-    const bsls::Types::Int64 now     = mwcsys::Time::highResolutionTimer();
-    const bsls::Types::Int64 nsDelta = now - d_lastSnapshotTime;
-    const bsls::Types::Int64 minDelta =
-        mqbcfg::BrokerConfig::get().stats().snapshotInterval() *
-        bdlt::TimeUnitRatio::k_NS_PER_S / 2;
-    if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(nsDelta < minDelta)) {
-        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-        if (d_lastSnapshotLogLimiter.requestPermission()) {
-            BALL_LOG_INFO << "snapshot invoked too frequently (delta = "
-                          << mwcu::PrintUtil::prettyTimeInterval(nsDelta)
-                          << "), skipping snapshot";
-        }
-        return;  // RETURN
+    if (!d_snapshotThrottle.requestPermission()) {
+        const bsls::Types::Int64 nsDelta = now - d_lastSnapshotTime;
+        BALL_LOGTHROTTLE_WARN(k_MAX_INSTANT_MESSAGES, k_NS_PER_MESSAGE)
+            << "[THROTTLED] Snapshot invoked too frequently (delta = "
+            << bmqu::PrintUtil::prettyTimeInterval(nsDelta)
+            << "), skipping snapshot";
+
+        return false;  // RETURN
     }
 
     d_lastSnapshotTime = now;
@@ -518,21 +549,41 @@ void StatController::snapshot()
     // through snapshot
     d_systemStatMonitor_mp->snapshot();
 
-    // StatConsumers will report all stats
-    bsl::vector<StatConsumerMp>::iterator it = d_statConsumers.begin();
-    for (; it != d_statConsumers.end(); ++it) {
-        (*it)->onSnapshot();
-    }
-
     // Printer needs to be notified of every snapshot, but has an internal
     // action counter to know when it's time to print.  Allocator stat context
-    // only has an history size of 2, so we need to snapshot only once, just
+    // only has a history size of 2, so we need to snapshot only once, just
     // before printing.
+    // TODO: adopt this code for `mqbstat::JsonPrinter` when we report
+    //       allocator stats in json
     const bool willPrint = d_printer_mp->nextSnapshotWillPrint();
     if (d_allocatorsStatContext_p && willPrint) {
         d_allocatorsStatContext_p->snapshot();
     }
 
+    return true;
+}
+
+void StatController::snapshotAndNotify()
+{
+    // executed by the *SCHEDULER* thread
+
+    if (!snapshot()) {
+        // Trying to make snapshots too often
+        return;  // RETURN
+    }
+
+    // StatConsumers will report all stats
+    bsl::vector<StatConsumerMp>::iterator it = d_statConsumers.begin();
+    for (; it != d_statConsumers.end(); ++it) {
+        try {
+            (*it)->onSnapshot();
+        }
+        catch (const bsl::exception& e) {
+            BALL_LOG_ERROR << "#PLUGIN_ERROR " << e.what();
+        }
+    }
+
+    const bool willPrint = d_printer_mp->nextSnapshotWillPrint();
     d_printer_mp->onSnapshot();
 
     // Finally, perform cleanup of expired stat contexts if we have printed
@@ -606,12 +657,13 @@ int StatController::validateConfig(bsl::ostream& errorDescription) const
 StatController::StatController(const CommandProcessorFn& commandProcessor,
                                mqbplug::PluginManager*   pluginManager,
                                bdlbb::BlobBufferFactory* bufferFactory,
-                               mwcst::StatContext*       allocatorsStatContext,
+                               bmqst::StatContext*       allocatorsStatContext,
                                bdlmt::EventScheduler*    eventScheduler,
                                bslma::Allocator*         allocator)
 : d_allocators(allocator)
 , d_scheduler_mp(0)
 , d_lastSnapshotTime()
+, d_snapshotThrottle()
 , d_allocatorsStatContext_p(allocatorsStatContext)
 , d_statContextsMap(allocator)
 , d_statContextChannelsLocal_mp(0)
@@ -621,6 +673,7 @@ StatController::StatController(const CommandProcessorFn& commandProcessor,
 , d_bufferFactory_p(bufferFactory)
 , d_commandProcessorFn(bsl::allocator_arg, allocator, commandProcessor)
 , d_printer_mp(0)
+, d_jsonPrinter_mp(0)
 , d_statConsumers(allocator)
 , d_statConsumerMaxPublishInterval(0)
 , d_eventScheduler_p(eventScheduler)
@@ -630,9 +683,11 @@ StatController::StatController(const CommandProcessorFn& commandProcessor,
     BSLS_ASSERT_SAFE(eventScheduler->clockType() ==
                      bsls::SystemClockType::e_MONOTONIC);
 
-    d_lastSnapshotLogLimiter.initialize(1,
-                                        15 * bdlt::TimeUnitRatio::k_NS_PER_M);
-    // Throttling of one maximum alarm per 15 minutes
+    // Have to initialize the throttle with default "allow none" parameters to
+    // avoid possible undefined behaviour according to its usage contract.
+    // The throttle should be reinitialized during 'start()' with normal
+    // values.
+    d_snapshotThrottle.initialize(0, 1);
 }
 
 int StatController::start(bsl::ostream& errorDescription)
@@ -651,6 +706,13 @@ int StatController::start(bsl::ostream& errorDescription)
         return 0;  // RETURN
     }
 
+    // Initialize the safeguard throttle against too often snapshots
+    const int k_MAX_SNAPSHOTS_PER_INTERVAL = 4;
+    d_snapshotThrottle.initialize(k_MAX_SNAPSHOTS_PER_INTERVAL,
+                                  brkrCfg.stats().snapshotInterval() *
+                                      bdlt::TimeUnitRatio::k_NS_PER_S /
+                                      k_MAX_SNAPSHOTS_PER_INTERVAL);
+
     // Start the scheduler
     d_scheduler_mp.load(new (*d_allocator_p) bdlmt::TimerEventScheduler(
                             bsls::SystemClockType::e_MONOTONIC,
@@ -663,10 +725,10 @@ int StatController::start(bsl::ostream& errorDescription)
         return -2;  // RETURN
     }
 
-    if (mwcsys::ThreadUtil::k_SUPPORT_THREAD_NAME) {
+    if (bmqsys::ThreadUtil::k_SUPPORT_THREAD_NAME) {
         d_scheduler_mp->scheduleEvent(
             bsls::TimeInterval(0),  // execute as soon as possible
-            bdlf::BindUtil::bind(&mwcsys::ThreadUtil::setCurrentThreadName,
+            bdlf::BindUtil::bind(&bmqsys::ThreadUtil::setCurrentThreadName,
                                  "bmqSchedStat"));
     }
 
@@ -680,20 +742,20 @@ int StatController::start(bsl::ostream& errorDescription)
         maxInterval = bsl::max(maxInterval, consumerIt->publishInterval());
     }
     d_systemStatMonitor_mp.load(
-        new (*d_allocator_p) mwcsys::StatMonitor(maxInterval, d_allocator_p),
+        new (*d_allocator_p) bmqsys::StatMonitor(maxInterval, d_allocator_p),
         d_allocator_p);
 
     // Failing to start some subsystems of StatController should not result in
     // a broker shutdown, but rather be intercepted here and printed as an
     // error, therefore use a local 'errorDescription' stream and not the
     // supplied one.
-    mwcu::MemOutStream errorStream(d_allocator_p);
+    bmqu::MemOutStream errorStream(d_allocator_p);
 
     rc = d_systemStatMonitor_mp->start(errorStream);
     if (rc != 0) {
-        MWCTSK_ALARMLOG_ALARM("#STATS")
+        BMQTSK_ALARMLOG_ALARM("#STATS")
             << "Failed to start SystemStatMonitor [rc: " << rc << ","
-            << " error: '" << errorStream.str() << "']" << MWCTSK_ALARMLOG_END;
+            << " error: '" << errorStream.str() << "']" << BMQTSK_ALARMLOG_END;
         rc = 0;
         errorStream.reset();
     }
@@ -703,7 +765,7 @@ int StatController::start(bsl::ostream& errorDescription)
     initializeStats();
 
     // Build Map to be passed to all lower level components
-    bsl::unordered_map<bsl::string, mwcst::StatContext*> ctxPtrMap(
+    bsl::unordered_map<bsl::string, bmqst::StatContext*> ctxPtrMap(
         d_allocator_p);
     for (StatContextDetailsMap::iterator ctxIt = d_statContextsMap.begin();
          ctxIt != d_statContextsMap.end();
@@ -728,10 +790,10 @@ int StatController::start(bsl::ostream& errorDescription)
                                                       d_allocator_p);
 
             if (int status = consumer->start(errorStream)) {
-                MWCTSK_ALARMLOG_ALARM("#STATS")
+                BMQTSK_ALARMLOG_ALARM("#STATS")
                     << "Failed to start StatConsumer '" << consumer->name()
                     << "' [rc: " << status << ", error: '" << errorStream.str()
-                    << "']" << MWCTSK_ALARMLOG_END;
+                    << "']" << BMQTSK_ALARMLOG_END;
                 errorStream.reset();
                 continue;  // CONTINUE
             }
@@ -777,23 +839,28 @@ int StatController::start(bsl::ostream& errorDescription)
     // initializeStats() and creation of d_printer.
     rc = d_printer_mp->start(errorStream);
     if (rc != 0) {
-        MWCTSK_ALARMLOG_ALARM("#STATS")
+        BMQTSK_ALARMLOG_ALARM("#STATS")
             << "Failed to start Printer [rc: " << rc << ", error: '"
-            << errorStream.str() << "']" << MWCTSK_ALARMLOG_END;
+            << errorStream.str() << "']" << BMQTSK_ALARMLOG_END;
         rc = 0;
         errorStream.reset();
     }
+
+    // Create the json printer
+    d_jsonPrinter_mp.load(new (*d_allocator_p)
+                              JsonPrinter(ctxPtrMap, d_allocator_p),
+                          d_allocator_p);
 
     // Max value for the stat publish interval must be the minimum history size
     // of all stat contexts.
     d_statConsumerMaxPublishInterval =
         bsl::min(maxInterval, brkrCfg.stats().printer().printInterval());
-    d_lastSnapshotTime = mwcsys::Time::highResolutionTimer();
+    d_lastSnapshotTime = bmqsys::Time::highResolutionTimer();
 
     // Start the clock
     d_scheduler_mp->startClock(
         bsls::TimeInterval(brkrCfg.stats().snapshotInterval()),
-        bdlf::BindUtil::bind(&StatController::snapshot, this));
+        bdlf::BindUtil::bind(&StatController::snapshotAndNotify, this));
     BALL_LOG_INFO << "Starting statistics  [SnapshotInterval: "
                   << brkrCfg.stats().snapshotInterval() << ", PrintInterval: "
                   << brkrCfg.stats().printer().printInterval() << "]";
@@ -834,6 +901,7 @@ void StatController::stop()
         DESTROY_OBJ((*it), it->name());
     }
     DESTROY_OBJ(d_printer_mp, "Printer");
+    DESTROY_OBJ(d_jsonPrinter_mp, "JsonPrinter");
     DESTROY_OBJ(d_systemStatMonitor_mp, "SystemStatMonitor");
     DESTROY_OBJ(d_scheduler_mp, "Scheduler");
 
@@ -852,8 +920,10 @@ void StatController::loadStatContexts(StatContexts* contexts)
     }
 }
 
-int StatController::processCommand(mqbcmd::StatResult*        result,
-                                   const mqbcmd::StatCommand& command)
+int StatController::processCommand(
+    mqbcmd::StatResult*                  result,
+    const mqbcmd::StatCommand&           command,
+    const mqbcmd::EncodingFormat::Value& encoding)
 {
     if (command.isShowValue()) {
         bslmt::Semaphore semaphore;
@@ -862,7 +932,8 @@ int StatController::processCommand(mqbcmd::StatResult*        result,
             bdlf::BindUtil::bind(&StatController::captureStatsAndSemaphorePost,
                                  this,
                                  result,
-                                 &semaphore));
+                                 &semaphore,
+                                 encoding));
         semaphore.wait();
         return 0;  // RETURN
     }
@@ -909,7 +980,7 @@ int StatController::processCommand(mqbcmd::StatResult*        result,
         return 0;  // RETURN
     }
 
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << "Unknown command '" << command << "'";
     result->makeError();
     result->error().message() = os.str();

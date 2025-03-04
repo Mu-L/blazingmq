@@ -27,12 +27,11 @@
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_protocol.h>
 
-// MWC
-#include <mwcio_channel.h>
-#include <mwcio_testchannel.h>
-#include <mwcsys_time.h>
-#include <mwcu_blob.h>
-#include <mwcu_blobobjectproxy.h>
+#include <bmqio_channel.h>
+#include <bmqio_testchannel.h>
+#include <bmqsys_time.h>
+#include <bmqu_blob.h>
+#include <bmqu_blobobjectproxy.h>
 
 // BDE
 #include <bdlbb_blobutil.h>
@@ -46,7 +45,7 @@
 #include <bsls_annotation.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -142,7 +141,7 @@ class TestBench {
     // DATA
     bdlbb::PooledBlobBufferFactory      d_bufferFactory;
     BlobSpPool                          d_blobSpPool;
-    bsl::shared_ptr<mwcio::TestChannel> d_channel;
+    bsl::shared_ptr<bmqio::TestChannel> d_channel;
     mqbmock::Dispatcher                 d_mockDispatcher;
     bdlmt::EventScheduler               d_scheduler;
     TestClock                           d_testClock;
@@ -163,7 +162,7 @@ class TestBench {
                                         bdlf::PlaceHolders::_2),  // alloc
                    1024,  // blob pool growth strategy
                    allocator)
-    , d_channel(new mwcio::TestChannel(allocator))
+    , d_channel(new bmqio::TestChannel(allocator))
     , d_mockDispatcher(allocator)
     , d_scheduler(bsls::SystemClockType::e_MONOTONIC, allocator)
     , d_testClock(d_scheduler)
@@ -172,7 +171,6 @@ class TestBench {
            "sessionDescription",
            setInDispatcherThread(&d_mockDispatcher),
            &d_blobSpPool,
-           &d_bufferFactory,
            &d_scheduler,
            adminEnqueueCb,
            allocator)
@@ -183,15 +181,15 @@ class TestBench {
         d_mockDispatcher._setInDispatcherThread(true);
 
         // Setup test time source
-        mwcsys::Time::shutdown();
-        mwcsys::Time::initialize(
+        bmqsys::Time::shutdown();
+        bmqsys::Time::initialize(
             bdlf::BindUtil::bind(&TestClock::realtimeClock, &d_testClock),
             bdlf::BindUtil::bind(&TestClock::monotonicClock, &d_testClock),
             bdlf::BindUtil::bind(&TestClock::highResTimer, &d_testClock),
             d_allocator_p);
 
         int rc = d_scheduler.start();
-        ASSERT_EQ(rc, 0);
+        BMQTST_ASSERT_EQ(rc, 0);
     }
 
     /// Destructor
@@ -225,9 +223,10 @@ static void test1_watermark()
 //
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("ADMIN SESSION HIGH WATERMARK");
+    bmqtst::TestHelper::printTestName("ADMIN SESSION HIGH WATERMARK");
 
-    const bsl::string command("sample command", s_allocator_p);
+    const bsl::string command("sample command",
+                              bmqtst::TestHelperUtil::allocator());
     const size_t      numMessages = 64;
     const int         rId         = 678098;
 
@@ -240,30 +239,32 @@ static void test1_watermark()
                              bdlf::PlaceHolders::_1,  // source
                              bdlf::PlaceHolders::_2,  // cmd
                              bdlf::PlaceHolders::_3),  // onProcessedCb
-        s_allocator_p);
+        bmqtst::TestHelperUtil::allocator());
 
     // Prepare sample admin command control message event
-    bdlma::LocalSequentialAllocator<2048> localAllocator(s_allocator_p);
+    bdlma::LocalSequentialAllocator<2048> localAllocator(
+        bmqtst::TestHelperUtil::allocator());
     bmqp_ctrlmsg::ControlMessage          admin(&localAllocator);
 
     admin.rId() = rId;
     admin.choice().makeAdminCommand();
     admin.choice().adminCommand().command() = command;
 
-    bmqp::SchemaEventBuilder builder(&tb.d_bufferFactory,
-                                     tb.d_allocator_p,
-                                     bmqp::EncodingType::e_JSON);
+    bmqp::SchemaEventBuilder builder(&tb.d_blobSpPool,
+                                     bmqp::EncodingType::e_JSON,
+                                     tb.d_allocator_p);
 
     int rc = builder.setMessage(admin, bmqp::EventType::e_CONTROL);
-    ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(rc, 0);
 
-    bmqp::Event adminEvent(&builder.blob(), s_allocator_p);
+    bmqp::Event adminEvent(builder.blob().get(),
+                           bmqtst::TestHelperUtil::allocator());
     BSLS_ASSERT(adminEvent.isValid());
     BSLS_ASSERT(adminEvent.isControlEvent());
 
     // Set high watermark status for the test channel
-    mwcio::Status status;
-    status.setCategory(mwcio::StatusCategory::e_LIMIT);
+    bmqio::Status status;
+    status.setCategory(bmqio::StatusCategory::e_LIMIT);
     tb.d_channel->setWriteStatus(status);
 
     // Send the sample admin event multiple times to the admin session
@@ -275,20 +276,20 @@ static void test1_watermark()
     // Check if callback loop delivered admin commands execution results back
     // to the admin session and it writes the needed number of responses to the
     // test channel
-    ASSERT_EQ(tb.d_channel->writeCalls().size(), numMessages);
+    BMQTST_ASSERT_EQ(tb.d_channel->writeCalls().size(), numMessages);
 
     // Sanity check for the first admin response
     bmqp::Event adminResponseEvent(&tb.d_channel->writeCalls().at(0).d_blob,
-                                   s_allocator_p);
+                                   bmqtst::TestHelperUtil::allocator());
     BSLS_ASSERT(adminResponseEvent.isValid());
     BSLS_ASSERT(adminResponseEvent.isControlEvent());
 
     bmqp_ctrlmsg::ControlMessage response(&localAllocator);
     rc = adminResponseEvent.loadControlEvent(&response);
-    ASSERT_EQ(rc, 0);
-    ASSERT_EQ(response.rId(), rId);
+    BMQTST_ASSERT_EQ(rc, 0);
+    BMQTST_ASSERT_EQ(response.rId(), rId);
     BSLS_ASSERT(response.choice().isAdminCommandResponseValue());
-    ASSERT_EQ(response.choice().adminCommandResponse().text(), command);
+    BMQTST_ASSERT_EQ(response.choice().adminCommandResponse().text(), command);
 }
 
 // ============================================================================
@@ -297,16 +298,16 @@ static void test1_watermark()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    bmqt::UriParser::initialize(s_allocator_p);
+    bmqt::UriParser::initialize(bmqtst::TestHelperUtil::allocator());
     bmqp::Crc32c::initialize();
 
     {
-        bmqp::ProtocolUtil::initialize(s_allocator_p);
-        mwcsys::Time::initialize(s_allocator_p);
+        bmqp::ProtocolUtil::initialize(bmqtst::TestHelperUtil::allocator());
+        bmqsys::Time::initialize(bmqtst::TestHelperUtil::allocator());
 
-        mqbcfg::AppConfig brokerConfig(s_allocator_p);
+        mqbcfg::AppConfig brokerConfig(bmqtst::TestHelperUtil::allocator());
         mqbcfg::BrokerConfig::set(brokerConfig);
 
         mqbu::MessageGUIDUtil::initialize();
@@ -316,16 +317,16 @@ int main(int argc, char* argv[])
         case 1: test1_watermark(); break;
         default: {
             cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-            s_testStatus = -1;
+            bmqtst::TestHelperUtil::testStatus() = -1;
         } break;
         }
 
-        mwcsys::Time::shutdown();
+        bmqsys::Time::shutdown();
         bmqp::ProtocolUtil::shutdown();
     }
 
     bmqt::UriParser::shutdown();
 
-    TEST_EPILOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_EPILOG(bmqtst::TestHelper::e_DEFAULT);
     // Do not check for default/global allocator usage.
 }

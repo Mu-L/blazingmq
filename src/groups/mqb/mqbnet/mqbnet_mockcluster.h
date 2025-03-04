@@ -33,9 +33,8 @@
 #include <mqbcfg_messages.h>
 #include <mqbnet_cluster.h>
 
-// MWC
-#include <mwcio_channel.h>
-#include <mwcio_status.h>
+#include <bmqio_channel.h>
+#include <bmqio_status.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -78,7 +77,7 @@ class MockClusterNode : public ClusterNode {
 
     bmqp_ctrlmsg::ClientIdentity d_identity;
 
-    mwcio::Channel::ReadCallback d_readCb;
+    bmqio::Channel::ReadCallback d_readCb;
 
     bool d_isReading;
     // Indicates if post-negotiation read
@@ -101,7 +100,6 @@ class MockClusterNode : public ClusterNode {
     MockClusterNode(MockCluster*               cluster,
                     const mqbcfg::ClusterNode& config,
                     bdlbb::BlobBufferFactory*  blobBufferFactory,
-                    Channel::ItemPool*         itemPool,
                     bslma::Allocator*          allocator);
 
     /// Destructor.
@@ -117,9 +115,9 @@ class MockClusterNode : public ClusterNode {
     /// return a pointer to this object.  Store the specified `identity`.
     /// The specified `readCb` serves as read data callback when
     /// `enableRead` is called.
-    ClusterNode* setChannel(const bsl::weak_ptr<mwcio::Channel>& value,
+    ClusterNode* setChannel(const bsl::weak_ptr<bmqio::Channel>& value,
                             const bmqp_ctrlmsg::ClientIdentity&  identity,
-                            const mwcio::Channel::ReadCallback&  readCb)
+                            const bmqio::Channel::ReadCallback&  readCb)
         BSLS_KEYWORD_OVERRIDE;
 
     /// Start reading from the channel.  Return true if `read` is successful
@@ -138,8 +136,8 @@ class MockClusterNode : public ClusterNode {
     /// imply that the data has been written or will be successfully written
     /// to the underlying stream used by this channel.
     bmqt::GenericResult::Enum
-    write(const bdlbb::Blob&    blob,
-          bmqp::EventType::Enum type) BSLS_KEYWORD_OVERRIDE;
+    write(const bsl::shared_ptr<bdlbb::Blob>& blob,
+          bmqp::EventType::Enum               type) BSLS_KEYWORD_OVERRIDE;
 
     // ACCESSORS
     //   (virtual mqbnet::ClusterNode)
@@ -252,7 +250,6 @@ class MockCluster : public Cluster {
     /// `allocator`.
     MockCluster(const mqbcfg::ClusterDefinition& config,
                 bdlbb::BlobBufferFactory*        blobBufferFactory,
-                Channel::ItemPool*               itemPool,
                 bslma::Allocator*                allocator);
 
     /// Destructor
@@ -274,13 +271,14 @@ class MockCluster : public Cluster {
     /// nodes of this cluster (with the exception of the current node).
     /// Return the maximum number of pending items across all cluster
     /// channels prior to broadcasting.
-    int writeAll(const bdlbb::Blob&    blob,
+    int writeAll(const bsl::shared_ptr<bdlbb::Blob>& blob,
                  bmqp::EventType::Enum type) BSLS_KEYWORD_OVERRIDE;
 
     /// Send the specified `blob` to all currently up nodes of this cluster
     /// (exception of the current node).  Return the maximum number of
     /// pending items across all cluster channels prior to broadcasting.
-    int broadcast(const bdlbb::Blob& blob) BSLS_KEYWORD_OVERRIDE;
+    int
+    broadcast(const bsl::shared_ptr<bdlbb::Blob>& blob) BSLS_KEYWORD_OVERRIDE;
 
     /// Close the channels associated to all nodes in this cluster.
     void closeChannels() BSLS_KEYWORD_OVERRIDE;
@@ -299,7 +297,7 @@ class MockCluster : public Cluster {
 
     /// Process incoming proxy connection.
     void
-    onProxyConnectionUp(const bsl::shared_ptr<mwcio::Channel>& channel,
+    onProxyConnectionUp(const bsl::shared_ptr<bmqio::Channel>& channel,
                         const bmqp_ctrlmsg::ClientIdentity&    identity,
                         const bsl::string& description) BSLS_KEYWORD_OVERRIDE;
 

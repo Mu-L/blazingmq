@@ -1,4 +1,4 @@
-// Copyright 2014-2023 Bloomberg Finance L.P.
+// Copyright 2014-2024 Bloomberg Finance L.P.
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -440,6 +440,71 @@ bsl::ostream& DomainResolver::print(bsl::ostream& stream,
     return stream;
 }
 
+// -----------------------
+// class ExpressionVersion
+// -----------------------
+
+// CONSTANTS
+
+const char ExpressionVersion::CLASS_NAME[] = "ExpressionVersion";
+
+const bdlat_EnumeratorInfo ExpressionVersion::ENUMERATOR_INFO_ARRAY[] = {
+    {ExpressionVersion::E_UNDEFINED,
+     "E_UNDEFINED",
+     sizeof("E_UNDEFINED") - 1,
+     ""},
+    {ExpressionVersion::E_VERSION_1,
+     "E_VERSION_1",
+     sizeof("E_VERSION_1") - 1,
+     ""}};
+
+// CLASS METHODS
+
+int ExpressionVersion::fromInt(ExpressionVersion::Value* result, int number)
+{
+    switch (number) {
+    case ExpressionVersion::E_UNDEFINED:
+    case ExpressionVersion::E_VERSION_1:
+        *result = static_cast<ExpressionVersion::Value>(number);
+        return 0;
+    default: return -1;
+    }
+}
+
+int ExpressionVersion::fromString(ExpressionVersion::Value* result,
+                                  const char*               string,
+                                  int                       stringLength)
+{
+    for (int i = 0; i < 2; ++i) {
+        const bdlat_EnumeratorInfo& enumeratorInfo =
+            ExpressionVersion::ENUMERATOR_INFO_ARRAY[i];
+
+        if (stringLength == enumeratorInfo.d_nameLength &&
+            0 == bsl::memcmp(enumeratorInfo.d_name_p, string, stringLength)) {
+            *result = static_cast<ExpressionVersion::Value>(
+                enumeratorInfo.d_value);
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+const char* ExpressionVersion::toString(ExpressionVersion::Value value)
+{
+    switch (value) {
+    case E_UNDEFINED: {
+        return "E_UNDEFINED";
+    }
+    case E_VERSION_1: {
+        return "E_VERSION_1";
+    }
+    }
+
+    BSLS_ASSERT(!"invalid enumerator");
+    return 0;
+}
+
 // -------------
 // class Failure
 // -------------
@@ -594,35 +659,7 @@ const bdlat_AttributeInfo* FileBackedStorage::lookupAttributeInfo(int id)
 
 // CREATORS
 
-FileBackedStorage::FileBackedStorage()
-{
-}
-
-FileBackedStorage::FileBackedStorage(const FileBackedStorage& original)
-{
-    (void)original;
-}
-
-FileBackedStorage::~FileBackedStorage()
-{
-}
-
 // MANIPULATORS
-
-FileBackedStorage& FileBackedStorage::operator=(const FileBackedStorage& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-FileBackedStorage& FileBackedStorage::operator=(FileBackedStorage&& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-#endif
 
 void FileBackedStorage::reset()
 {
@@ -630,12 +667,8 @@ void FileBackedStorage::reset()
 
 // ACCESSORS
 
-bsl::ostream& FileBackedStorage::print(bsl::ostream& stream,
-                                       int           level,
-                                       int           spacesPerLevel) const
+bsl::ostream& FileBackedStorage::print(bsl::ostream& stream, int, int) const
 {
-    (void)level;
-    (void)spacesPerLevel;
     return stream;
 }
 
@@ -666,35 +699,7 @@ const bdlat_AttributeInfo* InMemoryStorage::lookupAttributeInfo(int id)
 
 // CREATORS
 
-InMemoryStorage::InMemoryStorage()
-{
-}
-
-InMemoryStorage::InMemoryStorage(const InMemoryStorage& original)
-{
-    (void)original;
-}
-
-InMemoryStorage::~InMemoryStorage()
-{
-}
-
 // MANIPULATORS
-
-InMemoryStorage& InMemoryStorage::operator=(const InMemoryStorage& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-InMemoryStorage& InMemoryStorage::operator=(InMemoryStorage&& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-#endif
 
 void InMemoryStorage::reset()
 {
@@ -702,12 +707,8 @@ void InMemoryStorage::reset()
 
 // ACCESSORS
 
-bsl::ostream& InMemoryStorage::print(bsl::ostream& stream,
-                                     int           level,
-                                     int           spacesPerLevel) const
+bsl::ostream& InMemoryStorage::print(bsl::ostream& stream, int, int) const
 {
-    (void)level;
-    (void)spacesPerLevel;
     return stream;
 }
 
@@ -788,46 +789,7 @@ Limits::Limits()
 {
 }
 
-Limits::Limits(const Limits& original)
-: d_messagesWatermarkRatio(original.d_messagesWatermarkRatio)
-, d_bytesWatermarkRatio(original.d_bytesWatermarkRatio)
-, d_messages(original.d_messages)
-, d_bytes(original.d_bytes)
-{
-}
-
-Limits::~Limits()
-{
-}
-
 // MANIPULATORS
-
-Limits& Limits::operator=(const Limits& rhs)
-{
-    if (this != &rhs) {
-        d_messages               = rhs.d_messages;
-        d_messagesWatermarkRatio = rhs.d_messagesWatermarkRatio;
-        d_bytes                  = rhs.d_bytes;
-        d_bytesWatermarkRatio    = rhs.d_bytesWatermarkRatio;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-Limits& Limits::operator=(Limits&& rhs)
-{
-    if (this != &rhs) {
-        d_messages               = bsl::move(rhs.d_messages);
-        d_messagesWatermarkRatio = bsl::move(rhs.d_messagesWatermarkRatio);
-        d_bytes                  = bsl::move(rhs.d_bytes);
-        d_bytesWatermarkRatio    = bsl::move(rhs.d_bytesWatermarkRatio);
-    }
-
-    return *this;
-}
-#endif
 
 void Limits::reset()
 {
@@ -924,43 +886,7 @@ MsgGroupIdConfig::MsgGroupIdConfig()
 {
 }
 
-MsgGroupIdConfig::MsgGroupIdConfig(const MsgGroupIdConfig& original)
-: d_ttlSeconds(original.d_ttlSeconds)
-, d_maxGroups(original.d_maxGroups)
-, d_rebalance(original.d_rebalance)
-{
-}
-
-MsgGroupIdConfig::~MsgGroupIdConfig()
-{
-}
-
 // MANIPULATORS
-
-MsgGroupIdConfig& MsgGroupIdConfig::operator=(const MsgGroupIdConfig& rhs)
-{
-    if (this != &rhs) {
-        d_rebalance  = rhs.d_rebalance;
-        d_maxGroups  = rhs.d_maxGroups;
-        d_ttlSeconds = rhs.d_ttlSeconds;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-MsgGroupIdConfig& MsgGroupIdConfig::operator=(MsgGroupIdConfig&& rhs)
-{
-    if (this != &rhs) {
-        d_rebalance  = bsl::move(rhs.d_rebalance);
-        d_maxGroups  = bsl::move(rhs.d_maxGroups);
-        d_ttlSeconds = bsl::move(rhs.d_ttlSeconds);
-    }
-
-    return *this;
-}
-#endif
 
 void MsgGroupIdConfig::reset()
 {
@@ -1012,38 +938,7 @@ QueueConsistencyEventual::lookupAttributeInfo(int id)
 
 // CREATORS
 
-QueueConsistencyEventual::QueueConsistencyEventual()
-{
-}
-
-QueueConsistencyEventual::QueueConsistencyEventual(
-    const QueueConsistencyEventual& original)
-{
-    (void)original;
-}
-
-QueueConsistencyEventual::~QueueConsistencyEventual()
-{
-}
-
 // MANIPULATORS
-
-QueueConsistencyEventual&
-QueueConsistencyEventual::operator=(const QueueConsistencyEventual& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-QueueConsistencyEventual&
-QueueConsistencyEventual::operator=(QueueConsistencyEventual&& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-#endif
 
 void QueueConsistencyEventual::reset()
 {
@@ -1051,12 +946,9 @@ void QueueConsistencyEventual::reset()
 
 // ACCESSORS
 
-bsl::ostream& QueueConsistencyEventual::print(bsl::ostream& stream,
-                                              int           level,
-                                              int spacesPerLevel) const
+bsl::ostream&
+QueueConsistencyEventual::print(bsl::ostream& stream, int, int) const
 {
-    (void)level;
-    (void)spacesPerLevel;
     return stream;
 }
 
@@ -1087,38 +979,7 @@ const bdlat_AttributeInfo* QueueConsistencyStrong::lookupAttributeInfo(int id)
 
 // CREATORS
 
-QueueConsistencyStrong::QueueConsistencyStrong()
-{
-}
-
-QueueConsistencyStrong::QueueConsistencyStrong(
-    const QueueConsistencyStrong& original)
-{
-    (void)original;
-}
-
-QueueConsistencyStrong::~QueueConsistencyStrong()
-{
-}
-
 // MANIPULATORS
-
-QueueConsistencyStrong&
-QueueConsistencyStrong::operator=(const QueueConsistencyStrong& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-QueueConsistencyStrong&
-QueueConsistencyStrong::operator=(QueueConsistencyStrong&& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-#endif
 
 void QueueConsistencyStrong::reset()
 {
@@ -1126,12 +987,9 @@ void QueueConsistencyStrong::reset()
 
 // ACCESSORS
 
-bsl::ostream& QueueConsistencyStrong::print(bsl::ostream& stream,
-                                            int           level,
-                                            int           spacesPerLevel) const
+bsl::ostream&
+QueueConsistencyStrong::print(bsl::ostream& stream, int, int) const
 {
-    (void)level;
-    (void)spacesPerLevel;
     return stream;
 }
 
@@ -1162,36 +1020,7 @@ const bdlat_AttributeInfo* QueueModeBroadcast::lookupAttributeInfo(int id)
 
 // CREATORS
 
-QueueModeBroadcast::QueueModeBroadcast()
-{
-}
-
-QueueModeBroadcast::QueueModeBroadcast(const QueueModeBroadcast& original)
-{
-    (void)original;
-}
-
-QueueModeBroadcast::~QueueModeBroadcast()
-{
-}
-
 // MANIPULATORS
-
-QueueModeBroadcast&
-QueueModeBroadcast::operator=(const QueueModeBroadcast& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-QueueModeBroadcast& QueueModeBroadcast::operator=(QueueModeBroadcast&& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-#endif
 
 void QueueModeBroadcast::reset()
 {
@@ -1199,12 +1028,8 @@ void QueueModeBroadcast::reset()
 
 // ACCESSORS
 
-bsl::ostream& QueueModeBroadcast::print(bsl::ostream& stream,
-                                        int           level,
-                                        int           spacesPerLevel) const
+bsl::ostream& QueueModeBroadcast::print(bsl::ostream& stream, int, int) const
 {
-    (void)level;
-    (void)spacesPerLevel;
     return stream;
 }
 
@@ -1216,10 +1041,17 @@ bsl::ostream& QueueModeBroadcast::print(bsl::ostream& stream,
 
 const char QueueModeFanout::CLASS_NAME[] = "QueueModeFanout";
 
+const bool QueueModeFanout::DEFAULT_INITIALIZER_PUBLISH_APP_ID_METRICS = false;
+
 const bdlat_AttributeInfo QueueModeFanout::ATTRIBUTE_INFO_ARRAY[] = {
     {ATTRIBUTE_ID_APP_I_DS,
      "appIDs",
      sizeof("appIDs") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_PUBLISH_APP_ID_METRICS,
+     "publishAppIdMetrics",
+     sizeof("publishAppIdMetrics") - 1,
      "",
      bdlat_FormattingMode::e_TEXT}};
 
@@ -1228,7 +1060,7 @@ const bdlat_AttributeInfo QueueModeFanout::ATTRIBUTE_INFO_ARRAY[] = {
 const bdlat_AttributeInfo*
 QueueModeFanout::lookupAttributeInfo(const char* name, int nameLength)
 {
-    for (int i = 0; i < 1; ++i) {
+    for (int i = 0; i < 2; ++i) {
         const bdlat_AttributeInfo& attributeInfo =
             QueueModeFanout::ATTRIBUTE_INFO_ARRAY[i];
 
@@ -1246,6 +1078,8 @@ const bdlat_AttributeInfo* QueueModeFanout::lookupAttributeInfo(int id)
     switch (id) {
     case ATTRIBUTE_ID_APP_I_DS:
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_I_DS];
+    case ATTRIBUTE_ID_PUBLISH_APP_ID_METRICS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_PUBLISH_APP_ID_METRICS];
     default: return 0;
     }
 }
@@ -1254,25 +1088,29 @@ const bdlat_AttributeInfo* QueueModeFanout::lookupAttributeInfo(int id)
 
 QueueModeFanout::QueueModeFanout(bslma::Allocator* basicAllocator)
 : d_appIDs(basicAllocator)
+, d_publishAppIdMetrics(DEFAULT_INITIALIZER_PUBLISH_APP_ID_METRICS)
 {
 }
 
 QueueModeFanout::QueueModeFanout(const QueueModeFanout& original,
                                  bslma::Allocator*      basicAllocator)
 : d_appIDs(original.d_appIDs, basicAllocator)
+, d_publishAppIdMetrics(original.d_publishAppIdMetrics)
 {
 }
 
 #if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
 QueueModeFanout::QueueModeFanout(QueueModeFanout&& original) noexcept
-: d_appIDs(bsl::move(original.d_appIDs))
+: d_appIDs(bsl::move(original.d_appIDs)),
+  d_publishAppIdMetrics(bsl::move(original.d_publishAppIdMetrics))
 {
 }
 
 QueueModeFanout::QueueModeFanout(QueueModeFanout&& original,
                                  bslma::Allocator* basicAllocator)
 : d_appIDs(bsl::move(original.d_appIDs), basicAllocator)
+, d_publishAppIdMetrics(bsl::move(original.d_publishAppIdMetrics))
 {
 }
 #endif
@@ -1286,7 +1124,8 @@ QueueModeFanout::~QueueModeFanout()
 QueueModeFanout& QueueModeFanout::operator=(const QueueModeFanout& rhs)
 {
     if (this != &rhs) {
-        d_appIDs = rhs.d_appIDs;
+        d_appIDs              = rhs.d_appIDs;
+        d_publishAppIdMetrics = rhs.d_publishAppIdMetrics;
     }
 
     return *this;
@@ -1297,7 +1136,8 @@ QueueModeFanout& QueueModeFanout::operator=(const QueueModeFanout& rhs)
 QueueModeFanout& QueueModeFanout::operator=(QueueModeFanout&& rhs)
 {
     if (this != &rhs) {
-        d_appIDs = bsl::move(rhs.d_appIDs);
+        d_appIDs              = bsl::move(rhs.d_appIDs);
+        d_publishAppIdMetrics = bsl::move(rhs.d_publishAppIdMetrics);
     }
 
     return *this;
@@ -1307,6 +1147,7 @@ QueueModeFanout& QueueModeFanout::operator=(QueueModeFanout&& rhs)
 void QueueModeFanout::reset()
 {
     bdlat_ValueTypeFunctions::reset(&d_appIDs);
+    d_publishAppIdMetrics = DEFAULT_INITIALIZER_PUBLISH_APP_ID_METRICS;
 }
 
 // ACCESSORS
@@ -1318,6 +1159,7 @@ bsl::ostream& QueueModeFanout::print(bsl::ostream& stream,
     bslim::Printer printer(&stream, level, spacesPerLevel);
     printer.start();
     printer.printAttribute("appIDs", this->appIDs());
+    printer.printAttribute("publishAppIdMetrics", this->publishAppIdMetrics());
     printer.end();
     return stream;
 }
@@ -1349,35 +1191,7 @@ const bdlat_AttributeInfo* QueueModePriority::lookupAttributeInfo(int id)
 
 // CREATORS
 
-QueueModePriority::QueueModePriority()
-{
-}
-
-QueueModePriority::QueueModePriority(const QueueModePriority& original)
-{
-    (void)original;
-}
-
-QueueModePriority::~QueueModePriority()
-{
-}
-
 // MANIPULATORS
-
-QueueModePriority& QueueModePriority::operator=(const QueueModePriority& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-QueueModePriority& QueueModePriority::operator=(QueueModePriority&& rhs)
-{
-    (void)rhs;
-    return *this;
-}
-#endif
 
 void QueueModePriority::reset()
 {
@@ -1385,12 +1199,8 @@ void QueueModePriority::reset()
 
 // ACCESSORS
 
-bsl::ostream& QueueModePriority::print(bsl::ostream& stream,
-                                       int           level,
-                                       int           spacesPerLevel) const
+bsl::ostream& QueueModePriority::print(bsl::ostream& stream, int, int) const
 {
-    (void)level;
-    (void)spacesPerLevel;
     return stream;
 }
 
@@ -1818,6 +1628,135 @@ bsl::ostream& DomainConfigRequest::print(bsl::ostream& stream,
     printer.start();
     printer.printAttribute("brokerIdentity", this->brokerIdentity());
     printer.printAttribute("domainName", this->domainName());
+    printer.end();
+    return stream;
+}
+
+// ----------------
+// class Expression
+// ----------------
+
+// CONSTANTS
+
+const char Expression::CLASS_NAME[] = "Expression";
+
+const ExpressionVersion::Value Expression::DEFAULT_INITIALIZER_VERSION =
+    ExpressionVersion::E_UNDEFINED;
+
+const bdlat_AttributeInfo Expression::ATTRIBUTE_INFO_ARRAY[] = {
+    {ATTRIBUTE_ID_VERSION,
+     "version",
+     sizeof("version") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_TEXT,
+     "text",
+     sizeof("text") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT}};
+
+// CLASS METHODS
+
+const bdlat_AttributeInfo* Expression::lookupAttributeInfo(const char* name,
+                                                           int nameLength)
+{
+    for (int i = 0; i < 2; ++i) {
+        const bdlat_AttributeInfo& attributeInfo =
+            Expression::ATTRIBUTE_INFO_ARRAY[i];
+
+        if (nameLength == attributeInfo.d_nameLength &&
+            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
+            return &attributeInfo;
+        }
+    }
+
+    return 0;
+}
+
+const bdlat_AttributeInfo* Expression::lookupAttributeInfo(int id)
+{
+    switch (id) {
+    case ATTRIBUTE_ID_VERSION:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_VERSION];
+    case ATTRIBUTE_ID_TEXT: return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_TEXT];
+    default: return 0;
+    }
+}
+
+// CREATORS
+
+Expression::Expression(bslma::Allocator* basicAllocator)
+: d_text(basicAllocator)
+, d_version(DEFAULT_INITIALIZER_VERSION)
+{
+}
+
+Expression::Expression(const Expression& original,
+                       bslma::Allocator* basicAllocator)
+: d_text(original.d_text, basicAllocator)
+, d_version(original.d_version)
+{
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+Expression::Expression(Expression&& original) noexcept
+: d_text(bsl::move(original.d_text)),
+  d_version(bsl::move(original.d_version))
+{
+}
+
+Expression::Expression(Expression&& original, bslma::Allocator* basicAllocator)
+: d_text(bsl::move(original.d_text), basicAllocator)
+, d_version(bsl::move(original.d_version))
+{
+}
+#endif
+
+Expression::~Expression()
+{
+}
+
+// MANIPULATORS
+
+Expression& Expression::operator=(const Expression& rhs)
+{
+    if (this != &rhs) {
+        d_version = rhs.d_version;
+        d_text    = rhs.d_text;
+    }
+
+    return *this;
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+Expression& Expression::operator=(Expression&& rhs)
+{
+    if (this != &rhs) {
+        d_version = bsl::move(rhs.d_version);
+        d_text    = bsl::move(rhs.d_text);
+    }
+
+    return *this;
+}
+#endif
+
+void Expression::reset()
+{
+    d_version = DEFAULT_INITIALIZER_VERSION;
+    bdlat_ValueTypeFunctions::reset(&d_text);
+}
+
+// ACCESSORS
+
+bsl::ostream&
+Expression::print(bsl::ostream& stream, int level, int spacesPerLevel) const
+{
+    bslim::Printer printer(&stream, level, spacesPerLevel);
+    printer.start();
+    printer.printAttribute("version", this->version());
+    printer.printAttribute("text", this->text());
     printer.end();
     return stream;
 }
@@ -3137,43 +3076,7 @@ StorageDefinition::StorageDefinition()
 {
 }
 
-StorageDefinition::StorageDefinition(const StorageDefinition& original)
-: d_config(original.d_config)
-, d_domainLimits(original.d_domainLimits)
-, d_queueLimits(original.d_queueLimits)
-{
-}
-
-StorageDefinition::~StorageDefinition()
-{
-}
-
 // MANIPULATORS
-
-StorageDefinition& StorageDefinition::operator=(const StorageDefinition& rhs)
-{
-    if (this != &rhs) {
-        d_domainLimits = rhs.d_domainLimits;
-        d_queueLimits  = rhs.d_queueLimits;
-        d_config       = rhs.d_config;
-    }
-
-    return *this;
-}
-
-#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
-    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
-StorageDefinition& StorageDefinition::operator=(StorageDefinition&& rhs)
-{
-    if (this != &rhs) {
-        d_domainLimits = bsl::move(rhs.d_domainLimits);
-        d_queueLimits  = bsl::move(rhs.d_queueLimits);
-        d_config       = bsl::move(rhs.d_config);
-    }
-
-    return *this;
-}
-#endif
 
 void StorageDefinition::reset()
 {
@@ -3193,6 +3096,134 @@ bsl::ostream& StorageDefinition::print(bsl::ostream& stream,
     printer.printAttribute("domainLimits", this->domainLimits());
     printer.printAttribute("queueLimits", this->queueLimits());
     printer.printAttribute("config", this->config());
+    printer.end();
+    return stream;
+}
+
+// ------------------
+// class Subscription
+// ------------------
+
+// CONSTANTS
+
+const char Subscription::CLASS_NAME[] = "Subscription";
+
+const bdlat_AttributeInfo Subscription::ATTRIBUTE_INFO_ARRAY[] = {
+    {ATTRIBUTE_ID_APP_ID,
+     "appId",
+     sizeof("appId") - 1,
+     "",
+     bdlat_FormattingMode::e_TEXT},
+    {ATTRIBUTE_ID_EXPRESSION,
+     "expression",
+     sizeof("expression") - 1,
+     "",
+     bdlat_FormattingMode::e_DEFAULT}};
+
+// CLASS METHODS
+
+const bdlat_AttributeInfo* Subscription::lookupAttributeInfo(const char* name,
+                                                             int nameLength)
+{
+    for (int i = 0; i < 2; ++i) {
+        const bdlat_AttributeInfo& attributeInfo =
+            Subscription::ATTRIBUTE_INFO_ARRAY[i];
+
+        if (nameLength == attributeInfo.d_nameLength &&
+            0 == bsl::memcmp(attributeInfo.d_name_p, name, nameLength)) {
+            return &attributeInfo;
+        }
+    }
+
+    return 0;
+}
+
+const bdlat_AttributeInfo* Subscription::lookupAttributeInfo(int id)
+{
+    switch (id) {
+    case ATTRIBUTE_ID_APP_ID:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_APP_ID];
+    case ATTRIBUTE_ID_EXPRESSION:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_EXPRESSION];
+    default: return 0;
+    }
+}
+
+// CREATORS
+
+Subscription::Subscription(bslma::Allocator* basicAllocator)
+: d_appId(basicAllocator)
+, d_expression(basicAllocator)
+{
+}
+
+Subscription::Subscription(const Subscription& original,
+                           bslma::Allocator*   basicAllocator)
+: d_appId(original.d_appId, basicAllocator)
+, d_expression(original.d_expression, basicAllocator)
+{
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+Subscription::Subscription(Subscription&& original) noexcept
+: d_appId(bsl::move(original.d_appId)),
+  d_expression(bsl::move(original.d_expression))
+{
+}
+
+Subscription::Subscription(Subscription&&    original,
+                           bslma::Allocator* basicAllocator)
+: d_appId(bsl::move(original.d_appId), basicAllocator)
+, d_expression(bsl::move(original.d_expression), basicAllocator)
+{
+}
+#endif
+
+Subscription::~Subscription()
+{
+}
+
+// MANIPULATORS
+
+Subscription& Subscription::operator=(const Subscription& rhs)
+{
+    if (this != &rhs) {
+        d_appId      = rhs.d_appId;
+        d_expression = rhs.d_expression;
+    }
+
+    return *this;
+}
+
+#if defined(BSLS_COMPILERFEATURES_SUPPORT_RVALUE_REFERENCES) &&               \
+    defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
+Subscription& Subscription::operator=(Subscription&& rhs)
+{
+    if (this != &rhs) {
+        d_appId      = bsl::move(rhs.d_appId);
+        d_expression = bsl::move(rhs.d_expression);
+    }
+
+    return *this;
+}
+#endif
+
+void Subscription::reset()
+{
+    bdlat_ValueTypeFunctions::reset(&d_appId);
+    bdlat_ValueTypeFunctions::reset(&d_expression);
+}
+
+// ACCESSORS
+
+bsl::ostream&
+Subscription::print(bsl::ostream& stream, int level, int spacesPerLevel) const
+{
+    bslim::Printer printer(&stream, level, spacesPerLevel);
+    printer.start();
+    printer.printAttribute("appId", this->appId());
+    printer.printAttribute("expression", this->expression());
     printer.end();
     return stream;
 }
@@ -3277,6 +3308,11 @@ const bdlat_AttributeInfo Domain::ATTRIBUTE_INFO_ARRAY[] = {
      "consistency",
      sizeof("consistency") - 1,
      "",
+     bdlat_FormattingMode::e_DEFAULT},
+    {ATTRIBUTE_ID_SUBSCRIPTIONS,
+     "subscriptions",
+     sizeof("subscriptions") - 1,
+     "",
      bdlat_FormattingMode::e_DEFAULT}};
 
 // CLASS METHODS
@@ -3284,7 +3320,7 @@ const bdlat_AttributeInfo Domain::ATTRIBUTE_INFO_ARRAY[] = {
 const bdlat_AttributeInfo* Domain::lookupAttributeInfo(const char* name,
                                                        int         nameLength)
 {
-    for (int i = 0; i < 12; ++i) {
+    for (int i = 0; i < 13; ++i) {
         const bdlat_AttributeInfo& attributeInfo =
             Domain::ATTRIBUTE_INFO_ARRAY[i];
 
@@ -3322,6 +3358,8 @@ const bdlat_AttributeInfo* Domain::lookupAttributeInfo(int id)
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_DEDUPLICATION_TIME_MS];
     case ATTRIBUTE_ID_CONSISTENCY:
         return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_CONSISTENCY];
+    case ATTRIBUTE_ID_SUBSCRIPTIONS:
+        return &ATTRIBUTE_INFO_ARRAY[ATTRIBUTE_INDEX_SUBSCRIPTIONS];
     default: return 0;
     }
 }
@@ -3330,6 +3368,7 @@ const bdlat_AttributeInfo* Domain::lookupAttributeInfo(int id)
 
 Domain::Domain(bslma::Allocator* basicAllocator)
 : d_messageTtl()
+, d_subscriptions(basicAllocator)
 , d_name(basicAllocator)
 , d_msgGroupIdConfig()
 , d_storage()
@@ -3346,6 +3385,7 @@ Domain::Domain(bslma::Allocator* basicAllocator)
 
 Domain::Domain(const Domain& original, bslma::Allocator* basicAllocator)
 : d_messageTtl(original.d_messageTtl)
+, d_subscriptions(original.d_subscriptions, basicAllocator)
 , d_name(original.d_name, basicAllocator)
 , d_msgGroupIdConfig(original.d_msgGroupIdConfig)
 , d_storage(original.d_storage)
@@ -3364,6 +3404,7 @@ Domain::Domain(const Domain& original, bslma::Allocator* basicAllocator)
     defined(BSLS_COMPILERFEATURES_SUPPORT_NOEXCEPT)
 Domain::Domain(Domain&& original) noexcept
 : d_messageTtl(bsl::move(original.d_messageTtl)),
+  d_subscriptions(bsl::move(original.d_subscriptions)),
   d_name(bsl::move(original.d_name)),
   d_msgGroupIdConfig(bsl::move(original.d_msgGroupIdConfig)),
   d_storage(bsl::move(original.d_storage)),
@@ -3380,6 +3421,7 @@ Domain::Domain(Domain&& original) noexcept
 
 Domain::Domain(Domain&& original, bslma::Allocator* basicAllocator)
 : d_messageTtl(bsl::move(original.d_messageTtl))
+, d_subscriptions(bsl::move(original.d_subscriptions), basicAllocator)
 , d_name(bsl::move(original.d_name), basicAllocator)
 , d_msgGroupIdConfig(bsl::move(original.d_msgGroupIdConfig))
 , d_storage(bsl::move(original.d_storage))
@@ -3416,6 +3458,7 @@ Domain& Domain::operator=(const Domain& rhs)
         d_maxDeliveryAttempts = rhs.d_maxDeliveryAttempts;
         d_deduplicationTimeMs = rhs.d_deduplicationTimeMs;
         d_consistency         = rhs.d_consistency;
+        d_subscriptions       = rhs.d_subscriptions;
     }
 
     return *this;
@@ -3438,6 +3481,7 @@ Domain& Domain::operator=(Domain&& rhs)
         d_maxDeliveryAttempts = bsl::move(rhs.d_maxDeliveryAttempts);
         d_deduplicationTimeMs = bsl::move(rhs.d_deduplicationTimeMs);
         d_consistency         = bsl::move(rhs.d_consistency);
+        d_subscriptions       = bsl::move(rhs.d_subscriptions);
     }
 
     return *this;
@@ -3458,6 +3502,7 @@ void Domain::reset()
     d_maxDeliveryAttempts = DEFAULT_INITIALIZER_MAX_DELIVERY_ATTEMPTS;
     d_deduplicationTimeMs = DEFAULT_INITIALIZER_DEDUPLICATION_TIME_MS;
     bdlat_ValueTypeFunctions::reset(&d_consistency);
+    bdlat_ValueTypeFunctions::reset(&d_subscriptions);
 }
 
 // ACCESSORS
@@ -3479,6 +3524,7 @@ Domain::print(bsl::ostream& stream, int level, int spacesPerLevel) const
     printer.printAttribute("maxDeliveryAttempts", this->maxDeliveryAttempts());
     printer.printAttribute("deduplicationTimeMs", this->deduplicationTimeMs());
     printer.printAttribute("consistency", this->consistency());
+    printer.printAttribute("subscriptions", this->subscriptions());
     printer.end();
     return stream;
 }
@@ -3936,6 +3982,14 @@ const char* DomainVariant::selectionName() const
 }  // close package namespace
 }  // close enterprise namespace
 
-// GENERATED BY BLP_BAS_CODEGEN_2023.05.27
+// GENERATED BY @BLP_BAS_CODEGEN_VERSION@
 // USING bas_codegen.pl -m msg --noAggregateConversion --noExternalization
-// --noIdent --package mqbconfm --msgComponent messages mqbconf.xsd
+// --noIdent --package mqbconfm --msgComponent messages mqbconf.xsd SERVICE
+// VERSION bmqconf:183474-1.0
+// ----------------------------------------------------------------------------
+// NOTICE:
+//      Copyright 2024 Bloomberg Finance L.P. All rights reserved.
+//      Property of Bloomberg Finance L.P. (BFLP)
+//      This software is made available solely pursuant to the
+//      terms of a BFLP license agreement which governs its use.
+// ------------------------------- END-OF-FILE --------------------------------

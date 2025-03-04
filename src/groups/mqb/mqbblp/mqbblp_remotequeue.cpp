@@ -38,12 +38,12 @@
 #include <bmqt_resultcode.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwctsk_alarmlog.h>
-#include <mwcu_blob.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
+#include <bmqsys_time.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_blob.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
+#include <bmqu_weakmemfn.h>
 
 // BDE
 #include <ball_severity.h>
@@ -64,6 +64,16 @@
 
 namespace BloombergLP {
 namespace mqbblp {
+
+namespace {
+
+/// The default timeout for scheduled PUT expiration clean-up event.
+static const bsls::Types::Int64 k_DEFAULT_PUT_EXPIRATION_TIMEOUT_MINUTES = 5;
+static const bsls::Types::Int64 k_DEFAULT_PUT_EXPIRATION_TIMEOUT_NS =
+    k_DEFAULT_PUT_EXPIRATION_TIMEOUT_MINUTES *
+    bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MINUTE;
+
+}  // close unnamed namespace
 
 // -----------------
 // class RemoteQueue
@@ -99,14 +109,13 @@ int RemoteQueue::configureAsProxy(bsl::ostream& errorDescription,
     // TTL is not applicable at proxy
 
     // Create the associated storage.
-    bslma::ManagedPtr<mqbi::Storage> storageMp;
-    storageMp.load(new (*d_allocator_p) mqbs::InMemoryStorage(
+    bsl::shared_ptr<mqbi::Storage> storageSp;
+    storageSp.load(new (*d_allocator_p) mqbs::InMemoryStorage(
                        d_state_p->uri(),
                        d_state_p->key(),
                        mqbs::DataStore::k_INVALID_PARTITION_ID,
                        domainCfg,
                        d_state_p->domain()->capacityMeter(),
-                       bmqp::RdaInfo(),
                        d_allocator_p),
                    d_allocator_p);
 
@@ -116,7 +125,8 @@ int RemoteQueue::configureAsProxy(bsl::ostream& errorDescription,
     limits.messages() = bsl::numeric_limits<bsls::Types::Int64>::max();
     limits.bytes()    = bsl::numeric_limits<bsls::Types::Int64>::max();
 
-    int rc = storageMp->configure(errorDescription,
+    storageSp->setConsistency(domainCfg.consistency());
+    int rc = storageSp->configure(errorDescription,
                                   config,
                                   limits,
                                   domainCfg.messageTtl(),
@@ -125,41 +135,33 @@ int RemoteQueue::configureAsProxy(bsl::ostream& errorDescription,
         return 10 * rc + rc_STORAGE_CFG_FAILURE;  // RETURN
     }
 
-    storageMp->capacityMeter()->disable();
+    storageSp->capacityMeter()->disable();
     // In a remote queue, we don't care about monitoring, so disable it for
     // efficiency performance.
 
-    if (!d_state_p->isStorageCompatible(storageMp)) {
+    if (!d_state_p->isStorageCompatible(storageSp)) {
         errorDescription << "Incompatible storage type for ProxyRemoteQueue "
                          << "[uri: " << d_state_p->uri()
                          << ", id: " << d_state_p->id() << "]";
         return rc_INCOMPATIBLE_STORAGE;  // RETURN
     }
 
-    d_state_p->setStorage(storageMp);
-
-    // Create SubStreamMessages list.
-    d_subStreamMessages_mp.load(
-        new (*d_allocator_p)
-            mqbs::VirtualStorageCatalog(d_state_p->storage(), d_allocator_p),
-        d_allocator_p);
+    d_state_p->setStorage(storageSp);
 
     // Create the queueEngine.
-    d_queueEngine_mp.load(new (*d_allocator_p)
-                              RelayQueueEngine(d_state_p,
-                                               d_subStreamMessages_mp.get(),
-                                               mqbconfm::Domain(),
-                                               d_allocator_p),
-                          d_allocator_p);
+    d_queueEngine_mp.load(
+        new (*d_allocator_p)
+            RelayQueueEngine(d_state_p, mqbconfm::Domain(), d_allocator_p),
+        d_allocator_p);
 
-    rc = d_queueEngine_mp->configure(errorDescription);
+    rc = d_queueEngine_mp->configure(errorDescription, isReconfigure);
     if (rc != 0) {
         return 10 * rc + rc_QUEUE_ENGINE_CFG_FAILURE;  // RETURN
     }
 
-    d_state_p->stats().onEvent(
-        mqbstat::QueueStatsDomain::EventType::e_CHANGE_ROLE,
-        mqbstat::QueueStatsDomain::Role::e_PROXY);
+    d_state_p->stats()
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_CHANGE_ROLE>(
+            mqbstat::QueueStatsDomain::Role::e_PROXY);
 
     BALL_LOG_INFO
         << "Created a ProxyRemoteQueue "
@@ -193,12 +195,12 @@ int RemoteQueue::configureAsClusterMember(bsl::ostream& errorDescription,
         // Only create a storage if this is the initial configure; reconfigure
         // (which happens during conversion to local/remote) should reuse the
         // previously created storage.
-        bslma::ManagedPtr<mqbi::Storage>      storageMp;
+        bsl::shared_ptr<mqbi::Storage>        storageSp;
         bdlma::LocalSequentialAllocator<1024> localAllocator(d_allocator_p);
-        mwcu::MemOutStream                    errorDesc(&localAllocator);
+        bmqu::MemOutStream                    errorDesc(&localAllocator);
         rc = d_state_p->storageManager()->makeStorage(
             errorDesc,
-            &storageMp,
+            &storageSp,
             d_state_p->uri(),
             d_state_p->key(),
             d_state_p->partitionId(),
@@ -209,48 +211,41 @@ int RemoteQueue::configureAsClusterMember(bsl::ostream& errorDescription,
             // This most likely means that this queue's partition at this
             // replica is out of sync.
 
-            MWCTSK_ALARMLOG_ALARM("CLUSTER_STATE")
-                << d_state_p->domain()->cluster()->name() << ": PartitionId ["
+            BMQTSK_ALARMLOG_ALARM("CLUSTER_STATE")
+                << d_state_p->domain()->cluster()->name() << ": Partition ["
                 << d_state_p->partitionId()
                 << "]: failed to retrieve storage for remote queue ["
                 << d_state_p->uri() << "], queueKey [" << d_state_p->key()
                 << "], rc: " << rc << ", reason [" << errorDesc.str() << "]."
-                << MWCTSK_ALARMLOG_END;
+                << BMQTSK_ALARMLOG_END;
 
             return 10 * rc + rc_QUEUE_CONFIGURE_FAILURE;  // RETURN
         }
 
         if (d_state_p->isAtMostOnce()) {
-            storageMp->capacityMeter()->disable();
+            storageSp->capacityMeter()->disable();
         }
 
-        // Create SubStreamMessages list.
-        d_subStreamMessages_mp.load(
-            new (*d_allocator_p)
-                mqbs::VirtualStorageCatalog(storageMp.get(), d_allocator_p),
-            d_allocator_p);
-
-        if (!d_state_p->isStorageCompatible(storageMp)) {
-            MWCTSK_ALARMLOG_ALARM("CLUSTER_STATE")
-                << d_state_p->domain()->cluster()->name() << ": PartitionId ["
+        if (!d_state_p->isStorageCompatible(storageSp)) {
+            BMQTSK_ALARMLOG_ALARM("CLUSTER_STATE")
+                << d_state_p->domain()->cluster()->name() << ": Partition ["
                 << d_state_p->partitionId()
                 << "]: incompatible storage type for remote queue ["
                 << d_state_p->uri() << "], queueKey [" << d_state_p->key()
-                << "]" << MWCTSK_ALARMLOG_END;
+                << "]" << BMQTSK_ALARMLOG_END;
             return 10 * rc + rc_QUEUE_CONFIGURE_FAILURE;  // RETURN
         }
 
-        d_state_p->setStorage(storageMp);
+        d_state_p->setStorage(storageSp);
 
         // Create the queueEngine.
         d_queueEngine_mp.load(
-            new (*d_allocator_p) RelayQueueEngine(d_state_p,
-                                                  d_subStreamMessages_mp.get(),
-                                                  domainCfg,
-                                                  d_allocator_p),
+            new (*d_allocator_p)
+                RelayQueueEngine(d_state_p, domainCfg, d_allocator_p),
             d_allocator_p);
     }
     else {
+        d_state_p->storage()->setConsistency(domainCfg.consistency());
         rc = d_state_p->storage()->configure(
             errorDescription,
             domainCfg.storage().config(),
@@ -263,16 +258,16 @@ int RemoteQueue::configureAsClusterMember(bsl::ostream& errorDescription,
     }
 
     bdlma::LocalSequentialAllocator<1024> localAllocator(d_allocator_p);
-    mwcu::MemOutStream                    errorDesc(&localAllocator);
-    rc = d_queueEngine_mp->configure(errorDesc);
+    bmqu::MemOutStream                    errorDesc(&localAllocator);
+    rc = d_queueEngine_mp->configure(errorDesc, isReconfigure);
     if (rc != 0) {
-        MWCTSK_ALARMLOG_ALARM("CLUSTER_STATE")
-            << d_state_p->domain()->cluster()->name() << ": PartitionId ["
+        BMQTSK_ALARMLOG_ALARM("CLUSTER_STATE")
+            << d_state_p->domain()->cluster()->name() << ": Partition ["
             << d_state_p->partitionId()
             << "]: failed to configure queue engine for remote queue ["
             << d_state_p->uri() << "], queueKey [" << d_state_p->key()
             << "], rc: " << rc << ", reason [" << errorDesc.str() << "]."
-            << MWCTSK_ALARMLOG_END;
+            << BMQTSK_ALARMLOG_END;
         return 10 * rc + rc_ENGINE_CONFIGURE_FAILURE;  // RETURN
     }
 
@@ -282,9 +277,9 @@ int RemoteQueue::configureAsClusterMember(bsl::ostream& errorDescription,
     d_state_p->storageManager()->setQueueRaw(queue,
                                              d_state_p->uri(),
                                              d_state_p->partitionId());
-    d_state_p->stats().onEvent(
-        mqbstat::QueueStatsDomain::EventType::e_CHANGE_ROLE,
-        mqbstat::QueueStatsDomain::Role::e_REPLICA);
+    d_state_p->stats()
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_CHANGE_ROLE>(
+            mqbstat::QueueStatsDomain::Role::e_REPLICA);
 
     BALL_LOG_INFO << d_state_p->domain()->cluster()->name()
                   << ": Created a ClusterMemberRemoteQueue "
@@ -308,7 +303,7 @@ bool RemoteQueue::loadSubQueueInfos(
     // Load 'SubQueueIdsOption' from 'options'.
 
     int rc = d_optionsView.reset(&options,
-                                 mwcu::BlobPosition(),
+                                 bmqu::BlobPosition(),
                                  options.length());
     if (rc) {
         BALL_LOG_ERROR
@@ -332,12 +327,33 @@ bool RemoteQueue::loadSubQueueInfos(
     return subQueueInfos->size();
 }
 
+//  We have two VirtualStorageCatalog in the case of RemoteQueue (one for PUTs,
+//  one for PUSHes.
+//  And one in the case of LocalQueue.
+//
+//  LocalQueue   ---------------->  Storage
+//                              /       |
+//  RemoteQueue  ---------------        |
+//          |                           |
+//          V                           V
+//  VirtualStorageCatalog (2)     VirtualStorageCatalog (1)
+//
+
+//              PUT     Replication     Broadcast PUSH      non-Broadcast PUSH
+//  --------------------------------------------------------------------------
+//  LocalQueue  (1)
+//  Replica                 (1)         (1) (2 (some Apps))     (2 (some Apps))
+//  Proxy                               (1 (some Apps))         (1 (some Apps))
+
+// Redundant storage at Proxy
+
 void RemoteQueue::pushMessage(
     const bmqt::MessageGUID&             msgGUID,
     const bsl::shared_ptr<bdlbb::Blob>&  appData,
     const bsl::shared_ptr<bdlbb::Blob>&  options,
     const bmqp::MessagePropertiesInfo&   messagePropertiesInfo,
-    bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType)
+    bmqt::CompressionAlgorithmType::Enum compressionAlgorithmType,
+    bool                                 isOutOfOrder)
 {
     // executed by the *QUEUE DISPATCHER* thread
 
@@ -360,10 +376,21 @@ void RemoteQueue::pushMessage(
             BSLS_ASSERT_SAFE(appData);
 
             result = storage->put(&attributes, msgGUID, appData, options);
+
+            if (result != mqbi::StorageResult::e_SUCCESS) {
+                if (d_throttledFailedPushMessages.requestPermission()) {
+                    BALL_LOG_WARN << "[THROTTLED] " << d_state_p->uri()
+                                  << " failed to store broadcast PUSH ["
+                                  << msgGUID << "], result = " << result;
+                }
+                return;  // RETURN
+            }
         }
         else {
             // In a replica, 'appData' must be empty in non-broadcast mode.
             BSLS_ASSERT_SAFE(!appData);
+
+            // Insert into the ShortList
         }
 
         // 'msgGUID' must be present in the storage.
@@ -415,90 +442,11 @@ void RemoteQueue::pushMessage(
     BSLS_ASSERT_SAFE(d_state_p->hasMultipleSubStreams() ||
                      subQueueInfos.size() == 1);
 
-    // Collect only those subQueueIds which 'storage' is aware of.
-    storageKeys.reserve(subQueueInfos.size());
-
-    for (bmqp::Protocol::SubQueueInfosArray::const_iterator cit =
-             subQueueInfos.begin();
-         cit != subQueueInfos.end();
-         ++cit) {
-        unsigned int subQueueId;
-
-        if (!d_queueEngine_mp->subscriptionId2upstreamSubQueueId(&subQueueId,
-                                                                 cit->id())) {
-            if (d_throttledFailedPushMessages.requestPermission()) {
-                BALL_LOG_ERROR << "#QUEUE_UNKNOWN_SUBSCRIPTION_ID "
-                               << "Remote queue: " << d_state_p->uri()
-                               << " (id: " << d_state_p->id()
-                               << ") received a PUSH message for guid "
-                               << msgGUID << ", with unknown Subscription Id "
-                               << cit->id();
-            }
-            return;  // RETURN
-        }
-
-        const mqbu::StorageKey appKey(subQueueId);
-
-        if (BSLS_PERFORMANCEHINT_PREDICT_LIKELY(
-                d_subStreamMessages_mp->hasVirtualStorage(appKey))) {
-            storageKeys.push_back(appKey);
-            BSLS_ASSERT_SAFE(cit->rdaInfo().isUnlimited() ||
-                             cit->rdaInfo().counter());
-
-            result = d_subStreamMessages_mp->put(msgGUID,
-                                                 msgSize,
-                                                 cit->rdaInfo(),
-                                                 cit->id(),
-                                                 appKey);
-
-            if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
-                    result != mqbi::StorageResult::e_SUCCESS)) {
-                BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-                if (d_throttledFailedPushMessages.requestPermission()) {
-                    BALL_LOG_WARN << d_state_p->uri()
-                                  << " failed to store PUSH message ["
-                                  << msgGUID << "], app [" << *cit
-                                  << "], result = " << result;
-                }
-            }
-        }
-        else {
-            BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-            BALL_LOG_ERROR << "#QUEUE_STORAGE_NOTFOUND "
-                           << "For a PUSH message for queue ["
-                           << d_state_p->description() << "] and GUID ["
-                           << msgGUID << "], received a subQueueId ["
-                           << subQueueId << "] in SubQueueIdsOption"
-                           << " for which virtual storage does not exist in "
-                           << "the storage. AppKey corresponding to the "
-                           << "subQueueId: [" << appKey << "].";
-        }
-    }
-
-    if (d_state_p->domain()->cluster()->isRemote()) {
-        // Save the message along with the subIds in the storage.  Note that
-        // for now, we will assume that in fanout mode, the only option present
-        // in 'options' is subQueueInfos, and we won't store the specified
-        // 'options' in the storage.
-
-        attributes.setRefCount(storageKeys.size());
-        // Pass correct ref count
-
-        result = storage->put(&attributes,
-                              msgGUID,
-                              appData,
-                              bsl::shared_ptr<bdlbb::Blob>(),  // No options
-                              storageKeys);
-
-        if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
-                result != mqbi::StorageResult::e_SUCCESS)) {
-            BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-            if (d_throttledFailedPushMessages.requestPermission()) {
-                BALL_LOG_INFO << d_state_p->uri() << " failed to store GUID ["
-                              << msgGUID << "], result = " << result;
-            }
-        }
-    }
+    d_queueEngine_mp->push(&attributes,
+                           msgGUID,
+                           appData,
+                           subQueueInfos,
+                           isOutOfOrder);
 
     // 'flush' will inform the queue engine so it delivers the message.
 }
@@ -508,7 +456,8 @@ RemoteQueue::RemoteQueue(QueueState*       state,
                          int               ackWindowSize,
                          StateSpPool*      statePool,
                          bslma::Allocator* allocator)
-: d_state_p(state)
+: d_self(this, allocator)
+, d_state_p(state)
 , d_queueEngine_mp(0)
 , d_pendingMessages(allocator)
 , d_pendingConfirms(allocator)
@@ -516,12 +465,12 @@ RemoteQueue::RemoteQueue(QueueState*       state,
 , d_optionsView(allocator)
 , d_pendingPutsTimeoutNs(deduplicationTimeMs *
                          bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND)
-, d_scheduler_p(state->scheduler())
 , d_pendingMessagesTimerEventHandle()
 , d_ackWindowSize(ackWindowSize)
 , d_unackedPutCounter(0)
 , d_subStreams(allocator)
 , d_statePool_p(statePool)
+, d_producerState()
 , d_allocator_p(allocator)
 {
     // PRECONDITIONS
@@ -545,9 +494,21 @@ RemoteQueue::RemoteQueue(QueueState*       state,
 
     // Description, to identify a 'remote' queue, prefix its URI with an '@'.
     bdlma::LocalSequentialAllocator<1024> localAllocator(d_allocator_p);
-    mwcu::MemOutStream                    os(&localAllocator);
+    bmqu::MemOutStream                    os(&localAllocator);
     os << '@' << d_state_p->uri().asString();
     d_state_p->setDescription(os.str());
+
+    if (deduplicationTimeMs <= 0) {
+        d_pendingPutsTimeoutNs = k_DEFAULT_PUT_EXPIRATION_TIMEOUT_NS;
+        BALL_LOG_WARN << "Remote queue [" << d_state_p->description()
+                      << "]: cannot schedule PUT expiration timer with a "
+                      << "non-positive timeout from config ["
+                      << deduplicationTimeMs << " ms], use a default PUT "
+                      << "expiration timeout for scheduler instead ["
+                      << bmqu::PrintUtil::prettyTimeInterval(
+                             d_pendingPutsTimeoutNs)
+                      << "]";
+    }
 
     BALL_LOG_INFO << "Remote queue: " << d_state_p->uri()
                   << " [id: " << d_state_p->id() << "]";
@@ -566,6 +527,15 @@ int RemoteQueue::configure(bsl::ostream& errorDescription, bool isReconfigure)
     // PRECONDITIONS
     BSLS_ASSERT_SAFE(d_state_p->queue()->dispatcher()->inDispatcherThread(
         d_state_p->queue()));
+
+    // Update stats
+    if (isReconfigure) {
+        const mqbconfm::Domain& domainCfg = d_state_p->domain()->config();
+        if (domainCfg.mode().isFanoutValue()) {
+            d_state_p->stats()->updateDomainAppIds(
+                domainCfg.mode().fanout().appIDs());
+        }
+    }
 
     if (d_state_p->domain()->cluster()->isRemote()) {
         return configureAsProxy(errorDescription, isReconfigure);  // RETURN
@@ -586,8 +556,9 @@ void RemoteQueue::resetState()
 
     erasePendingMessages(d_pendingMessages.end());
 
+    d_self.invalidate();
     if (d_pendingMessagesTimerEventHandle) {
-        d_scheduler_p->cancelEventAndWait(&d_pendingMessagesTimerEventHandle);
+        scheduler()->cancelEventAndWait(&d_pendingMessagesTimerEventHandle);
         // 'expirePendingMessagesDispatched' does not restart timer if
         // 'd_pendingMessages' is empty
     }
@@ -610,6 +581,12 @@ void RemoteQueue::close()
     // (unless StopRequest has timed out) all downstreams have closed all
     // queues.
 
+    // `close()` might be called multiple times
+    if (!d_self.isValid()) {
+        return;  // RETURN
+    }
+    d_self.invalidate();
+
     size_t numMessages = erasePendingMessages(d_pendingMessages.end());
 
     BALL_LOG_INFO << d_state_p->uri() << ": erased all " << numMessages
@@ -619,7 +596,7 @@ void RemoteQueue::close()
     BSLS_ASSERT_SAFE(d_pendingMessages.size() == 0);
 
     if (d_pendingMessagesTimerEventHandle) {
-        d_scheduler_p->cancelEventAndWait(&d_pendingMessagesTimerEventHandle);
+        scheduler()->cancelEventAndWait(&d_pendingMessagesTimerEventHandle);
         // 'expirePendingMessagesDispatched' does not restart timer if
         // 'd_pendingMessages' is empty
     }
@@ -637,16 +614,12 @@ void RemoteQueue::getHandle(
     BSLS_ASSERT_SAFE(d_state_p->queue()->dispatcher()->inDispatcherThread(
         d_state_p->queue()));
 
-    mqbi::QueueHandle* handle = d_queueEngine_mp->getHandle(clientContext,
-                                                            handleParameters,
-                                                            upstreamSubQueueId,
-                                                            callback);
-
     mqbi::Cluster* cluster = d_state_p->domain()->cluster();
+
     if (cluster->isRemote()) {
-        if (d_state_p->hasMultipleSubStreams() && handle &&
+        if (d_state_p->hasMultipleSubStreams() &&
             !handleParameters.subIdInfo().isNull()) {
-            // Successful 'getHandle' in fanout mode at proxy: need to add
+            // In fanout mode at proxy need to add
             // virtual storage to the physical storage
             bsl::ostringstream errorDesc;
             mqbu::StorageKey   appKey(upstreamSubQueueId);
@@ -668,6 +641,11 @@ void RemoteQueue::getHandle(
                 mqbi::QueueEngine::k_DEFAULT_APP_KEY);
         }
     }
+
+    d_queueEngine_mp->getHandle(clientContext,
+                                handleParameters,
+                                upstreamSubQueueId,
+                                callback);
 }
 
 void RemoteQueue::configureHandle(
@@ -722,6 +700,8 @@ void RemoteQueue::onHandleReleased(
     BSLS_ASSERT_SAFE(d_state_p->queue()->dispatcher()->inDispatcherThread(
         d_state_p->queue()));
 
+    d_state_p->updateStats();
+
     mqbi::Cluster* cluster = d_state_p->domain()->cluster();
     if (result.hasNoHandleStreamConsumers()) {
         // Lost last reader for the specified subStream for the handle
@@ -730,10 +710,10 @@ void RemoteQueue::onHandleReleased(
              it != d_pendingConfirms.end();) {
             if (it->d_handle == handle.get()) {
                 if (d_throttledFailedConfirmMessages.requestPermission()) {
-                    BALL_LOG_WARN << "Dropping CONFIRM because downstream ["
-                                  << handle << "] is gone. [queue: '"
-                                  << d_state_p->description() << "', GUID: '"
-                                  << it->d_guid << "']";
+                    BALL_LOG_WARN << "[THROTTLED] Dropping CONFIRM because "
+                                  << "downstream [" << handle << "] is gone. "
+                                  << "[queue: '" << d_state_p->description()
+                                  << "', GUID: '" << it->d_guid << "']";
                 }
                 it = d_pendingConfirms.erase(it);
                 ++numProcessed;
@@ -760,7 +740,7 @@ void RemoteQueue::onHandleReleased(
                         d_state_p->storage()->hasVirtualStorage(appId,
                                                                 &appKey);
                     BSLS_ASSERT_SAFE(hasVirtualStorage);
-                    d_state_p->storage()->removeVirtualStorage(appKey);
+                    d_state_p->storage()->removeVirtualStorage(appKey, false);
 
                     (void)
                         hasVirtualStorage;  // Compiler happiness in opt build
@@ -770,7 +750,8 @@ void RemoteQueue::onHandleReleased(
                          d_state_p->handleParameters().flags())) {
                 // Lost last reader in non-fanout mode
                 d_state_p->storage()->removeVirtualStorage(
-                    mqbi::QueueEngine::k_DEFAULT_APP_KEY);
+                    mqbi::QueueEngine::k_DEFAULT_APP_KEY,
+                    false);
                 d_state_p->storage()->removeAll(mqbu::StorageKey::k_NULL_KEY);
             }
         }
@@ -814,7 +795,8 @@ void RemoteQueue::onDispatcherEvent(const mqbi::DispatcherEvent& event)
                     realEvent->blob(),
                     realEvent->options(),
                     realEvent->messagePropertiesInfo(),
-                    realEvent->compressionAlgorithmType());
+                    realEvent->compressionAlgorithmType(),
+                    realEvent->isOutOfOrderPush());
     } break;
     case mqbi::DispatcherEventType::e_PUT: {
         const mqbi::DispatcherPutEvent* realEvent = event.asPutEvent();
@@ -829,39 +811,39 @@ void RemoteQueue::onDispatcherEvent(const mqbi::DispatcherEvent& event)
     case mqbi::DispatcherEventType::e_CONFIRM: {
         BSLS_ASSERT_OPT(false && "'CONFIRM' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_REJECT: {
         BSLS_ASSERT_OPT(false && "'REJECT' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_DISPATCHER: {
         BSLS_ASSERT_OPT(false &&
                         "'DISPATCHER' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_CLUSTER_STATE: {
         BSLS_ASSERT_OPT(false &&
                         "'CLUSTER_STATE' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_STORAGE: {
         BSLS_ASSERT_OPT(false && "'STORAGE' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_RECOVERY: {
         BSLS_ASSERT_OPT(false &&
                         "'RECOVERY' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_REPLICATION_RECEIPT: {
         BSLS_ASSERT_OPT(
             false && "'REPLICATION_RECEIPT' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     case mqbi::DispatcherEventType::e_UNDEFINED: {
         BSLS_ASSERT_OPT(false && "'NONE' type dispatcher event unexpected");
         return;  // RETURN
-    }            // break;
+    }  // break;
     default: {
         BALL_LOG_ERROR << "#QUEUE_UNEXPECTED_EVENT "
                        << d_state_p->description()
@@ -918,7 +900,7 @@ void RemoteQueue::postMessage(const bmqp::PutHeader&              putHeaderIn,
 
         if (d_throttledFailedPutMessages.requestPermission()) {
             BALL_LOG_WARN
-                << "#CLIENT_IMPROPER_BEHAVIOR "
+                << "[THROTTLED] #CLIENT_IMPROPER_BEHAVIOR "
                 << "Failed PUT message for queue [" << d_state_p->uri()
                 << "] from client [" << source->client()->description()
                 << "]. Queue not opened in WRITE mode by the client.";
@@ -935,8 +917,7 @@ void RemoteQueue::postMessage(const bmqp::PutHeader&              putHeaderIn,
         return;  // RETURN
     }
 
-    SubStreamContext& ctx = subStreamContext(
-        bmqp::QueueId::k_DEFAULT_SUBQUEUE_ID);
+    SubStreamContext& ctx = d_producerState;
 
     if (ctx.d_state == SubStreamContext::e_NONE) {
         BALL_LOG_WARN << "#CLIENT_IMPROPER_BEHAVIOR " << d_state_p->uri()
@@ -944,7 +925,29 @@ void RemoteQueue::postMessage(const bmqp::PutHeader&              putHeaderIn,
                       << putHeader.messageGUID() << "'] for unknown upstream";
         return;  // RETURN
     }
+
+    bool isInvalid = false;
+
     if (ctx.d_state == SubStreamContext::e_CLOSED) {
+        isInvalid = true;
+    }
+    else if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
+                 d_pendingMessages.find(putHeader.messageGUID()) !=
+                 d_pendingMessages.end())) {
+        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+
+        isInvalid = true;
+
+        if (d_throttledFailedPutMessages.requestPermission()) {
+            BALL_LOG_INFO << "[THROTTLED] Remote queue " << d_state_p->uri()
+                          << " (id: " << d_state_p->id()
+                          << ") discarding a duplicate PUT from client ["
+                          << source->client()->description() << "] for guid "
+                          << putHeader.messageGUID();
+        }
+    }
+
+    if (isInvalid) {
         if (!d_state_p->isAtMostOnce()) {
             bmqp::AckMessage ackMessage;
 
@@ -952,9 +955,8 @@ void RemoteQueue::postMessage(const bmqp::PutHeader&              putHeaderIn,
                 bmqt::AckResult::e_REFUSED));
             ackMessage.setMessageGUID(putHeader.messageGUID());
 
-            d_state_p->stats().onEvent(
-                mqbstat::QueueStatsDomain::EventType::e_NACK,
-                1);
+            d_state_p->stats()
+                ->onEvent<mqbstat::QueueStatsDomain::EventType::e_NACK>(1);
 
             // CorrelationId & QueueId are left unset as those fields
             // will be filled downstream.
@@ -966,7 +968,7 @@ void RemoteQueue::postMessage(const bmqp::PutHeader&              putHeaderIn,
     //  - if this is broadcast PUT, just GUID unless there is no upstream
     //  - else, also keep 'appData' and 'options'
 
-    bsl::shared_ptr<mwcu::AtomicState> state = d_statePool_p->getObject();
+    bsl::shared_ptr<bmqu::AtomicState> state = d_statePool_p->getObject();
     bsls::Types::Int64                 now   = 0;
 
     if (d_state_p->isAtMostOnce()) {
@@ -993,16 +995,17 @@ void RemoteQueue::postMessage(const bmqp::PutHeader&              putHeaderIn,
         // an ACK for 'd_ackWindowSize' PUTs.
     }
     else {
-        now = mwcsys::Time::highResolutionTimer();
+        now = bmqsys::Time::highResolutionTimer();
 
         if (!d_pendingMessagesTimerEventHandle) {
             bsls::TimeInterval time;
             time.setTotalNanoseconds(now + d_pendingPutsTimeoutNs);
-            d_scheduler_p->scheduleEvent(
+            scheduler()->scheduleEvent(
                 &d_pendingMessagesTimerEventHandle,
                 time,
-                bdlf::BindUtil::bind(&RemoteQueue::expirePendingMessages,
-                                     this));
+                bdlf::BindUtil::bind(bmqu::WeakMemFnUtil::weakMemFn(
+                    &RemoteQueue::expirePendingMessages,
+                    d_self.acquireWeak())));
         }
     }
 
@@ -1026,8 +1029,9 @@ void RemoteQueue::postMessage(const bmqp::PutHeader&              putHeaderIn,
     // the time the message is actually sent upstream, i.e. in
     // cluster/clusterProxy) for the most exact accuracy, but doing it here is
     // good enough.
-    d_state_p->stats().onEvent(mqbstat::QueueStatsDomain::EventType::e_PUT,
-                               appData->length());
+
+    d_state_p->stats()->onEvent<mqbstat::QueueStatsDomain::EventType::e_PUT>(
+        appData->length());
 }
 
 void RemoteQueue::confirmMessage(const bmqt::MessageGUID& msgGUID,
@@ -1206,7 +1210,7 @@ void RemoteQueue::onAckMessageDispatched(const mqbi::DispatcherAckEvent& event)
 
         if (d_throttledFailedAckMessages.requestPermission()) {
             BALL_LOG_STREAM(severity)
-                << "Received ACK message [" << ackResult
+                << "[THROTTLED] Received ACK message [" << ackResult
                 << ", queue: " << d_state_p->description()
                 << "] for unknown guid: " << ackMessage.messageGUID();
         }
@@ -1233,9 +1237,9 @@ void RemoteQueue::onAckMessageDispatched(const mqbi::DispatcherAckEvent& event)
 
         erasePendingMessage(it);
 
-        BALL_LOG_INFO << d_state_p->uri() << ": erased window of " << numErased
-                      << " cached broadcasted PUTs upon "
-                      << bmqt::AckResult::toAscii(ackResult);
+        BALL_LOG_DEBUG << d_state_p->uri() << ": erased window of "
+                       << numErased << " cached broadcasted PUTs upon "
+                       << bmqt::AckResult::toAscii(ackResult);
 
         return;  // RETURN
     }
@@ -1337,7 +1341,7 @@ void RemoteQueue::expirePendingMessagesDispatched()
     BSLS_ASSERT_SAFE(d_state_p->queue()->dispatcher()->inDispatcherThread(
         d_state_p->queue()));
 
-    bsls::Types::Int64 now         = mwcsys::Time::highResolutionTimer();
+    bsls::Types::Int64 now         = bmqsys::Time::highResolutionTimer();
     bsls::Types::Int64 nextTime    = 0;
     bsls::Types::Int64 numExpired  = 0;
     bsls::Types::Int64 numMessages = d_pendingMessages.size();
@@ -1366,12 +1370,14 @@ void RemoteQueue::expirePendingMessagesDispatched()
     }
 
     if (numExpired) {
-        BALL_LOG_INFO << d_state_p->uri() << ": expired "
-                      << mwcu::PrintUtil::prettyNumber(numExpired)
-                      << " pending PUSH messages ("
-                      << mwcu::PrintUtil::prettyNumber(numMessages -
-                                                       numExpired)
-                      << " remaining messages).";
+        if (d_throttledFailedPutMessages.requestPermission()) {
+            BALL_LOG_WARN << "[THROTTLED] " << d_state_p->uri() << ": expired "
+                          << bmqu::PrintUtil::prettyNumber(numExpired)
+                          << " pending PUT messages ("
+                          << bmqu::PrintUtil::prettyNumber(numMessages -
+                                                           numExpired)
+                          << " remaining messages).";
+        }
     }
 
     // reschedule
@@ -1380,21 +1386,23 @@ void RemoteQueue::expirePendingMessagesDispatched()
 
         bsls::TimeInterval time;
         time.setTotalNanoseconds(nextTime);
-        d_scheduler_p->scheduleEvent(
+        scheduler()->scheduleEvent(
             &d_pendingMessagesTimerEventHandle,
             time,
-            bdlf::BindUtil::bind(&RemoteQueue::expirePendingMessages, this));
+            bdlf::BindUtil::bind(bmqu::WeakMemFnUtil::weakMemFn(
+                &RemoteQueue::expirePendingMessages,
+                d_self.acquireWeak())));
 
         BALL_LOG_DEBUG << d_state_p->uri() << ": will check again to expire"
                        << " pending PUSH messages in "
-                       << mwcu::PrintUtil::prettyTimeInterval(
-                              nextTime - mwcsys::Time::highResolutionTimer());
+                       << bmqu::PrintUtil::prettyTimeInterval(
+                              nextTime - bmqsys::Time::highResolutionTimer());
     }
     else {
         d_pendingMessagesTimerEventHandle.release();
-        BALL_LOG_INFO << d_state_p->uri() << ": "
-                      << "no more timer scheduled to check expiration of "
-                      << "pending PUSH messages";
+        BALL_LOG_DEBUG << d_state_p->uri() << ": "
+                       << "no more timer scheduled to check expiration of "
+                       << "pending PUSH messages";
     }
 }
 
@@ -1510,7 +1518,7 @@ void RemoteQueue::cleanPendingMessages(mqbi::QueueHandle* handle)
     }
 
     if (d_pendingMessages.size() == 0 && d_pendingMessagesTimerEventHandle) {
-        d_scheduler_p->cancelEventAndWait(&d_pendingMessagesTimerEventHandle);
+        scheduler()->cancelEventAndWait(&d_pendingMessagesTimerEventHandle);
         // 'expirePendingMessagesDispatched' does not restart timer if
         // 'd_pendingMessages' is empty
     }
@@ -1524,8 +1532,8 @@ RemoteQueue::Puts::iterator& RemoteQueue::nack(Puts::iterator&   it,
 {
     ackMessage.setMessageGUID(it->first);
 
-    d_state_p->stats().onEvent(mqbstat::QueueStatsDomain::EventType::e_NACK,
-                               1);
+    d_state_p->stats()->onEvent<mqbstat::QueueStatsDomain::EventType::e_NACK>(
+        1);
 
     // CorrelationId & QueueId are left unset as those fields
     // will be filled downstream.
@@ -1539,7 +1547,7 @@ void RemoteQueue::sendPutMessage(
     const bmqp::PutHeader&                    putHeader,
     const bsl::shared_ptr<bdlbb::Blob>&       appData,
     const bsl::shared_ptr<bdlbb::Blob>&       options,
-    const bsl::shared_ptr<mwcu::AtomicState>& state,
+    const bsl::shared_ptr<bmqu::AtomicState>& state,
     bsls::Types::Uint64                       genCount)
 {
     mqbi::Cluster* cluster = d_state_p->domain()->cluster();
@@ -1575,6 +1583,9 @@ void RemoteQueue::onOpenFailure(unsigned int upstreamSubQueueId)
     ctx.d_state           = SubStreamContext::e_CLOSED;
     ctx.d_genCount        = 0;
 
+    d_producerState.d_state    = SubStreamContext::e_CLOSED;
+    d_producerState.d_genCount = 0;
+
     if (upstreamSubQueueId == bmqp::QueueId::k_DEFAULT_SUBQUEUE_ID) {
         size_t numMessages = d_pendingMessages.size();
         if (numMessages) {
@@ -1604,7 +1615,7 @@ void RemoteQueue::onOpenFailure(unsigned int upstreamSubQueueId)
         BSLS_ASSERT_SAFE(d_pendingMessages.size() == 0);
 
         if (d_pendingMessagesTimerEventHandle) {
-            d_scheduler_p->cancelEventAndWait(
+            scheduler()->cancelEventAndWait(
                 &d_pendingMessagesTimerEventHandle);
             // 'expirePendingMessagesDispatched' does not restart timer if
             // 'd_pendingMessages' is empty
@@ -1654,11 +1665,15 @@ void RemoteQueue::onLostUpstream()
         i->d_genCount = 0;
     }
 
+    d_producerState.d_state    = SubStreamContext::e_STOPPED;
+    d_producerState.d_genCount = 0;
+
     BALL_LOG_INFO << d_state_p->uri() << ": has lost the upstream";
 }
 
 void RemoteQueue::onOpenUpstream(bsls::Types::Uint64 genCount,
-                                 unsigned int        upstreamSubQueueId)
+                                 unsigned int        upstreamSubQueueId,
+                                 bool                isWriterOnly)
 {
     // executed by the *DISPATCHER* thread
 
@@ -1666,7 +1681,9 @@ void RemoteQueue::onOpenUpstream(bsls::Types::Uint64 genCount,
     BSLS_ASSERT_SAFE(d_state_p->queue()->dispatcher()->inDispatcherThread(
         d_state_p->queue()));
 
-    SubStreamContext& ctx = subStreamContext(upstreamSubQueueId);
+    SubStreamContext& ctx = isWriterOnly
+                                ? d_producerState
+                                : subStreamContext(upstreamSubQueueId);
 
     if (genCount == 0) {
         // This is a result of StopRequest processing.
@@ -1674,7 +1691,7 @@ void RemoteQueue::onOpenUpstream(bsls::Types::Uint64 genCount,
         // Until then, we buffer.
         if (ctx.d_state == SubStreamContext::e_OPENED) {
             if (upstreamSubQueueId == bmqp::QueueId::k_DEFAULT_SUBQUEUE_ID) {
-                if (d_state_p->hasMultipleSubStreams()) {
+                if (isWriterOnly) {
                     BALL_LOG_INFO << d_state_p->uri()
                                   << ": buffering PUTs with generation count "
                                   << ctx.d_genCount
@@ -1685,6 +1702,8 @@ void RemoteQueue::onOpenUpstream(bsls::Types::Uint64 genCount,
                                   << ": buffering PUTs and CONFIRMs with"
                                   << " generation count " << ctx.d_genCount
                                   << " because upstream is stopping.";
+                    d_producerState.d_state    = SubStreamContext::e_STOPPED;
+                    d_producerState.d_genCount = 0;
                 }
             }
             else {
@@ -1719,6 +1738,9 @@ void RemoteQueue::onOpenUpstream(bsls::Types::Uint64 genCount,
         ctx.d_state = SubStreamContext::e_OPENED;
 
         if (upstreamSubQueueId == bmqp::QueueId::k_DEFAULT_SUBQUEUE_ID) {
+            d_producerState.d_genCount = genCount;
+            d_producerState.d_state    = SubStreamContext::e_OPENED;
+
             retransmitPendingMessagesDispatched(genCount);
         }
         retransmitPendingConfirmsDispatched(upstreamSubQueueId);

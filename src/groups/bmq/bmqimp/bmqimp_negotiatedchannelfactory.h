@@ -26,20 +26,18 @@
 //
 //@DESCRIPTION: This component defines a mechanism,
 // 'bmqimp::NegotiatedChannelFactory', which is an implementation of the
-// 'mwcio::ChannelFactory' protocol that performs initial negotiation with a
-// peer on top of a channel created using a base 'mwcio::ChannelFactory'.
+// 'bmqio::ChannelFactory' protocol that performs initial negotiation with a
+// peer on top of a channel created using a base 'bmqio::ChannelFactory'.
 
 // BMQ
-
+#include <bmqio_channel.h>
+#include <bmqio_channelfactory.h>
+#include <bmqio_connectoptions.h>
+#include <bmqio_listenoptions.h>
+#include <bmqio_status.h>
+#include <bmqp_blobpoolutil.h>
 #include <bmqp_ctrlmsg_messages.h>
-
-// MWC
-#include <mwcio_channel.h>
-#include <mwcio_channelfactory.h>
-#include <mwcio_connectoptions.h>
-#include <mwcio_listenoptions.h>
-#include <mwcio_status.h>
-#include <mwcu_sharedresource.h>
+#include <bmqu_sharedresource.h>
 
 // BDE
 #include <bdlbb_blob.h>
@@ -60,12 +58,16 @@ namespace bmqimp {
 
 /// Configuration for a `NegotiatedChannelFactory`.
 class NegotiatedChannelFactoryConfig {
+  public:
+    // TYPES
+    typedef bmqp::BlobPoolUtil::BlobSpPool BlobSpPool;
+
   private:
     // PRIVATE DATA
-    mwcio::ChannelFactory*           d_baseFactory_p;
+    bmqio::ChannelFactory*           d_baseFactory_p;
     bmqp_ctrlmsg::NegotiationMessage d_negotiationMessage;
     bsls::TimeInterval               d_negotiationTimeout;
-    bdlbb::BlobBufferFactory*        d_bufferFactory_p;
+    BlobSpPool*                      d_blobSpPool_p;
     bslma::Allocator*                d_allocator_p;
 
     // FRIENDS
@@ -78,10 +80,10 @@ class NegotiatedChannelFactoryConfig {
 
     // CREATORS
     NegotiatedChannelFactoryConfig(
-        mwcio::ChannelFactory*                  base,
+        bmqio::ChannelFactory*                  base,
         const bmqp_ctrlmsg::NegotiationMessage& negotiationMessage,
         const bsls::TimeInterval&               negotiationTimeout,
-        bdlbb::BlobBufferFactory*               bufferFactory,
+        BlobSpPool*                             blobSpPool_p,
         bslma::Allocator*                       basicAllocator = 0);
 
     NegotiatedChannelFactoryConfig(
@@ -95,7 +97,7 @@ class NegotiatedChannelFactoryConfig {
 
 /// `ChannelFactory` implementation that performs negotiation with the peer
 /// upon connection.
-class NegotiatedChannelFactory : public mwcio::ChannelFactory {
+class NegotiatedChannelFactory : public bmqio::ChannelFactory {
   public:
     // TYPES
     typedef NegotiatedChannelFactoryConfig Config;
@@ -107,12 +109,19 @@ class NegotiatedChannelFactory : public mwcio::ChannelFactory {
     /// Temporary; shall remove after 2nd roll out of "new style" brokers.
     static const char* k_CHANNEL_PROPERTY_MPS_EX;
 
+    /// Temporary safety switch to control configure request.
+    static const char* k_CHANNEL_PROPERTY_CONFIGURE_STREAM;
+
+    static const char* k_CHANNEL_PROPERTY_HEARTBEAT_INTERVAL_MS;
+
+    static const char* k_CHANNEL_PROPERTY_MAX_MISSED_HEARTBEATS;
+
   private:
     // PRIVATE DATA
     Config d_config;
 
     // Used to make sure no callback is invoked an a destroyed object.
-    mutable mwcu::SharedResource<NegotiatedChannelFactory> d_self;
+    mutable bmqu::SharedResource<NegotiatedChannelFactory> d_self;
 
     // NOT IMPLEMENTED
     NegotiatedChannelFactory(const NegotiatedChannelFactory&)
@@ -131,23 +140,23 @@ class NegotiatedChannelFactory : public mwcio::ChannelFactory {
     /// Handle an event from our base ChannelFactory.
     void
     baseResultCallback(const ResultCallback&                  userCb,
-                       mwcio::ChannelFactoryEvent::Enum       event,
-                       const mwcio::Status&                   status,
-                       const bsl::shared_ptr<mwcio::Channel>& channel) const;
+                       bmqio::ChannelFactoryEvent::Enum       event,
+                       const bmqio::Status&                   status,
+                       const bsl::shared_ptr<bmqio::Channel>& channel) const;
 
-    void negotiate(const bsl::shared_ptr<mwcio::Channel>& channel,
+    void negotiate(const bsl::shared_ptr<bmqio::Channel>& channel,
                    const ResultCallback&                  cb) const;
 
-    void readPacketsCb(const bsl::shared_ptr<mwcio::Channel>& channel,
+    void readPacketsCb(const bsl::shared_ptr<bmqio::Channel>& channel,
                        const ResultCallback&                  cb,
-                       const mwcio::Status&                   status,
+                       const bmqio::Status&                   status,
                        int*                                   numNeeded,
                        bdlbb::Blob*                           blob) const;
 
     void onBrokerNegotiationResponse(
         const bdlbb::Blob&                     packet,
         const ResultCallback&                  cb,
-        const bsl::shared_ptr<mwcio::Channel>& channel) const;
+        const bsl::shared_ptr<bmqio::Channel>& channel) const;
 
   public:
     // CREATORS
@@ -158,14 +167,14 @@ class NegotiatedChannelFactory : public mwcio::ChannelFactory {
 
   public:
     // MANIPULATORS
-    void listen(mwcio::Status*               status,
+    void listen(bmqio::Status*               status,
                 bslma::ManagedPtr<OpHandle>* handle,
-                const mwcio::ListenOptions&  options,
+                const bmqio::ListenOptions&  options,
                 const ResultCallback&        cb) BSLS_KEYWORD_OVERRIDE;
 
-    void connect(mwcio::Status*               status,
+    void connect(bmqio::Status*               status,
                  bslma::ManagedPtr<OpHandle>* handle,
-                 const mwcio::ConnectOptions& options,
+                 const bmqio::ConnectOptions& options,
                  const ResultCallback&        cb) BSLS_KEYWORD_OVERRIDE;
 };
 

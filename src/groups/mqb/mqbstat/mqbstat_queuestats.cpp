@@ -21,22 +21,24 @@
 #include <bmqt_queueflags.h>
 
 // MQB
+#include <mqbcfg_brokerconfig.h>
 #include <mqbi_cluster.h>
 #include <mqbi_domain.h>
 #include <mqbi_queue.h>
 
-// MWC
-#include <mwcst_statcontext.h>
-#include <mwcst_statutil.h>
-#include <mwcst_statvalue.h>
+#include <bmqst_statcontext.h>
+#include <bmqst_statutil.h>
+#include <bmqst_statvalue.h>
 
 // BDE
 #include <ball_log.h>
+#include <ball_logthrottle.h>
 #include <bdlb_print.h>
 #include <bdld_datummapbuilder.h>
 #include <bdld_manageddatum.h>
 #include <bdlma_localsequentialallocator.h>
 #include <bsl_limits.h>
+#include <bslmf_movableref.h>
 #include <bsls_assert.h>
 
 namespace BloombergLP {
@@ -44,105 +46,22 @@ namespace mqbstat {
 
 namespace {
 
+const char k_LOG_CATEGORY[] = "MQBSTAT.QUEUESTATS";
+
 /// Name of the stat context to create (holding all domain's queues
 /// statistics)
-static const char k_DOMAIN_STAT_NAME[] = "domain";
+const char k_DOMAIN_STAT_NAME[] = "domain";
 
 /// Name of the stat context to create (holding all client's queues
 /// statistics)
-static const char k_CLIENT_STAT_NAME[] = "client";
+const char k_CLIENT_STAT_NAME[] = "client";
 
-// -----------------------
-// struct DomainQueueStats
-// -----------------------
+/// Maximum messages logged with throttling in a short period of time.
+const int k_MAX_INSTANT_MESSAGES = 10;
 
-/// Namespace for the constants of stat values that applies to the queues on
-/// the domain
-struct DomainQueueStats {
-    enum Enum {
-        /// Value:      Current number of clients who opened the queue with
-        ///             the `WRITE` flag
-        e_STAT_NB_PRODUCER
-
-        ,
-        e_STAT_NB_CONSUMER
-        // Value:      Current number of clients who opened the queue with
-        //             the 'READ' flag
-
-        ,
-        e_STAT_MESSAGES
-        // Value:      Current number of messages in the queue
-
-        ,
-        e_STAT_BYTES
-        // Value:      Accumulated bytes of all messages currently in the
-        //             queue
-
-        ,
-        e_STAT_ACK
-        // Value:      Number of ack messages delivered by this queue
-
-        ,
-        e_STAT_ACK_TIME
-        // Value:      The time between PUT and ACK (in nanoseconds).
-
-        ,
-        e_STAT_NACK
-        // Value:      Number of NACK messages generated for this queue
-
-        ,
-        e_STAT_CONFIRM
-        // Value:      Number of CONFIRM messages received by this queue
-
-        ,
-        e_STAT_CONFIRM_TIME
-        // Value:      The time between PUSH and CONFIRM (in nanoseconds).
-
-        ,
-        e_STAT_REJECT
-        // Value:      Number of messages rejected by this queue (RDA
-        //             reaching zero)
-
-        ,
-        e_STAT_QUEUE_TIME
-        // Value:      The time spent by the message in the queue (in
-        //             nanoseconds).
-
-        ,
-        e_STAT_PUSH
-        // Value:      Accumulated bytes of all messages ever pushed from
-        //             the queue
-        // Increment:  Number of messages ever pushed from the queue
-
-        ,
-        e_STAT_PUT
-        // Value:      Accumulated bytes of all messages ever put in the
-        //             queue
-        // Increment:  Number of messages ever put in the queue
-
-        ,
-        e_STAT_GC_MSGS
-        // Value:      Accumulated number of messages ever GC'ed in the
-        //             queue
-
-        ,
-        e_STAT_ROLE
-        // Value:      Role (Unknown, Primary, Replica, Proxy)
-
-        ,
-        e_CFG_MSGS
-        // Value:      The configured queue messages capacity
-
-        ,
-        e_CFG_BYTES
-        // Value:      The configured queue bytes capacity
-        ,
-        e_STAT_NO_SC_MSGS
-        // Value:      Accumulated number of messages in the strong
-        //             consistency queue expired before receiving quorum
-        //             Receipts
-    };
-};
+/// Time interval between messages logged with throttling.
+const bsls::Types::Int64 k_NS_PER_MESSAGE =
+    bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MINUTE / k_MAX_INSTANT_MESSAGES;
 
 // ------------------
 // struct ClientStats
@@ -156,57 +75,124 @@ struct ClientStats {
         e_STAT_ACK
 
         ,
+        /// Value:      Number of confirm messages delivered to the client
         e_STAT_CONFIRM
-        // Value:      Number of confirm messages delivered to the client
 
         ,
+        /// Value:      Accumulated bytes of all messages ever pushed to
+        ///             the client
+        /// Increments: Number of messages ever pushed to the client
         e_STAT_PUSH
-        // Value:      Accumulated bytes of all messages ever pushed to
-        //             the client
-        // Increments: Number of messages ever pushed to the client
 
         ,
+        /// Value:      Accumulated bytes of all messages ever received from
+        ///             the client
+        /// Increments: Number of messages ever received from the client
         e_STAT_PUT
-        // Value:      Accumulated bytes of all messages ever received from
-        //             the client
-        // Increments: Number of messages ever received from the client
     };
 };
 
 /// Functor method returning `true`, i.e., filter out, if the specified
 /// `record` represents a `*direct*` stat (used when printing to filter them
 /// out).
-bool filterDirect(const mwcst::TableRecords::Record& record)
+bool filterDirect(const bmqst::TableRecords::Record& record)
 {
-    return record.type() == mwcst::StatContext::DMCST_TOTAL_VALUE;
+    return record.type() == bmqst::StatContext::e_TOTAL_VALUE;
 }
 
 }  // close unnamed namespace
+
+// -----------------------------
+// struct QueueStatsDomain::Stat
+// -----------------------------
+
+const char* QueueStatsDomain::Stat::toString(Stat::Enum value)
+{
+#define MQBSTAT_CASE(VAL, DESC)                                               \
+    case (VAL): {                                                             \
+        return (DESC);                                                        \
+    } break;
+
+    switch (value) {
+        MQBSTAT_CASE(e_NB_PRODUCER, "queue_producers_count")
+        MQBSTAT_CASE(e_NB_CONSUMER, "queue_consumers_count")
+        MQBSTAT_CASE(e_MESSAGES_CURRENT, "queue_msgs_current")
+        MQBSTAT_CASE(e_MESSAGES_MAX, "queue_content_msgs")
+        MQBSTAT_CASE(e_BYTES_CURRENT, "queue_bytes_current")
+        MQBSTAT_CASE(e_BYTES_MAX, "queue_content_bytes")
+        MQBSTAT_CASE(e_PUT_MESSAGES_DELTA, "queue_put_msgs")
+        MQBSTAT_CASE(e_PUT_BYTES_DELTA, "queue_put_bytes")
+        MQBSTAT_CASE(e_PUT_MESSAGES_ABS, "queue_put_msgs_abs")
+        MQBSTAT_CASE(e_PUT_BYTES_ABS, "queue_put_bytes_abs")
+        MQBSTAT_CASE(e_PUSH_MESSAGES_DELTA, "queue_push_msgs")
+        MQBSTAT_CASE(e_PUSH_BYTES_DELTA, "queue_push_bytes")
+        MQBSTAT_CASE(e_PUSH_MESSAGES_ABS, "queue_push_msgs_abs")
+        MQBSTAT_CASE(e_PUSH_BYTES_ABS, "queue_push_bytes_abs")
+        MQBSTAT_CASE(e_ACK_DELTA, "queue_ack_msgs")
+        MQBSTAT_CASE(e_ACK_ABS, "queue_ack_msgs_abs")
+        MQBSTAT_CASE(e_ACK_TIME_AVG, "queue_ack_time_avg")
+        MQBSTAT_CASE(e_ACK_TIME_MAX, "queue_ack_time_max")
+        MQBSTAT_CASE(e_NACK_DELTA, "queue_nack_msgs")
+        MQBSTAT_CASE(e_NACK_ABS, "queue_nack_msgs_abs")
+        MQBSTAT_CASE(e_CONFIRM_DELTA, "queue_confirm_msgs")
+        MQBSTAT_CASE(e_CONFIRM_ABS, "queue_confirm_msgs_abs")
+        MQBSTAT_CASE(e_CONFIRM_TIME_AVG, "queue_confirm_time_avg")
+        MQBSTAT_CASE(e_CONFIRM_TIME_MAX, "queue_confirm_time_max")
+        MQBSTAT_CASE(e_REJECT_ABS, "queue_reject_msgs_abs")
+        MQBSTAT_CASE(e_REJECT_DELTA, "queue_reject_msgs")
+        MQBSTAT_CASE(e_QUEUE_TIME_AVG, "queue_queue_time_avg")
+        MQBSTAT_CASE(e_QUEUE_TIME_MAX, "queue_queue_time_max")
+        MQBSTAT_CASE(e_GC_MSGS_DELTA, "queue_gc_msgs")
+        MQBSTAT_CASE(e_GC_MSGS_ABS, "queue_gc_msgs_abs")
+        MQBSTAT_CASE(e_ROLE, "queue_role")
+        MQBSTAT_CASE(e_CFG_MSGS, "queue_cfg_msgs")
+        MQBSTAT_CASE(e_CFG_BYTES, "queue_cfg_bytes")
+        MQBSTAT_CASE(e_NO_SC_MSGS_DELTA, "queue_nack_noquorum_msgs")
+        MQBSTAT_CASE(e_NO_SC_MSGS_ABS, "queue_nack_noquorum_msgs_abs")
+        MQBSTAT_CASE(e_HISTORY_ABS, "queue_history_abs")
+    }
+
+    BSLS_ASSERT(!"invalid enumerator");
+    return 0;
+
+#undef MQBSTAT_CASE
+}
 
 // ----------------------
 // class QueueStatsDomain
 // ----------------------
 
 bsls::Types::Int64
-QueueStatsDomain::getValue(const mwcst::StatContext& context,
+QueueStatsDomain::getValue(const bmqst::StatContext& context,
                            int                       snapshotId,
                            const Stat::Enum&         stat)
 {
     // invoked from the SNAPSHOT thread
 
-    const mwcst::StatValue::SnapshotLocation latestSnapshot(0, 0);
-    const mwcst::StatValue::SnapshotLocation oldestSnapshot(0, snapshotId);
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(snapshotId >= -1);  // do not support other negatives yet
+
+    const bmqst::StatValue::SnapshotLocation latestSnapshot(0, 0);
+
+#define OLDEST_SNAPSHOT(STAT)                                                 \
+    (bmqst::StatValue::SnapshotLocation(                                      \
+        0,                                                                    \
+        (snapshotId >= 0)                                                     \
+            ? snapshotId                                                      \
+            : (context.value(bmqst::StatContext::e_DIRECT_VALUE, (STAT))      \
+                   .historySize(0) -                                          \
+               1)))
 
 #define STAT_SINGLE(OPERATION, STAT)                                          \
-    mwcst::StatUtil::OPERATION(                                               \
-        context.value(mwcst::StatContext::DMCST_DIRECT_VALUE, STAT),          \
+    bmqst::StatUtil::OPERATION(                                               \
+        context.value(bmqst::StatContext::e_DIRECT_VALUE, STAT),              \
         latestSnapshot)
 
 #define STAT_RANGE(OPERATION, STAT)                                           \
-    mwcst::StatUtil::OPERATION(                                               \
-        context.value(mwcst::StatContext::DMCST_DIRECT_VALUE, STAT),          \
+    bmqst::StatUtil::OPERATION(                                               \
+        context.value(bmqst::StatContext::e_DIRECT_VALUE, STAT),              \
         latestSnapshot,                                                       \
-        oldestSnapshot)
+        OLDEST_SNAPSHOT(STAT))
 
     switch (stat) {
     case QueueStatsDomain::Stat::e_NB_PRODUCER: {
@@ -327,6 +313,9 @@ QueueStatsDomain::getValue(const mwcst::StatContext& context,
         return STAT_RANGE(valueDifference,
                           DomainQueueStats::e_STAT_NO_SC_MSGS);
     }
+    case QueueStatsDomain::Stat::e_HISTORY_ABS: {
+        return STAT_SINGLE(value, DomainQueueStats::e_STAT_HISTORY);
+    }
     default: {
         BSLS_ASSERT_SAFE(false && "Attempting to access an unknown stat");
     }
@@ -338,23 +327,24 @@ QueueStatsDomain::getValue(const mwcst::StatContext& context,
 #undef STAT_SINGLE
 }
 
-QueueStatsDomain::QueueStatsDomain()
-: d_statContext_mp(0)
+QueueStatsDomain::QueueStatsDomain(bslma::Allocator* allocator)
+: d_allocator_p(bslma::Default::allocator(allocator))
+, d_statContext_mp(0)
+, d_subContextsHolder(d_allocator_p)
+, d_subContextsLookup(d_allocator_p)
 {
     // NOTHING
 }
 
-void QueueStatsDomain::initialize(const bmqt::Uri&  uri,
-                                  mqbi::Domain*     domain,
-                                  bslma::Allocator* allocator)
+void QueueStatsDomain::initialize(const bmqt::Uri& uri, mqbi::Domain* domain)
 {
     BSLS_ASSERT_SAFE(!d_statContext_mp && "initialize was already called");
 
     // Create subContext
-    bdlma::LocalSequentialAllocator<2048> localAllocator(allocator);
+    bdlma::LocalSequentialAllocator<2048> localAllocator(d_allocator_p);
 
     d_statContext_mp = domain->queueStatContext()->addSubcontext(
-        mwcst::StatContextConfiguration(uri.canonical(), &localAllocator));
+        bmqst::StatContextConfiguration(uri.canonical(), &localAllocator));
 
     // Initialize the role to 'unknown'; once the 'mqbblp::Queue' is
     // configured, the role will be accordingly set
@@ -382,6 +372,26 @@ void QueueStatsDomain::initialize(const bmqt::Uri&  uri,
     builder.pushBack("tier", bdld::Datum::copyString(uri.tier(), alloc));
 
     datum->adopt(builder.commit());
+
+    // Create subcontexts for each AppId to store per-AppId metrics, such as
+    // `e_CONFIRM_TIME_MAX` or `e_QUEUE_TIME_MAX`, so the metrics can be
+    // inspected separately for each application.
+    if (!domain->cluster()->isRemote() &&
+        domain->config().mode().isFanoutValue() &&
+        domain->config().mode().fanout().publishAppIdMetrics()) {
+        const bsl::vector<bsl::string>& appIDs =
+            domain->config().mode().fanout().appIDs();
+        for (bsl::vector<bsl::string>::const_iterator cit = appIDs.begin();
+             cit != appIDs.end();
+             ++cit) {
+            StatSubContextMp subContext = d_statContext_mp->addSubcontext(
+                bmqst::StatContextConfiguration(*cit, &localAllocator));
+
+            d_subContextsLookup.insert(bsl::make_pair(*cit, subContext.get()));
+            d_subContextsHolder.emplace_back(
+                bslmf::MovableRefUtil::move(subContext));
+        }
+    }
 }
 
 QueueStatsDomain& QueueStatsDomain::setReaderCount(int readerCount)
@@ -404,85 +414,135 @@ QueueStatsDomain& QueueStatsDomain::setWriterCount(int writerCount)
     return *this;
 }
 
-void QueueStatsDomain::onEvent(EventType::Enum type, bsls::Types::Int64 value)
+void QueueStatsDomain::onEvent(EventType::Enum    type,
+                               bsls::Types::Int64 value,
+                               const bsl::string& appId)
 {
     BSLS_ASSERT_SAFE(d_statContext_mp && "initialize was not called");
 
+    BALL_LOG_SET_CATEGORY(k_LOG_CATEGORY);
+
+    if (d_subContextsLookup.empty()) {
+        BALL_LOGTHROTTLE_WARN(k_MAX_INSTANT_MESSAGES, k_NS_PER_MESSAGE)
+            << "[THROTTLED] No built sub contexts for domain: "
+            << d_statContext_mp->name() << ", appId: " << appId;
+        return;  // RETURN
+    }
+
+    bsl::unordered_map<bsl::string, bmqst::StatContext*>::iterator it =
+        d_subContextsLookup.find(appId);
+
+    if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(it ==
+                                              d_subContextsLookup.end())) {
+        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+
+        BALL_LOGTHROTTLE_WARN(k_MAX_INSTANT_MESSAGES, k_NS_PER_MESSAGE)
+            << "[THROTTLED] No matching StatContext for domain: "
+            << d_statContext_mp->name() << ", appId: " << appId;
+        return;  // RETURN
+    }
+
+    bmqst::StatContext* appIdContext = it->second;
+    BSLS_ASSERT_SAFE(appIdContext);
+
     switch (type) {
-    case EventType::e_ACK: {
-        // For ACK, we don't have any bytes value, but we also wouldn't care ..
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_ACK, 1);
-    } break;
-    case EventType::e_ACK_TIME: {
-        d_statContext_mp->reportValue(DomainQueueStats::e_STAT_ACK_TIME,
-                                      value);
-    } break;
-    case EventType::e_NACK: {
-        // For NACK, we don't care about the bytes value ..
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_NACK, 1);
-    } break;
-    case EventType::e_CONFIRM: {
-        // For CONFIRM, we don't care about the bytes value ..
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_CONFIRM, 1);
-    } break;
     case EventType::e_CONFIRM_TIME: {
-        d_statContext_mp->reportValue(DomainQueueStats::e_STAT_CONFIRM_TIME,
-                                      value);
-    } break;
-    case EventType::e_REJECT: {
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_REJECT, 1);
+        appIdContext->reportValue(DomainQueueStats::e_STAT_CONFIRM_TIME,
+                                  value);
     } break;
     case EventType::e_QUEUE_TIME: {
-        d_statContext_mp->reportValue(DomainQueueStats::e_STAT_QUEUE_TIME,
-                                      value);
-    } break;
-    case EventType::e_PUSH: {
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_PUSH, value);
-    } break;
-    case EventType::e_PUT: {
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_PUT, value);
+        appIdContext->reportValue(DomainQueueStats::e_STAT_QUEUE_TIME, value);
     } break;
     case EventType::e_ADD_MESSAGE: {
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_BYTES, value);
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_MESSAGES, 1);
+        appIdContext->adjustValue(DomainQueueStats::e_STAT_BYTES, value);
+        appIdContext->adjustValue(DomainQueueStats::e_STAT_MESSAGES, 1);
     } break;
     case EventType::e_DEL_MESSAGE: {
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_BYTES, -value);
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_MESSAGES, -1);
-    } break;
-    case EventType::e_GC_MESSAGE: {
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_GC_MSGS, value);
+        appIdContext->adjustValue(DomainQueueStats::e_STAT_BYTES, -value);
+        appIdContext->adjustValue(DomainQueueStats::e_STAT_MESSAGES, -1);
     } break;
     case EventType::e_PURGE: {
         // NOTE: Setting the value like that will cause weird results if using
         //       the stat to get rates
-        d_statContext_mp->setValue(DomainQueueStats::e_STAT_BYTES, 0);
-        d_statContext_mp->setValue(DomainQueueStats::e_STAT_MESSAGES, 0);
+        appIdContext->setValue(DomainQueueStats::e_STAT_BYTES, 0);
+        appIdContext->setValue(DomainQueueStats::e_STAT_MESSAGES, 0);
     } break;
-    case EventType::e_CHANGE_ROLE: {
-        d_statContext_mp->setValue(DomainQueueStats::e_STAT_ROLE, value);
+
+    // Some of these event types make no sense per appId and should be reported
+    // per entire queue instead
+    case EventType::e_ACK: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_ACK_TIME: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_NACK: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_CONFIRM: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_REJECT: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_PUSH: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_PUT: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_GC_MESSAGE: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_CHANGE_ROLE: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_CFG_MSGS: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_CFG_BYTES: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_NO_SC_MESSAGE: BSLS_ANNOTATION_FALLTHROUGH;
+    case EventType::e_UPDATE_HISTORY: {
+        BSLS_ASSERT_SAFE(false && "Unexpected event type for appId metric");
     } break;
-    case EventType::e_CFG_MSGS: {
-        d_statContext_mp->setValue(DomainQueueStats::e_CFG_MSGS, value);
-    } break;
-    case EventType::e_CFG_BYTES: {
-        d_statContext_mp->setValue(DomainQueueStats::e_CFG_BYTES, value);
-    } break;
-    case EventType::e_NO_SC_MESSAGE: {
-        d_statContext_mp->adjustValue(DomainQueueStats::e_STAT_NO_SC_MSGS,
-                                      value);
-    } break;
+
     default: {
         BSLS_ASSERT_SAFE(false && "Unknown event type");
     } break;
     };
 }
 
-void QueueStatsDomain::setQueueContentRaw(bsls::Types::Int64 messages,
-                                          bsls::Types::Int64 bytes)
+void QueueStatsDomain::updateDomainAppIds(
+    const bsl::vector<bsl::string>& appIds)
 {
-    d_statContext_mp->setValue(DomainQueueStats::e_STAT_BYTES, bytes);
-    d_statContext_mp->setValue(DomainQueueStats::e_STAT_MESSAGES, messages);
+    if (appIds.empty()) {
+        d_subContextsLookup.clear();
+        d_subContextsHolder.clear();
+        return;  // RETURN
+    }
+
+    bsl::unordered_set<bsl::string> remainingAppIds(appIds.begin(),
+                                                    appIds.end(),
+                                                    d_allocator_p);
+
+    // 1. Remove subcontexts for unneeded appIds
+    bsl::list<StatSubContextMp>::iterator it = d_subContextsHolder.begin();
+    while (it != d_subContextsHolder.end()) {
+        const bsl::string& ctxAppId = it->get()->name();
+        bsl::unordered_set<bsl::string>::const_iterator sIt =
+            remainingAppIds.find(ctxAppId);
+        if (sIt == remainingAppIds.end()) {
+            // Subcontext for this appId is no longer needed, remove it from
+            // the holder and lookup table
+            d_subContextsLookup.erase(ctxAppId);
+            it = d_subContextsHolder.erase(it);
+        }
+        else {
+            // This appId is needed, but the stat context is already built for
+            // it
+            remainingAppIds.erase(sIt);
+            ++it;
+        }
+    }
+
+    if (remainingAppIds.empty()) {
+        return;  // RETURN
+    }
+
+    // 2. Add the remaining appIds
+    bdlma::LocalSequentialAllocator<2048> localAllocator(d_allocator_p);
+
+    for (bsl::unordered_set<bsl::string>::const_iterator sIt =
+             remainingAppIds.begin();
+         sIt != remainingAppIds.end();
+         sIt++) {
+        StatSubContextMp subContext = d_statContext_mp->addSubcontext(
+            bmqst::StatContextConfiguration(*sIt, &localAllocator));
+
+        d_subContextsLookup.insert(bsl::make_pair(*sIt, subContext.get()));
+        d_subContextsHolder.emplace_back(
+            bslmf::MovableRefUtil::move(subContext));
+    }
 }
 
 // -----------------------------
@@ -526,24 +586,24 @@ const char* QueueStatsDomain::Role::toAscii(Role::Enum value)
 // ----------------------
 
 bsls::Types::Int64
-QueueStatsClient::getValue(const mwcst::StatContext& context,
+QueueStatsClient::getValue(const bmqst::StatContext& context,
                            int                       snapshotId,
                            const Stat::Enum&         stat)
 
 {
     // invoked from the SNAPSHOT thread
 
-    const mwcst::StatValue::SnapshotLocation latestSnapshot(0, 0);
-    const mwcst::StatValue::SnapshotLocation oldestSnapshot(0, snapshotId);
+    const bmqst::StatValue::SnapshotLocation latestSnapshot(0, 0);
+    const bmqst::StatValue::SnapshotLocation oldestSnapshot(0, snapshotId);
 
 #define STAT_SINGLE(OPERATION, STAT)                                          \
-    mwcst::StatUtil::OPERATION(                                               \
-        context.value(mwcst::StatContext::DMCST_DIRECT_VALUE, STAT),          \
+    bmqst::StatUtil::OPERATION(                                               \
+        context.value(bmqst::StatContext::e_DIRECT_VALUE, STAT),              \
         latestSnapshot)
 
 #define STAT_RANGE(OPERATION, STAT)                                           \
-    mwcst::StatUtil::OPERATION(                                               \
-        context.value(mwcst::StatContext::DMCST_DIRECT_VALUE, STAT),          \
+    bmqst::StatUtil::OPERATION(                                               \
+        context.value(bmqst::StatContext::e_DIRECT_VALUE, STAT),              \
         latestSnapshot,                                                       \
         oldestSnapshot)
 
@@ -602,7 +662,7 @@ QueueStatsClient::QueueStatsClient()
 }
 
 void QueueStatsClient::initialize(const bmqt::Uri&    uri,
-                                  mwcst::StatContext* clientStatContext,
+                                  bmqst::StatContext* clientStatContext,
                                   bslma::Allocator*   allocator)
 {
     // PRECONDITIONS
@@ -612,7 +672,7 @@ void QueueStatsClient::initialize(const bmqt::Uri&    uri,
     bdlma::LocalSequentialAllocator<2048> localAllocator(allocator);
 
     d_statContext_mp = clientStatContext->addSubcontext(
-        mwcst::StatContextConfiguration(uri.asString(), &localAllocator));
+        bmqst::StatContextConfiguration(uri.asString(), &localAllocator));
 }
 
 void QueueStatsClient::onEvent(EventType::Enum type, bsls::Types::Int64 value)
@@ -644,13 +704,13 @@ void QueueStatsClient::onEvent(EventType::Enum type, bsls::Types::Int64 value)
 // struct QueueStatsUtil
 // ---------------------
 
-bsl::shared_ptr<mwcst::StatContext>
+bsl::shared_ptr<bmqst::StatContext>
 QueueStatsUtil::initializeStatContextDomains(int               historySize,
                                              bslma::Allocator* allocator)
 {
     bdlma::LocalSequentialAllocator<2048> localAllocator(allocator);
 
-    mwcst::StatContextConfiguration config(k_DOMAIN_STAT_NAME,
+    bmqst::StatContextConfiguration config(k_DOMAIN_STAT_NAME,
                                            &localAllocator);
 
     config.isTable(true)
@@ -662,12 +722,12 @@ QueueStatsUtil::initializeStatContextDomains(int               historySize,
         .value("messages")
         .value("bytes")
         .value("ack")
-        .value("ack_time", mwcst::StatValue::DMCST_DISCRETE)
+        .value("ack_time", bmqst::StatValue::e_DISCRETE)
         .value("nack")
         .value("confirm")
-        .value("confirm_time", mwcst::StatValue::DMCST_DISCRETE)
+        .value("confirm_time", bmqst::StatValue::e_DISCRETE)
         .value("reject")
-        .value("queue_time", mwcst::StatValue::DMCST_DISCRETE)
+        .value("queue_time", bmqst::StatValue::e_DISCRETE)
         .value("gc")
         .value("push")
         .value("put")
@@ -675,23 +735,24 @@ QueueStatsUtil::initializeStatContextDomains(int               historySize,
         .value("cfg_msgs")
         .value("cfg_bytes")
         .value("content_msgs")
-        .value("content_bytes");
+        .value("content_bytes")
+        .value("history_size");
     // NOTE: If the stats are using too much memory, we could reconsider
     //       nb_producer, nb_consumer, messages and bytes to be using atomic
     //       int and not stat value.
 
-    return bsl::shared_ptr<mwcst::StatContext>(
-        new (*allocator) mwcst::StatContext(config, allocator),
+    return bsl::shared_ptr<bmqst::StatContext>(
+        new (*allocator) bmqst::StatContext(config, allocator),
         allocator);
 }
 
-bsl::shared_ptr<mwcst::StatContext>
+bsl::shared_ptr<bmqst::StatContext>
 QueueStatsUtil::initializeStatContextClients(int               historySize,
                                              bslma::Allocator* allocator)
 {
     bdlma::LocalSequentialAllocator<2048> localAllocator(allocator);
 
-    mwcst::StatContextConfiguration config(k_CLIENT_STAT_NAME,
+    bmqst::StatContextConfiguration config(k_CLIENT_STAT_NAME,
                                            &localAllocator);
     config.isTable(true)
         .defaultHistorySize(historySize)
@@ -704,167 +765,171 @@ QueueStatsUtil::initializeStatContextClients(int               historySize,
     // NOTE: If the stats are using too much memory, we could reconsider
     //       in_event and out_event to be using atomic int and not stat value.
 
-    return bsl::shared_ptr<mwcst::StatContext>(
-        new (*allocator) mwcst::StatContext(config, allocator),
+    return bsl::shared_ptr<bmqst::StatContext>(
+        new (*allocator) bmqst::StatContext(config, allocator),
         allocator);
 }
 
 void QueueStatsUtil::initializeTableAndTipDomains(
-    mwcst::Table*                 table,
-    mwcu::BasicTableInfoProvider* tip,
-    int                           historySize,
-    mwcst::StatContext*           statContext)
+    bmqst::Table*                  table,
+    bmqst::BasicTableInfoProvider* tip,
+    int                            historySize,
+    bmqst::StatContext*            statContext)
 {
     // Use only one level for now ...
-    mwcst::StatValue::SnapshotLocation start(0, 0);
-    mwcst::StatValue::SnapshotLocation end(0, historySize - 1);
+    bmqst::StatValue::SnapshotLocation start(0, 0);
+    bmqst::StatValue::SnapshotLocation end(0, historySize - 1);
 
     // Create table
-    mwcst::TableSchema& schema = table->schema();
+    bmqst::TableSchema& schema = table->schema();
 
     schema.addDefaultIdColumn("id");
     schema.addColumn("nb_producer",
                      DomainQueueStats::e_STAT_NB_PRODUCER,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
     schema.addColumn("nb_consumer",
                      DomainQueueStats::e_STAT_NB_CONSUMER,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
 
     schema.addColumn("messages",
                      DomainQueueStats::e_STAT_MESSAGES,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
     schema.addColumn("bytes",
                      DomainQueueStats::e_STAT_BYTES,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
+                     start);
+    schema.addColumn("history_size",
+                     DomainQueueStats::e_STAT_HISTORY,
+                     bmqst::StatUtil::value,
                      start);
 
     schema.addColumn("put_msgs_delta",
                      DomainQueueStats::e_STAT_PUT,
-                     mwcst::StatUtil::incrementsDifference,
+                     bmqst::StatUtil::incrementsDifference,
                      start,
                      end);
     schema.addColumn("put_bytes_delta",
                      DomainQueueStats::e_STAT_PUT,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("put_msgs_abs",
                      DomainQueueStats::e_STAT_PUT,
-                     mwcst::StatUtil::increments,
+                     bmqst::StatUtil::increments,
                      start);
     schema.addColumn("put_bytes_abs",
                      DomainQueueStats::e_STAT_PUT,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
 
     schema.addColumn("push_msgs_delta",
                      DomainQueueStats::e_STAT_PUSH,
-                     mwcst::StatUtil::incrementsDifference,
+                     bmqst::StatUtil::incrementsDifference,
                      start,
                      end);
     schema.addColumn("push_bytes_delta",
                      DomainQueueStats::e_STAT_PUSH,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("push_msgs_abs",
                      DomainQueueStats::e_STAT_PUSH,
-                     mwcst::StatUtil::increments,
+                     bmqst::StatUtil::increments,
                      start);
     schema.addColumn("push_bytes_abs",
                      DomainQueueStats::e_STAT_PUSH,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
     schema.addColumn("ack_delta",
                      DomainQueueStats::e_STAT_ACK,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("ack_abs",
                      DomainQueueStats::e_STAT_ACK,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
     schema.addColumn("ack_time_avg",
                      DomainQueueStats::e_STAT_ACK_TIME,
-                     mwcst::StatUtil::averagePerEvent,
+                     bmqst::StatUtil::averagePerEvent,
                      start,
                      end);
     schema.addColumn("ack_time_max",
                      DomainQueueStats::e_STAT_ACK_TIME,
-                     mwcst::StatUtil::rangeMax,
+                     bmqst::StatUtil::rangeMax,
                      start,
                      end);
     schema.addColumn("nack_delta",
                      DomainQueueStats::e_STAT_NACK,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("nack_abs",
                      DomainQueueStats::e_STAT_NACK,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
     schema.addColumn("confirm_delta",
                      DomainQueueStats::e_STAT_CONFIRM,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("confirm_abs",
                      DomainQueueStats::e_STAT_CONFIRM,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
     schema.addColumn("confirm_time_avg",
                      DomainQueueStats::e_STAT_CONFIRM_TIME,
-                     mwcst::StatUtil::averagePerEvent,
+                     bmqst::StatUtil::averagePerEvent,
                      start,
                      end);
     schema.addColumn("confirm_time_max",
                      DomainQueueStats::e_STAT_CONFIRM_TIME,
-                     mwcst::StatUtil::rangeMax,
+                     bmqst::StatUtil::rangeMax,
                      start,
                      end);
     schema.addColumn("reject_delta",
                      DomainQueueStats::e_STAT_REJECT,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("reject_abs",
                      DomainQueueStats::e_STAT_REJECT,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
     schema.addColumn("queue_time_avg",
                      DomainQueueStats::e_STAT_QUEUE_TIME,
-                     mwcst::StatUtil::averagePerEvent,
+                     bmqst::StatUtil::averagePerEvent,
                      start,
                      end);
     schema.addColumn("queue_time_max",
                      DomainQueueStats::e_STAT_QUEUE_TIME,
-                     mwcst::StatUtil::rangeMax,
+                     bmqst::StatUtil::rangeMax,
                      start,
                      end);
     schema.addColumn("gc_msgs_delta",
                      DomainQueueStats::e_STAT_GC_MSGS,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("gc_msgs_abs",
                      DomainQueueStats::e_STAT_GC_MSGS,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
     schema.addColumn("no_sc_msgs_delta",
                      DomainQueueStats::e_STAT_NO_SC_MSGS,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("no_sc_msgs_abs",
                      DomainQueueStats::e_STAT_NO_SC_MSGS,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
 
     // Configure records
-    mwcst::TableRecords& records = table->records();
+    bmqst::TableRecords& records = table->records();
     records.setContext(statContext);
     records.setFilter(&filterDirect);
 
@@ -940,83 +1005,86 @@ void QueueStatsUtil::initializeTableAndTipDomains(
     tip->setColumnGroup("GC");
     tip->addColumn("gc_msgs_delta", "delta").zeroString("");
     tip->addColumn("gc_msgs_abs", "abs").zeroString("");
+
+    tip->setColumnGroup("History");
+    tip->addColumn("history_size", "# GUIDs").zeroString("");
 }
 
 void QueueStatsUtil::initializeTableAndTipClients(
-    mwcst::Table*                 table,
-    mwcu::BasicTableInfoProvider* tip,
-    int                           historySize,
-    mwcst::StatContext*           statContext)
+    bmqst::Table*                  table,
+    bmqst::BasicTableInfoProvider* tip,
+    int                            historySize,
+    bmqst::StatContext*            statContext)
 {
     // Use only one level for now ...
-    mwcst::StatValue::SnapshotLocation start(0, 0);
-    mwcst::StatValue::SnapshotLocation end(0, historySize - 1);
+    bmqst::StatValue::SnapshotLocation start(0, 0);
+    bmqst::StatValue::SnapshotLocation end(0, historySize - 1);
 
     // Create table
-    mwcst::TableSchema& schema = table->schema();
+    bmqst::TableSchema& schema = table->schema();
 
     schema.addDefaultIdColumn("id");
 
     schema.addColumn("push_messages_delta",
                      ClientStats::e_STAT_PUSH,
-                     mwcst::StatUtil::incrementsDifference,
+                     bmqst::StatUtil::incrementsDifference,
                      start,
                      end);
     schema.addColumn("push_bytes_delta",
                      ClientStats::e_STAT_PUSH,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("push_messages_abs",
                      ClientStats::e_STAT_PUSH,
-                     mwcst::StatUtil::increments,
+                     bmqst::StatUtil::increments,
                      start);
     schema.addColumn("push_bytes_abs",
                      ClientStats::e_STAT_PUSH,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
 
     schema.addColumn("put_messages_delta",
                      ClientStats::e_STAT_PUT,
-                     mwcst::StatUtil::incrementsDifference,
+                     bmqst::StatUtil::incrementsDifference,
                      start,
                      end);
     schema.addColumn("put_bytes_delta",
                      ClientStats::e_STAT_PUT,
-                     mwcst::StatUtil::valueDifference,
+                     bmqst::StatUtil::valueDifference,
                      start,
                      end);
     schema.addColumn("put_messages_abs",
                      ClientStats::e_STAT_PUT,
-                     mwcst::StatUtil::increments,
+                     bmqst::StatUtil::increments,
                      start);
     schema.addColumn("put_bytes_abs",
                      ClientStats::e_STAT_PUT,
-                     mwcst::StatUtil::value,
+                     bmqst::StatUtil::value,
                      start);
 
     schema.addColumn("ack_delta",
                      ClientStats::e_STAT_ACK,
-                     mwcst::StatUtil::incrementsDifference,
+                     bmqst::StatUtil::incrementsDifference,
                      start,
                      end);
     schema.addColumn("ack_abs",
                      ClientStats::e_STAT_ACK,
-                     mwcst::StatUtil::increments,
+                     bmqst::StatUtil::increments,
                      start);
 
     schema.addColumn("confirm_delta",
                      ClientStats::e_STAT_CONFIRM,
-                     mwcst::StatUtil::incrementsDifference,
+                     bmqst::StatUtil::incrementsDifference,
                      start,
                      end);
     schema.addColumn("confirm_abs",
                      ClientStats::e_STAT_CONFIRM,
-                     mwcst::StatUtil::increments,
+                     bmqst::StatUtil::increments,
                      start);
 
     // Configure records
-    mwcst::TableRecords& records = table->records();
+    bmqst::TableRecords& records = table->records();
     records.setContext(statContext);
     records.setFilter(&filterDirect);
 

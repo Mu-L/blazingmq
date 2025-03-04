@@ -7,7 +7,7 @@ You can also search this project for issues with the following labels:
 
 | Label                                                                                                                                       | Search Term                               | Description                                                                                                                                                        |
 | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [good-first-issue]https://github.com/search?q=repo%3Abloomberg%2Fblazingmq+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22&type=issues) | `is:issue is:open label:good first issue` | Recommended for first-time contributors! These are well-defined, and allow a user to get familiar with the project's workflow before tackling more complex issues. |
+| [good-first-issue](https://github.com/search?q=repo%3Abloomberg%2Fblazingmq+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22&type=issues) | `is:issue is:open label:good first issue` | Recommended for first-time contributors! These are well-defined, and allow a user to get familiar with the project's workflow before tackling more complex issues. |
 | [help wanted](https://github.com/search?q=repo%3Abloomberg%2Fblazingmq+is%3Aissue+is%3Aopen+label%3A%22help+wanted%22&type=issues)          | `is:issue is:open label:"help wanted"`    | General issues where contributors help is wanted.                                                                                                                  |
 | [A-](https://github.com/bloomberg/blazingmq/labels?q=A)                                                                                     |                                           | Category for the *area* which this issue covers |
 
@@ -28,6 +28,46 @@ last line of the commit message for each commit in your contribution:
 The simplest way to accomplish this is to add `-s` or `--signoff` to your `git commit` command.
 
 You must use your real name (sorry, no pseudonyms, and no anonymous contributions).
+
+### DCO check
+
+This project's CI configured with a DCO check, to ensure that all commits in a PR are signed off.
+
+The common reasons for DCO check failure:
+
+- Not all commits are signed off.
+- Mismatch between configured git name on a host and name used for signed-off comment.
+
+The easiest way to fix DCO check failure is to squash all changes into 1 commit and sign off it:
+
+```shell
+git checkout <your_branch>
+git reset --soft HEAD~<number_of_commits>
+git commit -s -m "<commit_message>"
+git push -f origin <your_branch>
+```
+
+More concrete example, with explanation:
+
+```shell
+# Example branch 'issue25_fix_logger' with 4 commits, failed DCO check in CI.
+
+# Switch to this branch just to be sure.
+git checkout issue25_fix_logger
+
+# 4 commits in a PR - undo last 4 commits, while keeping changes on a disc (--soft option). 
+# Danger: use reset --soft here only, do not use hard reset, or you might lose code.
+git reset --soft HEAD~4
+
+# Make a new commit, with an automatic sign-off comment.
+# This commit contains changes from the previous 4 which we undone.
+git commit -s -m "Fix: logger verbosity in mqba"
+
+# Now the feature branch contains just 1 commit with all changes.
+# It is also guaranteed to be correctly sign-off.
+# Force-push it to the remote fork to update your PR.
+git push -f origin issue25_fix_logger
+```
 
 ## Documentation
 

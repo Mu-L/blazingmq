@@ -27,9 +27,8 @@
 // BMQ
 #include <bmqp_ctrlmsg_messages.h>
 
-// MWC
-#include <mwcio_channel.h>
-#include <mwcu_memoutstream.h>
+#include <bmqio_channel.h>
+#include <bmqu_memoutstream.h>
 
 // BDE
 #include <bdlbb_pooledblobbufferfactory.h>
@@ -89,6 +88,9 @@ void Cluster::_initializeClusterDefinition(
     BSLS_ASSERT_OPT(!d_isStarted &&
                     "_initializeClusterDefinition() must be called before"
                     " start()");
+    if (isFSMWorkflow) {
+        BSLS_ASSERT_SAFE(isCSLMode);
+    }
 
     d_clusterDefinition.name() = name;
 
@@ -134,7 +136,6 @@ void Cluster::_initializeNetcluster()
     d_netCluster_mp.load(new (*d_allocator_p)
                              mqbnet::MockCluster(d_clusterDefinition,
                                                  d_bufferFactory_p,
-                                                 &d_itemPool,
                                                  d_allocator_p),
                          d_allocator_p);
 
@@ -143,19 +144,23 @@ void Cluster::_initializeNetcluster()
     for (NodesListIter iter = nodes.begin(); iter != nodes.end(); ++iter) {
         d_channels.emplace(
             *iter,
-            bsl::allocate_shared<mwcio::TestChannel>(d_allocator_p),
+            bsl::allocate_shared<bmqio::TestChannel>(d_allocator_p),
             d_allocator_p);
 
-        bsl::weak_ptr<mwcio::Channel> channelWp(d_channels.at(*iter));
+        bsl::weak_ptr<bmqio::Channel> channelWp(d_channels.at(*iter));
         (*iter)->setChannel(channelWp,
                             bmqp_ctrlmsg::ClientIdentity(),
-                            mwcio::Channel::ReadCallback());
+                            bmqio::Channel::ReadCallback());
     }
 
     const int selfNodeId = d_isLeader ? k_LEADER_NODE_ID
                                       : k_LEADER_NODE_ID + 1;
     dynamic_cast<mqbnet::MockCluster*>(d_netCluster_mp.get())
         ->_setSelfNodeId(selfNodeId);
+
+    if (d_isClusterMember) {
+        BSLS_ASSERT_OPT(0 != d_netCluster_mp->selfNode());
+    }
 }
 
 void Cluster::_initializeNodeSessions()
@@ -177,7 +182,7 @@ void Cluster::_initializeNodeSessions()
         nodeSessionSp->setNodeStatus(bmqp_ctrlmsg::NodeStatus::E_AVAILABLE);
 
         // Create stat context for each cluster node
-        mwcst::StatContextConfiguration config((*nodeIter)->hostName());
+        bmqst::StatContextConfiguration config((*nodeIter)->hostName());
         nodeSessionSp->statContext() =
             d_clusterData_mp->clusterNodesStatContext()->addSubcontext(config);
 
@@ -214,11 +219,14 @@ Cluster::Cluster(bdlbb::BlobBufferFactory* bufferFactory,
 , d_scheduler(bsls::SystemClockType::e_MONOTONIC, allocator)
 , d_timeSource(&d_scheduler)
 , d_isStarted(false)
-, d_name(allocator)
-, d_description(allocator)
 , d_clusterDefinition(allocator)
-, d_itemPool(mqbnet::Channel::k_ITEM_SIZE, allocator)
 , d_channels(allocator)
+, d_negotiator_mp()
+, d_transportManager(&d_scheduler,
+                     bufferFactory,
+                     d_negotiator_mp,
+                     0,  // mqbstat::StatController*
+                     allocator)
 , d_netCluster_mp(0)
 , d_clusterData_mp(0)
 , d_isClusterMember(isClusterMember)
@@ -231,9 +239,15 @@ Cluster::Cluster(bdlbb::BlobBufferFactory* bufferFactory,
 , d_isLeader(isLeader)
 , d_isRestoringState(false)
 , d_processor()
+, d_resources(&d_scheduler, bufferFactory, &d_blobSpPool)
 {
     // PRECONDITIONS
-    BSLS_ASSERT_OPT(isClusterMember || !isLeader);
+    if (isClusterMember) {
+        BSLS_ASSERT_OPT(!clusterNodeDefs.empty());
+    }
+    else {
+        BSLS_ASSERT_OPT(!isLeader);
+    }
 
     _initializeClusterDefinition(name,
                                  location,
@@ -250,19 +264,18 @@ Cluster::Cluster(bdlbb::BlobBufferFactory* bufferFactory,
     d_dispatcherClientData.setDispatcher(&d_dispatcher);
     d_dispatcher._setInDispatcherThread(true);
 
-    d_clusterData_mp.load(new (*d_allocator_p)
-                              mqbc::ClusterData(d_clusterDefinition.name(),
-                                                &d_scheduler,
-                                                d_bufferFactory_p,
-                                                &d_blobSpPool,
-                                                d_clusterDefinition,
-                                                d_netCluster_mp,
-                                                this,
-                                                0,  // domainFactory
-                                                0,  // transportManager
-                                                d_statContext_sp.get(),
-                                                d_statContexts,
-                                                d_allocator_p),
+    d_clusterData_mp.load(new (*d_allocator_p) mqbc::ClusterData(
+                              d_clusterDefinition.name(),
+                              d_resources,
+                              d_clusterDefinition,
+                              mqbcfg::ClusterProxyDefinition(d_allocator_p),
+                              d_netCluster_mp,
+                              this,
+                              0,  // domainFactory
+                              &d_transportManager,
+                              d_statContext_sp.get(),
+                              d_statContexts,
+                              d_allocator_p),
                           d_allocator_p);
 
     // Set cluster state's dispatcher
@@ -308,7 +321,8 @@ int Cluster::start(BSLS_ANNOTATION_UNUSED bsl::ostream& errorDescription)
 }
 
 void Cluster::initiateShutdown(
-    BSLS_ANNOTATION_UNUSED const VoidFunctor& callback)
+    BSLS_ANNOTATION_UNUSED const VoidFunctor& callback,
+    BSLS_ANNOTATION_UNUSED bool               supportShutdownV2)
 {
     // PRECONDITIONS
     BSLS_ASSERT_OPT(!d_isStarted &&
@@ -374,6 +388,11 @@ mqbnet::Cluster& Cluster::netCluster()
 Cluster::RequestManagerType& Cluster::requestManager()
 {
     return d_clusterData_mp->requestManager();
+}
+
+mqbc::ClusterData::MultiRequestManagerType& Cluster::multiRequestManager()
+{
+    return d_clusterData_mp->multiRequestManager();
 }
 
 bmqt::GenericResult::Enum
@@ -459,7 +478,7 @@ void Cluster::onDomainReconfigured(
 int Cluster::processCommand(mqbcmd::ClusterResult*        result,
                             const mqbcmd::ClusterCommand& command)
 {
-    mwcu::MemOutStream os;
+    bmqu::MemOutStream os;
     os << "MockCluster::processCommand '" << command << "' not implemented!";
     result->makeError().message() = os.str();
     return -1;
@@ -468,6 +487,15 @@ int Cluster::processCommand(mqbcmd::ClusterResult*        result,
 void Cluster::loadClusterStatus(mqbcmd::ClusterResult* out)
 {
     out->makeClusterStatus();
+}
+
+void Cluster::purgeAndGCQueueOnDomain(
+    mqbcmd::ClusterResult*       result,
+    BSLS_ANNOTATION_UNUSED const bsl::string& domainName)
+{
+    bmqu::MemOutStream os;
+    os << "MockCluster::purgeAndGCQueueOnDomain not implemented!";
+    result->makeError().message() = os.str();
 }
 
 // MANIPULATORS
@@ -507,14 +535,14 @@ const mqbi::DispatcherClientData& Cluster::dispatcherClientData() const
 
 const bsl::string& Cluster::description() const
 {
-    return d_description;
+    return d_clusterData_mp->identity().description();
 }
 
 // ACCESSORS
 //   (virtual: mqbi::Cluster)
 const bsl::string& Cluster::name() const
 {
-    return d_name;
+    return d_clusterData_mp->identity().name();
 }
 
 const mqbnet::Cluster& Cluster::netCluster() const

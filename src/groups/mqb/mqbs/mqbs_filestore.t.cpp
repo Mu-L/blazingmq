@@ -18,6 +18,7 @@
 
 // MQB
 #include <mqbcfg_messages.h>
+#include <mqbi_dispatcher.h>
 #include <mqbi_storage.h>
 #include <mqbmock_dispatcher.h>
 #include <mqbnet_mockcluster.h>
@@ -30,17 +31,17 @@
 #include <mqbu_storagekey.h>
 
 // BMQ
+#include <bmqp_blobpoolutil.h>
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_protocolutil.h>
 #include <bmqt_messageguid.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwcu_memoutstream.h>
+#include <bmqsys_time.h>
+#include <bmqu_memoutstream.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // BDE
 #include <bdlb_random.h>
@@ -85,26 +86,11 @@ const int k_NODE_ID = 12345;
 
 // ALIASES
 typedef mqbs::FileStoreTestUtil_Record                 Record;
-typedef mqbs::DataStore::AppIdKeyPairs                 AppIdKeyPairs;
+typedef mqbs::DataStore::AppInfos                      AppInfos;
 typedef mqbs::FileStore::SyncPointOffsetPairs          SyncPointOffsetPairs;
 typedef bsl::pair<mqbs::DataStoreRecordHandle, Record> HandleRecordPair;
 
-typedef bdlcc::SharedObjectPool<
-    bdlbb::Blob,
-    bdlcc::ObjectPoolFunctors::DefaultCreator,
-    bdlcc::ObjectPoolFunctors::RemoveAll<bdlbb::Blob> >
-    BlobSpPool;
-
 // FUNCTIONS
-
-/// Create a new blob at the specified `arena` address, using the specified
-/// `bufferFactory` and `allocator`.
-void createBlob(bdlbb::BlobBufferFactory* bufferFactory,
-                void*                     arena,
-                bslma::Allocator*         allocator)
-{
-    new (arena) bdlbb::Blob(bufferFactory, allocator);
-}
 
 void queueCreationCb(int*                    status,
                      int                     partitionId,
@@ -145,20 +131,20 @@ struct Tester {
     // DATA
     bdlmt::EventScheduler                  d_scheduler;
     bdlbb::PooledBlobBufferFactory         d_bufferFactory;
-    mqbnet::Channel::ItemPool              d_itemPool;
     bsl::string                            d_clusterLocation;
     bsl::string                            d_clusterArchiveLocation;
-    BlobSpPool                             d_blobSpPool;
+    bmqp::BlobPoolUtil::BlobSpPoolSp       d_blobSpPool_sp;
     mqbcfg::PartitionConfig                d_partitionCfg;
     mqbcfg::ClusterDefinition              d_clusterCfg;
     bsl::vector<mqbcfg::ClusterNode>       d_clusterNodesCfg;
     mqbcfg::ClusterNode                    d_clusterNodeCfg;
     bslma::ManagedPtr<mqbnet::MockCluster> d_cluster_mp;
-    bsl::shared_ptr<mwcst::StatContext>    d_clusterStatsRootContext_sp;
+    bsl::shared_ptr<bmqst::StatContext>    d_clusterStatsRootContext_sp;
     mqbstat::ClusterStats                  d_clusterStats;
     mqbnet::ClusterNode*                   d_node_p;
     mqbs::DataStoreConfig                  d_dsCfg;
     bdlmt::FixedThreadPool                 d_miscWorkThreadPool;
+    mqbi::DispatcherClientData             d_dispatcherClientData;
     mqbmock::Dispatcher                    d_dispatcher;
     // must outlive FileStore
     bslma::ManagedPtr<mqbs::FileStore> d_fs_mp;
@@ -167,29 +153,27 @@ struct Tester {
   public:
     // CREATORS
     Tester(const char* location)
-    : d_scheduler(bsls::SystemClockType::e_MONOTONIC, s_allocator_p)
-    , d_bufferFactory(1024, s_allocator_p)
-    , d_itemPool(mqbnet::Channel::k_ITEM_SIZE, s_allocator_p)
-    , d_clusterLocation(location, s_allocator_p)
-    , d_clusterArchiveLocation(location, s_allocator_p)
-    , d_blobSpPool(bdlf::BindUtil::bind(&createBlob,
-                                        &d_bufferFactory,
-                                        bdlf::PlaceHolders::_1,   // arena
-                                        bdlf::PlaceHolders::_2),  // alloc
-                   1024,  // blob pool growth strategy
-                   s_allocator_p)
-    , d_partitionCfg(s_allocator_p)
-    , d_clusterCfg(s_allocator_p)
-    , d_clusterNodesCfg(s_allocator_p)
-    , d_clusterNodeCfg(s_allocator_p)
+    : d_scheduler(bsls::SystemClockType::e_MONOTONIC,
+                  bmqtst::TestHelperUtil::allocator())
+    , d_bufferFactory(1024, bmqtst::TestHelperUtil::allocator())
+    , d_clusterLocation(location, bmqtst::TestHelperUtil::allocator())
+    , d_clusterArchiveLocation(location, bmqtst::TestHelperUtil::allocator())
+    , d_blobSpPool_sp(bmqp::BlobPoolUtil::createBlobPool(
+          &d_bufferFactory,
+          bmqtst::TestHelperUtil::allocator()))
+    , d_partitionCfg(bmqtst::TestHelperUtil::allocator())
+    , d_clusterCfg(bmqtst::TestHelperUtil::allocator())
+    , d_clusterNodesCfg(bmqtst::TestHelperUtil::allocator())
+    , d_clusterNodeCfg(bmqtst::TestHelperUtil::allocator())
     , d_clusterStatsRootContext_sp(
           mqbstat::ClusterStatsUtil::initializeStatContextCluster(
               2,
-              s_allocator_p))
-    , d_clusterStats(s_allocator_p)
-    , d_miscWorkThreadPool(1, 1, s_allocator_p)
-    , d_dispatcher(s_allocator_p)
-    , d_statePool(1024, s_allocator_p)
+              bmqtst::TestHelperUtil::allocator()))
+    , d_clusterStats(bmqtst::TestHelperUtil::allocator())
+    , d_miscWorkThreadPool(1, 1, bmqtst::TestHelperUtil::allocator())
+    , d_dispatcherClientData()
+    , d_dispatcher(bmqtst::TestHelperUtil::allocator())
+    , d_statePool(1024, bmqtst::TestHelperUtil::allocator())
     {
         bdls::FilesystemUtil::remove(d_clusterLocation, true);
         bdls::FilesystemUtil::remove(d_clusterArchiveLocation, true);
@@ -220,12 +204,12 @@ struct Tester {
 
         d_clusterCfg.nodes() = d_clusterNodesCfg;
 
-        d_cluster_mp.load(new (*s_allocator_p)
-                              mqbnet::MockCluster(d_clusterCfg,
-                                                  &d_bufferFactory,
-                                                  &d_itemPool,
-                                                  s_allocator_p),
-                          s_allocator_p);
+        d_cluster_mp.load(
+            new (*bmqtst::TestHelperUtil::allocator())
+                mqbnet::MockCluster(d_clusterCfg,
+                                    &d_bufferFactory,
+                                    bmqtst::TestHelperUtil::allocator()),
+            bmqtst::TestHelperUtil::allocator());
         d_node_p = d_cluster_mp->lookupNode(k_NODE_ID);
 
         d_dsCfg
@@ -253,36 +237,32 @@ struct Tester {
                                      bdlf::PlaceHolders::_2,   // partitionId
                                      bdlf::PlaceHolders::_3,   // QueueUri
                                      bdlf::PlaceHolders::_4))  // QueueKey
-            .setRecoveredQueuesCb(
-                bdlf::BindUtil::bind(&recoveredQueuesCb,
-                                     bdlf::PlaceHolders::_1,  // partitionId
-                                     bdlf::PlaceHolders::_2));
-        // queueKeyInfoMap
+            .setRecoveredQueuesCb(bdlf::BindUtil::bind(
+                &recoveredQueuesCb,
+                bdlf::PlaceHolders::_1,    // partitionId
+                bdlf::PlaceHolders::_2));  // queueKeyInfoMap
 
-        // ******* IMPORTANT *******
-        // We have not written a mock dispatcher yet.  We pass a null
-        // dispatcher ptr, and rely on the internal implementation of FileStore
-        // to know that we will be ok.
-        // *************************
+        d_dispatcherClientData.setDispatcher(&d_dispatcher);
+        d_dispatcher._setInDispatcherThread(true);
 
         d_clusterStats.initialize("testCluster",
                                   1,  // numPartitions
                                   d_clusterStatsRootContext_sp.get(),
-                                  s_allocator_p);
-        d_fs_mp.load(new (*s_allocator_p)
+                                  bmqtst::TestHelperUtil::allocator());
+        d_fs_mp.load(new (*bmqtst::TestHelperUtil::allocator())
                          mqbs::FileStore(d_dsCfg,
                                          0,  // processorId
                                          &d_dispatcher,
                                          d_cluster_mp.get(),
                                          &d_clusterStats,
-                                         &d_blobSpPool,
+                                         d_blobSpPool_sp.get(),
                                          &d_statePool,
                                          &d_miscWorkThreadPool,
                                          false,  // isCSLModeEnabled
                                          false,  // isFSMWorkflow
                                          1,      // replicationFactor
-                                         s_allocator_p),
-                     s_allocator_p);
+                                         bmqtst::TestHelperUtil::allocator()),
+                     bmqtst::TestHelperUtil::allocator());
     }
 
     ~Tester()
@@ -311,10 +291,12 @@ struct Tester {
         typedef bsl::map<mqbu::StorageKey, Guids>       QueueKeyGuidsMap;
         typedef QueueKeyGuidsMap::iterator              QueueKeyGuidsMapIter;
 
-        QueueKeyUriMap   queueKeyUriMap(s_allocator_p);
-        QueueKeyGuidsMap queueKeyGuidsMap(s_allocator_p);
-        QueueKeyGuidsMap queueKeyConfGuidsMap(s_allocator_p);
-        bsl::string      uriBase("bmq://si.amw.bmq.stats/", s_allocator_p);
+        QueueKeyUriMap   queueKeyUriMap(bmqtst::TestHelperUtil::allocator());
+        QueueKeyGuidsMap queueKeyGuidsMap(bmqtst::TestHelperUtil::allocator());
+        QueueKeyGuidsMap queueKeyConfGuidsMap(
+            bmqtst::TestHelperUtil::allocator());
+        bsl::string      uriBase("bmq://si.amw.bmq.stats/",
+                            bmqtst::TestHelperUtil::allocator());
         const size_t     k_DIVISOR = 7;
         int              rc        = 0;
         int              seed      = 58133;
@@ -333,8 +315,8 @@ struct Tester {
             if (0 == recType) {
                 // Write a queue creation record.
 
-                bsl::string        uri(uriBase, s_allocator_p);
-                mwcu::MemOutStream osstr;
+                bsl::string uri(uriBase, bmqtst::TestHelperUtil::allocator());
+                bmqu::MemOutStream osstr;
                 osstr << "queue" << i;
                 uri.append(osstr.str().data(), osstr.str().length());
 
@@ -358,7 +340,7 @@ struct Tester {
                         .c_str());
 
                 mqbs::DataStoreRecordHandle handle;
-                Record                      rec(s_allocator_p);
+                Record rec(bmqtst::TestHelperUtil::allocator());
                 rec.d_recordType  = mqbs::RecordType::e_QUEUE_OP;
                 rec.d_queueOpType = mqbs::QueueOpType::e_CREATION;
                 rec.d_uri         = uri;
@@ -366,13 +348,13 @@ struct Tester {
                 rec.d_timestamp   = bdlt::EpochUtil::convertToTimeT64(
                     bdlt::CurrentTime::utc());
 
-                rc = fs->writeQueueCreationRecord(&handle,
-                                                  bmqt::Uri(rec.d_uri,
-                                                            s_allocator_p),
-                                                  rec.d_queueKey,
-                                                  AppIdKeyPairs(),
-                                                  rec.d_timestamp,
-                                                  true);  // isNewQueue
+                rc = fs->writeQueueCreationRecord(
+                    &handle,
+                    bmqt::Uri(rec.d_uri, bmqtst::TestHelperUtil::allocator()),
+                    rec.d_queueKey,
+                    AppInfos(),
+                    rec.d_timestamp,
+                    true);  // isNewQueue
 
                 if (0 != rc) {
                     bsl::cout
@@ -409,7 +391,7 @@ struct Tester {
                 BSLS_ASSERT(!it->second.empty());
 
                 mqbs::DataStoreRecordHandle handle;
-                Record                      rec(s_allocator_p);
+                Record rec(bmqtst::TestHelperUtil::allocator());
                 rec.d_recordType = mqbs::RecordType::e_MESSAGE;
                 rec.d_queueKey   = it->first;
                 bmqp::MessagePropertiesInfo messagePropertiesInfo =
@@ -425,10 +407,13 @@ struct Tester {
                     bsl::numeric_limits<unsigned int>::max() / i);
                 // crc value
                 mqbu::MessageGUIDUtil::generateGUID(&rec.d_guid);
-                rec.d_appData_sp.createInplace(s_allocator_p,
-                                               &d_bufferFactory,
-                                               s_allocator_p);
-                bsl::string payloadStr(i * 10, 'x', s_allocator_p);
+                rec.d_appData_sp.createInplace(
+                    bmqtst::TestHelperUtil::allocator(),
+                    &d_bufferFactory,
+                    bmqtst::TestHelperUtil::allocator());
+                bsl::string payloadStr(i * 10,
+                                       'x',
+                                       bmqtst::TestHelperUtil::allocator());
                 bdlbb::BlobUtil::append(rec.d_appData_sp.get(),
                                         payloadStr.c_str(),
                                         payloadStr.length());
@@ -486,7 +471,7 @@ struct Tester {
                 BSLS_ASSERT(!guids.empty());
 
                 mqbs::DataStoreRecordHandle handle;
-                Record                      rec(s_allocator_p);
+                Record rec(bmqtst::TestHelperUtil::allocator());
                 rec.d_recordType = mqbs::RecordType::e_CONFIRM;
                 rec.d_guid       = guids.back();
                 rec.d_queueKey   = it->first;
@@ -498,7 +483,7 @@ struct Tester {
                                             rec.d_queueKey,
                                             mqbu::StorageKey(),
                                             rec.d_timestamp,
-                                            false);  // onReject
+                                            mqbs::ConfirmReason::e_CONFIRMED);
                 if (0 != rc) {
                     bsl::cout << "Error writing ConfirmRecord, rc: " << rc
                               << bsl::endl;
@@ -555,7 +540,7 @@ struct Tester {
                 Guids& guids = it->second;
                 BSLS_ASSERT(!guids.empty());
 
-                Record rec(s_allocator_p);
+                Record rec(bmqtst::TestHelperUtil::allocator());
                 rec.d_recordType = mqbs::RecordType::e_DELETION;
                 rec.d_guid       = guids.back();
                 rec.d_queueKey   = it->first;
@@ -592,7 +577,8 @@ struct Tester {
             if (4 == recType) {
                 // Write a SyncPt.
 
-                mqbs::FileStoreSet fileSet(s_allocator_p);
+                mqbs::FileStoreSet fileSet(
+                    bmqtst::TestHelperUtil::allocator());
                 fs->loadCurrentFiles(&fileSet);
 
                 BSLS_ASSERT((fileSet.dataFileSize() %
@@ -608,7 +594,7 @@ struct Tester {
                     return false;  // RETURN
                 }
 
-                Record rec(s_allocator_p);
+                Record rec(bmqtst::TestHelperUtil::allocator());
                 rec.d_recordType    = mqbs::RecordType::e_JOURNAL_OP;
                 rec.d_journalOpType = mqbs::JournalOpType::e_SYNCPOINT;
                 rec.d_syncPtType    = mqbs::SyncPointType::e_REGULAR;
@@ -653,7 +639,7 @@ struct Tester {
                 BSLS_ASSERT(!it->second.empty());
 
                 mqbs::DataStoreRecordHandle handle;
-                Record                      rec(s_allocator_p);
+                Record rec(bmqtst::TestHelperUtil::allocator());
                 rec.d_recordType  = mqbs::RecordType::e_QUEUE_OP;
                 rec.d_queueOpType = mqbs::QueueOpType::e_PURGE;
                 rec.d_queueKey    = it->first;
@@ -663,7 +649,8 @@ struct Tester {
                 rc = fs->writeQueuePurgeRecord(&handle,
                                                rec.d_queueKey,
                                                mqbu::StorageKey(),
-                                               rec.d_timestamp);
+                                               rec.d_timestamp,
+                                               mqbs::DataStoreRecordHandle());
                 if (0 != rc) {
                     bsl::cout << "Error writing QueuePurgeRecord, rc: " << rc
                               << bsl::endl;
@@ -712,7 +699,7 @@ struct Tester {
                 }
 
                 mqbs::DataStoreRecordHandle handle;
-                Record                      rec(s_allocator_p);
+                Record rec(bmqtst::TestHelperUtil::allocator());
                 rec.d_recordType  = mqbs::RecordType::e_QUEUE_OP;
                 rec.d_queueOpType = mqbs::QueueOpType::e_DELETION;
                 rec.d_queueKey    = it->first;
@@ -765,7 +752,7 @@ static void test1_breathingTest()
 //   Basic functionality
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
 
     const char k_FILE_STORE_LOCATION[] = "./test-cluster123-1";
 
@@ -773,24 +760,24 @@ static void test1_breathingTest()
     mqbs::FileStore& fs = tester.fileStore();
 
     int rc = fs.open();
-    ASSERT_EQ(0, rc);
+    BMQTST_ASSERT_EQ(0, rc);
     if (rc) {
         cout << "Failed to open partition, rc: " << rc << endl;
         return;  // RETURN
     }
 
-    ASSERT_EQ(true, fs.isOpen());
-    ASSERT_EQ(1U, fs.clusterSize());
-    ASSERT_EQ(0ULL, fs.numRecords());
-    ASSERT_EQ(true, fs.syncPoints().empty());
-    ASSERT_EQ(0U, fs.primaryLeaseId());
-    ASSERT_EQ(0ULL, fs.sequenceNumber());
+    BMQTST_ASSERT_EQ(true, fs.isOpen());
+    BMQTST_ASSERT_EQ(1U, fs.clusterSize());
+    BMQTST_ASSERT_EQ(0ULL, fs.numRecords());
+    BMQTST_ASSERT_EQ(true, fs.syncPoints().empty());
+    BMQTST_ASSERT_EQ(0U, fs.primaryLeaseId());
+    BMQTST_ASSERT_EQ(0ULL, fs.sequenceNumber());
 
     // Temporary workaround to suppress the 'unused operator
     // NestedTraitDeclaration' warning/error generated by clang.  TBD: figure
     // out the right way to "fix" this.
 
-    Record dummy(s_allocator_p);
+    Record dummy(bmqtst::TestHelperUtil::allocator());
     static_cast<void>(
         static_cast<
             bslmf::NestedTraitDeclaration<Record, bslma::UsesBslmaAllocator> >(
@@ -800,35 +787,38 @@ static void test1_breathingTest()
     unsigned int        primaryLeaseId = 1;
     bsls::Types::Uint64 seqNum         = 1;
 
-    fs.setPrimary(tester.node(), primaryLeaseId);
+    fs.setActivePrimary(tester.node(), primaryLeaseId);
 
-    ASSERT_EQ(primaryLeaseId, fs.primaryLeaseId());
-    ASSERT_EQ(seqNum, fs.sequenceNumber());
-    ASSERT_EQ(tester.node(), fs.primaryNode());
+    BMQTST_ASSERT_EQ(primaryLeaseId, fs.primaryLeaseId());
+    BMQTST_ASSERT_EQ(seqNum, fs.sequenceNumber());
+    BMQTST_ASSERT_EQ(tester.node(), fs.primaryNode());
 
     // Primary must have issued a SyncPt.  Verify it.
 
     const bmqp_ctrlmsg::SyncPoint& sp = fs.syncPoints().front().syncPoint();
-    ASSERT_EQ(1U, fs.syncPoints().size());
-    ASSERT_EQ(primaryLeaseId, sp.primaryLeaseId());
-    ASSERT_EQ(seqNum, sp.sequenceNum());
-    ASSERT_EQ((k_SIZEOF_HEADERS_DATA_FILE / bmqp::Protocol::k_DWORD_SIZE),
-              sp.dataFileOffsetDwords());
-    ASSERT_EQ((k_SIZEOF_HEADERS_QLIST_FILE / bmqp::Protocol::k_WORD_SIZE),
-              sp.qlistFileOffsetWords());
-    ASSERT_EQ(k_SIZEOF_HEADERS_JOURNAL_FILE, fs.syncPoints().front().offset());
+    BMQTST_ASSERT_EQ(1U, fs.syncPoints().size());
+    BMQTST_ASSERT_EQ(primaryLeaseId, sp.primaryLeaseId());
+    BMQTST_ASSERT_EQ(seqNum, sp.sequenceNum());
+    BMQTST_ASSERT_EQ(
+        (k_SIZEOF_HEADERS_DATA_FILE / bmqp::Protocol::k_DWORD_SIZE),
+        sp.dataFileOffsetDwords());
+    BMQTST_ASSERT_EQ(
+        (k_SIZEOF_HEADERS_QLIST_FILE / bmqp::Protocol::k_WORD_SIZE),
+        sp.qlistFileOffsetWords());
+    BMQTST_ASSERT_EQ(k_SIZEOF_HEADERS_JOURNAL_FILE,
+                     fs.syncPoints().front().offset());
 
     // Write various records to the partition and keep track of them in memory.
     // Then close and re-open the partition, and verify that retrieved records
     // match in-memory stuff.
 
-    SyncPointOffsetPairs          spOffsetPairs(s_allocator_p);
-    bsl::vector<HandleRecordPair> records(s_allocator_p);
+    SyncPointOffsetPairs spOffsetPairs(bmqtst::TestHelperUtil::allocator());
+    bsl::vector<HandleRecordPair> records(bmqtst::TestHelperUtil::allocator());
 
     // Add one SyncPt written by the primary (to both 'spOffsetPairs' and
     // 'records').
 
-    Record rec(s_allocator_p);
+    Record rec(bmqtst::TestHelperUtil::allocator());
     rec.d_recordType    = mqbs::RecordType::e_JOURNAL_OP;
     rec.d_journalOpType = mqbs::JournalOpType::e_SYNCPOINT;
     rec.d_syncPtType    = mqbs::SyncPointType::e_REGULAR;
@@ -850,21 +840,23 @@ static void test1_breathingTest()
                                        &numRecordsWritten,
                                        k_NUM_RECORDS);
 
-    ASSERT_EQ(true, success);
+    BMQTST_ASSERT_EQ(true, success);
     if (!success) {
         fs.close();
         return;  // RETURN
     }
 
     const SyncPointOffsetPairs& fsSpOffsetPair = fs.syncPoints();
-    ASSERT_EQ(spOffsetPairs.size(), fsSpOffsetPair.size());
+    BMQTST_ASSERT_EQ(spOffsetPairs.size(), fsSpOffsetPair.size());
     for (size_t i = 0; i < spOffsetPairs.size(); ++i) {
-        ASSERT_EQ_D(i,
-                    spOffsetPairs[i].syncPoint(),
-                    fsSpOffsetPair[i].syncPoint());
-        ASSERT_EQ_D(i, spOffsetPairs[i].offset(), fsSpOffsetPair[i].offset());
+        BMQTST_ASSERT_EQ_D(i,
+                           spOffsetPairs[i].syncPoint(),
+                           fsSpOffsetPair[i].syncPoint());
+        BMQTST_ASSERT_EQ_D(i,
+                           spOffsetPairs[i].offset(),
+                           fsSpOffsetPair[i].offset());
     }
-    ASSERT_EQ(numRecordsWritten, fs.numRecords());
+    BMQTST_ASSERT_EQ(numRecordsWritten, fs.numRecords());
 
     mqbs::FileStoreIterator fsIt(&fs);
     while (fsIt.next()) {
@@ -873,7 +865,7 @@ static void test1_breathingTest()
 
     fs.close();
 
-    ASSERT_EQ(false, fs.isOpen());
+    BMQTST_ASSERT_EQ(false, fs.isOpen());
 
     // TBD: Open it again, and iterate over it again, and check retrieved
     // queue uris, keys, appIds, appKeys against in-memory data structure.
@@ -890,9 +882,9 @@ static void test2_printTest()
 //   operator<<(bsl::ostream& stream, const FileStoreIterator& rhs
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("PRINT TEST");
+    bmqtst::TestHelper::printTestName("PRINT TEST");
 
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
 
     const char k_FILE_STORE_LOCATION[] = "./test-cluster123-2";
 
@@ -903,11 +895,11 @@ static void test2_printTest()
     // Set primary.
     unsigned int        primaryLeaseId = 1;
     bsls::Types::Uint64 seqNum         = 1;
-    fs.setPrimary(tester.node(), primaryLeaseId);
+    fs.setActivePrimary(tester.node(), primaryLeaseId);
 
     // Write various records to the partition.
-    SyncPointOffsetPairs          spOffsetPairs(s_allocator_p);
-    bsl::vector<HandleRecordPair> records(s_allocator_p);
+    SyncPointOffsetPairs spOffsetPairs(bmqtst::TestHelperUtil::allocator());
+    bsl::vector<HandleRecordPair> records(bmqtst::TestHelperUtil::allocator());
 
     const size_t        k_NUM_RECORDS     = 10;
     bsls::Types::Uint64 numRecordsWritten = 0;
@@ -919,8 +911,8 @@ static void test2_printTest()
                                         &numRecordsWritten,
                                         k_NUM_RECORDS));
 
-    bdlpcre::RegEx expectedOut(s_allocator_p);
-    bsl::string    errorMessage(s_allocator_p);
+    bdlpcre::RegEx expectedOut(bmqtst::TestHelperUtil::allocator());
+    bsl::string    errorMessage(bmqtst::TestHelperUtil::allocator());
     size_t         errorOffset;
     expectedOut.prepare(
         &errorMessage,
@@ -957,19 +949,20 @@ static void test2_printTest()
     BSLS_ASSERT_OPT(expectedOut.isPrepared());
 
     mqbs::FileStoreIterator fsIt(&fs);
-    mwcu::MemOutStream      stream(s_allocator_p);
+    bmqu::MemOutStream      stream(bmqtst::TestHelperUtil::allocator());
     while (fsIt.next()) {
         stream << fsIt << "\n";
     }
-    ASSERT_EQ(expectedOut.match(stream.str().data(), stream.str().length()),
-              0);
+    BMQTST_ASSERT_EQ(expectedOut.match(stream.str().data(),
+                                       stream.str().length()),
+                     0);
 
     PV("Bad stream test");
     stream.reset();
     stream << "INVALID";
     stream.clear(bsl::ios_base::badbit);
     stream << fsIt;
-    ASSERT_EQ(stream.str(), "INVALID");
+    BMQTST_ASSERT_EQ(stream.str(), "INVALID");
 
     fs.close();
 }
@@ -982,9 +975,9 @@ static void test2_printTest()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    mwcsys::Time::initialize();
+    bmqsys::Time::initialize();
     mqbu::MessageGUIDUtil::initialize();
     bmqp::ProtocolUtil::initialize();
 
@@ -994,12 +987,12 @@ int main(int argc, char* argv[])
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
     bmqp::ProtocolUtil::shutdown();
-    mwcsys::Time::shutdown();
+    bmqsys::Time::shutdown();
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_ALLOC);
 }

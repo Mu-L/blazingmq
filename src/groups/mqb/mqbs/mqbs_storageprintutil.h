@@ -66,8 +66,8 @@ namespace mqbs {
 struct StoragePrintUtil {
   private:
     // PRIVATE TYPES
-    typedef mqbi::StorageManager::AppIdKeyPairs AppIdKeyPairs;
-    typedef AppIdKeyPairs::const_iterator       AppIdKeyPairsCIter;
+    typedef mqbi::StorageManager::AppInfos AppInfos;
+    typedef AppInfos::const_iterator       AppInfosCIter;
 
   public:
     // TYPES
@@ -107,12 +107,13 @@ struct StoragePrintUtil {
     /// the specified `storageMap` belonging to the specified `partitionId`,
     /// locking the specified `storagesLock` and using the specified
     /// `clusterDescription` and `recoveryStartTime`.
-    static void printRecoveredStorages(bsl::ostream&       out,
-                                       bslmt::Mutex*       storagesLock,
-                                       const StorageSpMap& storageMap,
-                                       int                 partitionId,
-                                       const bsl::string&  clusterDescription,
-                                       bsls::Types::Int64  recoveryStartTime);
+    static void
+    printRecoveredStorages(bsl::ostream&            out,
+                           bslmt::Mutex*            storagesLock,
+                           const StorageSpMap&      storageMap,
+                           int                      partitionId,
+                           const bsl::string&       clusterDescription,
+                           const bsls::Types::Int64 recoveryStartTime);
 
     /// Print to the specified `out` a summary message upon storage recovery
     /// completion using the specified `fileStores` and

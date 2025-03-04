@@ -18,8 +18,8 @@
 
 // BMQ
 #include <bmqt_queueflags.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_printutil.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bdlb_string.h>
@@ -261,6 +261,7 @@ Parameters::Parameters(bslma::Allocator* allocator)
 , d_logFilePath(allocator)
 , d_messageProperties(allocator)
 , d_subscriptions(allocator)
+, d_autoIncrementedField(allocator)
 {
     CommandLineParameters params(allocator);
     const bool            rc = from(bsl::cerr, params);
@@ -278,7 +279,7 @@ Parameters::print(bsl::ostream& stream, int level, int spacesPerLevel) const
     printer.printAttribute("qlistFilePath", qlistFilePath());
     printer.printAttribute("journalFilePath", journalFilePath());
     printer.printAttribute("dataFilePath", dataFilePath());
-    mwcu::MemOutStream flagsOs;
+    bmqu::MemOutStream flagsOs;
     bmqt::QueueFlagsUtil::prettyPrint(flagsOs, d_queueFlags);
     flagsOs << " (" << d_queueFlags << ")" << bsl::ends;
     printer.printAttribute("queueFlags", flagsOs.str());
@@ -326,7 +327,7 @@ bool Parameters::from(bsl::ostream&                stream,
 
     // Convert queueFlags string to int, and validate it
     bsls::Types::Uint64 flags;
-    mwcu::MemOutStream  errStream;
+    bmqu::MemOutStream  errStream;
     if (bmqt::QueueFlagsUtil::fromString(errStream,
                                          &flags,
                                          params.queueFlags()) != 0) {
@@ -407,14 +408,14 @@ bool Parameters::from(bsl::ostream&                stream,
     return true;
 }
 
-void Parameters::dump(bsl::ostream& stream)
+void Parameters::dump(bsl::ostream& stream) const
 {
     print(stream, 0, -1);
 }
 
 bool Parameters::validate(bsl::string* error)
 {
-    mwcu::MemOutStream ss;
+    bmqu::MemOutStream ss;
 
     if (d_queueFlags == 0 && d_mode != ParametersMode::e_CLI &&
         d_mode != ParametersMode::e_STORAGE &&

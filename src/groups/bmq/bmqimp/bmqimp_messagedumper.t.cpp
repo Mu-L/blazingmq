@@ -37,10 +37,9 @@
 #include <bmqt_resultcode.h>
 #include <bmqt_uri.h>
 
-// MWC
-#include <mwcsys_time.h>
-#include <mwcu_memoutstream.h>
-#include <mwcu_stringutil.h>
+#include <bmqsys_time.h>
+#include <bmqu_memoutstream.h>
+#include <bmqu_stringutil.h>
 
 // BDE
 #include <bdlb_tokenizer.h>
@@ -61,7 +60,7 @@
 #include <bsls_types.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -140,6 +139,9 @@ struct Tester BSLS_CPP11_FINAL {
     bdlbb::PooledBlobBufferFactory d_bufferFactory;
     // Buffer factory provided to the
     // various builders
+
+    /// Blob shared pointer pool used in event builders.
+    bmqp::BlobPoolUtil::BlobSpPoolSp d_blobSpPool_sp;
 
     bmqp::PushEventBuilder d_pushEventBuilder;
     // PUSH event builder
@@ -228,9 +230,14 @@ struct Tester BSLS_CPP11_FINAL {
     /// is undefined unless a queue with the `uri` was created and inserted
     /// using a call to `insertQueue`, or if packing the message is
     /// unsuccessful.
+#ifdef BMQ_ENABLE_MSG_GROUPID
     void packPutMessage(const bslstl::StringRef& uri,
                         const bslstl::StringRef& payload,
                         const bslstl::StringRef& msgGroupId = "");
+#else
+    void packPutMessage(const bslstl::StringRef& uri,
+                        const bslstl::StringRef& payload);
+#endif
 
     /// Append to the CONFIRM event being built a CONFIRM message associated
     /// with the queue corresponding to the specified `uri`.  The behavior
@@ -329,13 +336,15 @@ Tester::Tester(bslma::Allocator* allocator)
 , d_nextCorrelationId(0)
 , d_time(0, 0)
 , d_bufferFactory(1024, allocator)
-, d_pushEventBuilder(&d_bufferFactory, allocator)
-, d_ackEventBuilder(&d_bufferFactory, allocator)
-, d_putEventBuilder(&d_bufferFactory, allocator)
-, d_confirmEventBuilder(&d_bufferFactory, allocator)
+, d_blobSpPool_sp(
+      bmqp::BlobPoolUtil::createBlobPool(&d_bufferFactory, allocator))
+, d_pushEventBuilder(d_blobSpPool_sp.get(), allocator)
+, d_ackEventBuilder(d_blobSpPool_sp.get(), allocator)
+, d_putEventBuilder(d_blobSpPool_sp.get(), allocator)
+, d_confirmEventBuilder(d_blobSpPool_sp.get(), allocator)
 , d_allocator_p(allocator)
 {
-    mwcsys::Time::initialize(
+    bmqsys::Time::initialize(
         bdlf::BindUtil::bindS(d_allocator_p, &Tester::now, this),
         bdlf::BindUtil::bindS(d_allocator_p, &Tester::now, this),
         bdlf::BindUtil::bindS(d_allocator_p,
@@ -346,7 +355,7 @@ Tester::Tester(bslma::Allocator* allocator)
 
 Tester::~Tester()
 {
-    mwcsys::Time::shutdown();
+    bmqsys::Time::shutdown();
 }
 
 // MANIPULATORS
@@ -460,9 +469,14 @@ void Tester::appendAckMessage(const bslstl::StringRef& uri,
     BSLS_ASSERT_OPT(rc == 0);
 }
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
 void Tester::packPutMessage(const bslstl::StringRef& uri,
                             const bslstl::StringRef& payload,
                             const bslstl::StringRef& msgGroupId)
+#else
+void Tester::packPutMessage(const bslstl::StringRef& uri,
+                            const bslstl::StringRef& payload)
+#endif
 {
     // PRECONDITIONS
     BSLS_ASSERT_OPT(d_queueIdsByUri.find(uri) != d_queueIdsByUri.end() &&
@@ -481,10 +495,12 @@ void Tester::packPutMessage(const bslstl::StringRef& uri,
 
     d_putEventBuilder.startMessage();
     d_putEventBuilder.setMessageGUID(guid).setMessagePayload(&msgPayload);
+#ifdef BMQ_ENABLE_MSG_GROUPID
     if (!msgGroupId.empty()) {
         bmqp::Protocol::MsgGroupId groupId(msgGroupId, d_allocator_p);
         d_putEventBuilder.setMsgGroupId(msgGroupId);
     }
+#endif
 
     int rc = d_putEventBuilder.packMessage(queueId.id());
     BSLS_ASSERT_OPT(rc == 0);
@@ -550,7 +566,9 @@ void Tester::registerSubscription(const bslstl::StringRef&   uri,
 
     BSLS_ASSERT_SAFE(queue);
 
-    d_queueManager.registerSubscription(queue, subscriptionId, correlationId);
+    queue->registerInternalSubscriptionId(subscriptionId,
+                                          subscriptionId,
+                                          correlationId);
 }
 
 void Tester::updateSubscriptions(const bslstl::StringRef&              uri,
@@ -640,7 +658,7 @@ bmqp::Event& Tester::pushEvent(bmqp::Event* event) const
     // PRECONDITIONS
     BSLS_ASSERT_OPT(event && "'event' must be provided");
 
-    event->reset(&d_pushEventBuilder.blob(), true);
+    event->reset(d_pushEventBuilder.blob().get(), true);
 
     return *event;
 }
@@ -650,7 +668,7 @@ bmqp::Event& Tester::ackEvent(bmqp::Event* event) const
     // PRECONDITIONS
     BSLS_ASSERT_OPT(event && "'event' must be provided");
 
-    event->reset(&d_ackEventBuilder.blob(), true);
+    event->reset(d_ackEventBuilder.blob().get(), true);
 
     return *event;
 }
@@ -660,7 +678,7 @@ bmqp::Event& Tester::putEvent(bmqp::Event* event) const
     // PRECONDITIONS
     BSLS_ASSERT_OPT(event && "'event' must be provided");
 
-    event->reset(&d_putEventBuilder.blob(), true);
+    event->reset(d_putEventBuilder.blob().get(), true);
 
     return *event;
 }
@@ -670,7 +688,7 @@ bmqp::Event& Tester::confirmEvent(bmqp::Event* event) const
     // PRECONDITIONS
     BSLS_ASSERT_OPT(event && "'event' must be provided");
 
-    event->reset(&d_confirmEventBuilder.blob(), true);
+    event->reset(d_confirmEventBuilder.blob().get(), true);
 
     return *event;
 }
@@ -703,9 +721,9 @@ static void test1_breathingTest()
 //   Basic functionality.
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
 
-    Tester tester(s_allocator_p);
+    Tester tester(bmqtst::TestHelperUtil::allocator());
 
     // Temporary workaround to suppress the 'unused operator
     // NestedTraitDeclaration' warning/error generated by clang.  TBD:
@@ -715,11 +733,14 @@ static void test1_breathingTest()
             bslmf::NestedTraitDeclaration<Tester, bslma::UsesBslmaAllocator> >(
             tester));
 
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH), false);
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK), false);
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT), false);
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM), false);
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_UNDEFINED), false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
+                     false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK), false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT), false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
+                     false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_UNDEFINED),
+                     false);
 }
 
 static void test2_parseCommand()
@@ -742,11 +763,11 @@ static void test2_parseCommand()
 //   MessageDumper::parseCommand
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // Logging infrastructure allocates using the default allocator, and
     // that logging is beyond the control of this function.
 
-    mwctst::TestHelper::printTestName("PARSE COMMAND");
+    bmqtst::TestHelper::printTestName("PARSE COMMAND");
 
     struct Test {
         int                                 d_line;
@@ -1092,7 +1113,7 @@ static void test2_parseCommand()
 
         int rc = bmqimp::MessageDumper::parseCommand(&dumpMessagesCommand,
                                                      test.d_command);
-        ASSERT_EQ(rc, test.d_expectedRc);
+        BMQTST_ASSERT_EQ(rc, test.d_expectedRc);
 
         if (rc != 0) {
             // The specified 'command' is invalid and 'dumpMessagesCommand' has
@@ -1111,12 +1132,12 @@ static void test2_parseCommand()
         // 1. Attempt to parse a DumpMessages command from various valid and
         //    invalid string representations and verify expected return code as
         //    well as DumpMessages output.
-        ASSERT_EQ(dumpMessagesCommand.msgTypeToDump(),
-                  test.d_expectedMsgTypeToDump);
-        ASSERT_EQ(dumpMessagesCommand.dumpActionType(),
-                  test.d_expectedDumpActionType);
-        ASSERT_EQ(dumpMessagesCommand.dumpActionValue(),
-                  test.d_expectedDumpActionValue);
+        BMQTST_ASSERT_EQ(dumpMessagesCommand.msgTypeToDump(),
+                         test.d_expectedMsgTypeToDump);
+        BMQTST_ASSERT_EQ(dumpMessagesCommand.dumpActionType(),
+                         test.d_expectedDumpActionType);
+        BMQTST_ASSERT_EQ(dumpMessagesCommand.dumpActionValue(),
+                         test.d_expectedDumpActionValue);
     }
 }
 
@@ -1136,7 +1157,7 @@ static void test3_processDumpCommand()
 //   processDumpCommand
 // ------------------------------------------------------------------------
 {
-    mwctst::TestHelper::printTestName("PROCESS DUMP COMMAND");
+    bmqtst::TestHelper::printTestName("PROCESS DUMP COMMAND");
 
     struct Test {
         int         d_line;
@@ -1156,7 +1177,7 @@ static void test3_processDumpCommand()
     const size_t k_NUM_DATA = sizeof(k_DATA) / sizeof(*k_DATA);
 
     for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
-        Tester      tester(s_allocator_p);
+        Tester      tester(bmqtst::TestHelperUtil::allocator());
         const Test& test = k_DATA[idx];
 
         // 1. Process various DumpMessages commands and verify that dumping of
@@ -1169,16 +1190,16 @@ static void test3_processDumpCommand()
                         << ", PUT: " << test.d_isPutEnabled
                         << ", CONFIRM: " << test.d_isConfirmEnabled << "]");
 
-        ASSERT_EQ(tester.processDumpCommand(test.d_command), 0);
+        BMQTST_ASSERT_EQ(tester.processDumpCommand(test.d_command), 0);
 
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
-                  test.d_isPushEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
-                  test.d_isAckEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
-                  test.d_isPutEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
-                  test.d_isConfirmEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
+                         test.d_isPushEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
+                         test.d_isAckEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
+                         test.d_isPutEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
+                         test.d_isConfirmEnabled);
     }
 }
 
@@ -1204,11 +1225,11 @@ static void test4_processDumpCommand_invalidDumpMessage()
 //   processDumpCommand
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // Logging infrastructure allocates using the default allocator, and
     // that logging is beyond the control of this function.
 
-    mwctst::TestHelper::printTestName("PROCESS DUMP COMMAND");
+    bmqtst::TestHelper::printTestName("PROCESS DUMP COMMAND");
 
     struct Test {
         int         d_line;
@@ -1228,7 +1249,7 @@ static void test4_processDumpCommand_invalidDumpMessage()
     const size_t k_NUM_DATA = sizeof(k_DATA) / sizeof(*k_DATA);
 
     for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
-        Tester      tester(s_allocator_p);
+        Tester      tester(bmqtst::TestHelperUtil::allocator());
         const Test& test = k_DATA[idx];
 
         // a. Process the command and verify that dumping of the corresponding
@@ -1241,16 +1262,16 @@ static void test4_processDumpCommand_invalidDumpMessage()
                         << ", PUT: " << test.d_isPutEnabled
                         << ", CONFIRM: " << test.d_isConfirmEnabled << "]");
 
-        ASSERT_EQ(tester.processDumpCommand(test.d_command), 0);
+        BMQTST_ASSERT_EQ(tester.processDumpCommand(test.d_command), 0);
 
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
-                  test.d_isPushEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
-                  test.d_isAckEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
-                  test.d_isPutEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
-                  test.d_isConfirmEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
+                         test.d_isPushEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
+                         test.d_isAckEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
+                         test.d_isPutEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
+                         test.d_isConfirmEnabled);
 
         // b. Attempt to process further an *invalid* dump command and verify
         //    that it does not impact the state of the MessageDumper object as
@@ -1262,17 +1283,18 @@ static void test4_processDumpCommand_invalidDumpMessage()
         PVV(test.d_line << ": Attempting to process an invalid dump command");
 
         // Non-zero error code is returned
-        ASSERT_NE(tester.processDumpCommand(invalidDumpMessagesCommand), 0);
+        BMQTST_ASSERT_NE(tester.processDumpCommand(invalidDumpMessagesCommand),
+                         0);
 
         // No impact on the state of the MessageDumper object
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
-                  test.d_isPushEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
-                  test.d_isAckEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
-                  test.d_isPutEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
-                  test.d_isConfirmEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
+                         test.d_isPushEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
+                         test.d_isAckEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
+                         test.d_isPutEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
+                         test.d_isConfirmEnabled);
     }
 }
 
@@ -1293,11 +1315,11 @@ static void test5_reset()
 //   reset
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // Logging infrastructure allocates using the default allocator, and
     // that logging is beyond the control of this function.
 
-    mwctst::TestHelper::printTestName("PROCESS DUMP COMMAND");
+    bmqtst::TestHelper::printTestName("PROCESS DUMP COMMAND");
 
     struct Test {
         int         d_line;
@@ -1317,7 +1339,7 @@ static void test5_reset()
     const size_t k_NUM_DATA = sizeof(k_DATA) / sizeof(*k_DATA);
 
     for (size_t idx = 0; idx < k_NUM_DATA; ++idx) {
-        Tester      tester(s_allocator_p);
+        Tester      tester(bmqtst::TestHelperUtil::allocator());
         const Test& test = k_DATA[idx];
 
         // 1. Process various DumpMessages commands and verify that dumping of
@@ -1331,25 +1353,28 @@ static void test5_reset()
                         << ", PUT: " << test.d_isPutEnabled
                         << ", CONFIRM: " << test.d_isConfirmEnabled << "]");
 
-        ASSERT_EQ(tester.processDumpCommand(test.d_command), 0);
+        BMQTST_ASSERT_EQ(tester.processDumpCommand(test.d_command), 0);
 
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
-                  test.d_isPushEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
-                  test.d_isAckEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
-                  test.d_isPutEnabled);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
-                  test.d_isConfirmEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
+                         test.d_isPushEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
+                         test.d_isAckEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
+                         test.d_isPutEnabled);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
+                         test.d_isConfirmEnabled);
 
         // Reset the MessageDumper and verify that no event dumping is enabled
         tester.reset();
 
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH), false);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK), false);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT), false);
-        ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
-                  false);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
+                         false);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK),
+                         false);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT),
+                         false);
+        BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
+                         false);
     }
 }
 
@@ -1378,14 +1403,14 @@ static void test6_dumpPushEvent()
 //   dumpPushEvent
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // QueueManager's 'generateQueueAndSubQueueId' method creates a
     // temporary string using the default allocator when performing queue
     // lookup by canonical URI
 
-    mwctst::TestHelper::printTestName("DUMP PUSH EVENT");
+    bmqtst::TestHelper::printTestName("DUMP PUSH EVENT");
 
-    Tester tester(s_allocator_p);
+    Tester tester(bmqtst::TestHelperUtil::allocator());
 
     // Insert queues
     tester.insertQueue("bmq://bmq.test.mmap.fanout/q1?id=foo");
@@ -1397,7 +1422,7 @@ static void test6_dumpPushEvent()
     tester.processDumpCommand("PUSH 5");
 
     unsigned int                   subscriptionId = 1;
-    bmqp_ctrlmsg::StreamParameters config(s_allocator_p);
+    bmqp_ctrlmsg::StreamParameters config(bmqtst::TestHelperUtil::allocator());
 
     config.subscriptions().resize(1);
     config.subscriptions()[0].sId() = subscriptionId;
@@ -1444,53 +1469,59 @@ static void test6_dumpPushEvent()
 
     // 2. Dump the PUSH event and verify that the first five messages were
     //    dumped, and that no additional messages were dumped.
-    mwcu::MemOutStream out(s_allocator_p);
-    bmqp::Event        event(s_allocator_p);
+    bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+    bmqp::Event        event(bmqtst::TestHelperUtil::allocator());
 
     tester.pushEvent(&event);
     tester.dumpPushEvent(out, event);
 
     PVV(L_ << ": PUSH event dump: " << out.str());
 
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUSH Message #1:.*"
-                         "queue: bmq://bmq.test.mmap.fanout/q1\\?id=foo.*"
-                         "abcd.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUSH Message #2:.*"
-                         "queue: bmq://bmq.test.mmap.fanout/q1\\?id=foo.*"
-                         "efgh.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUSH Message #3:.*"
-                         "queue: bmq://bmq.test.mmap.fanout/q1\\?id=bar.*"
-                         "ijkl.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUSH Message #4:.*"
-                         "queue: bmq://bmq.test.mmap.priority/q1.*"
-                         "mnop.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUSH Message #5:.*"
-                         "queue: bmq://bmq.test.mmap.priority/q1.*"
-                         "mnop.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(), "PUSH Message #6:.*", s_allocator_p),
-              false);
+    BMQTST_ASSERT_EQ(
+        regexMatch(out.str(),
+                   "PUSH Message #1:.*"
+                   "queue: bmq://bmq.test.mmap.fanout/q1\\?id=foo.*"
+                   "abcd.*",
+                   bmqtst::TestHelperUtil::allocator()),
+        true);
+    BMQTST_ASSERT_EQ(
+        regexMatch(out.str(),
+                   "PUSH Message #2:.*"
+                   "queue: bmq://bmq.test.mmap.fanout/q1\\?id=foo.*"
+                   "efgh.*",
+                   bmqtst::TestHelperUtil::allocator()),
+        true);
+    BMQTST_ASSERT_EQ(
+        regexMatch(out.str(),
+                   "PUSH Message #3:.*"
+                   "queue: bmq://bmq.test.mmap.fanout/q1\\?id=bar.*"
+                   "ijkl.*",
+                   bmqtst::TestHelperUtil::allocator()),
+        true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUSH Message #4:.*"
+                                "queue: bmq://bmq.test.mmap.priority/q1.*"
+                                "mnop.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUSH Message #5:.*"
+                                "queue: bmq://bmq.test.mmap.priority/q1.*"
+                                "mnop.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUSH Message #6:.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     false);
 
     out.reset();
 
     // 3. Ensure that upon exhausting the number of messages to dump, dumping
     //    of PUSH events is no longer enabled, and attempts to do so fail
     //    appropriately.
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH), false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUSH),
+                     false);
 }
 
 static void test7_dumpAckEvent()
@@ -1522,14 +1553,14 @@ static void test7_dumpAckEvent()
 //   dumpAckEvent
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // QueueManager's 'generateQueueAndSubQueueId' method creates a
     // temporary string using the default allocator when performing queue
     // lookup by canonical URI
 
-    mwctst::TestHelper::printTestName("DUMP ACK EVENT");
+    bmqtst::TestHelper::printTestName("DUMP ACK EVENT");
 
-    Tester tester(s_allocator_p);
+    Tester tester(bmqtst::TestHelperUtil::allocator());
 
     // Insert queues
     tester.insertQueue("bmq://bmq.test.mmap.fanout/q1?id=foo");
@@ -1553,36 +1584,39 @@ static void test7_dumpAckEvent()
 
     // 2. Dump the ACK event and verify that the messages in the event were
     //    dumped.
-    mwcu::MemOutStream out(s_allocator_p);
-    bmqp::Event        event(s_allocator_p);
+    bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+    bmqp::Event        event(bmqtst::TestHelperUtil::allocator());
 
     tester.ackEvent(&event);
     tester.dumpAckEvent(out, event);
 
     PVV(L_ << ": ACK event dump: " << out.str());
 
-    ASSERT_EQ(regexMatch(out.str(),
-                         "ACK Message #1:.* status: SUCCESS",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "ACK Message #2:.* status: LIMIT_MESSAGES",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "ACK Message #3:.* status: LIMIT_BYTES",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "ACK Message #4:.* status: STORAGE_FAILURE",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "ACK Message #5:.* status: UNKNOWN",
-                         s_allocator_p),
-              true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "ACK Message #1:.* status: SUCCESS",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "ACK Message #2:.* status: LIMIT_MESSAGES",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "ACK Message #3:.* status: LIMIT_BYTES",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "ACK Message #4:.* status: STORAGE_FAILURE",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "ACK Message #5:.* status: UNKNOWN",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
 
-    ASSERT_EQ(regexMatch(out.str(), "ACK Message #6", s_allocator_p), false);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "ACK Message #6",
+                                bmqtst::TestHelperUtil::allocator()),
+                     false);
 
     out.reset();
 
@@ -1591,7 +1625,7 @@ static void test7_dumpAckEvent()
     //    still enabled and working as expected.
     PVV(L_ << ": advancing time by 99 seconds: ");
     tester.advanceTime(99);
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK), true);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK), true);
 
     tester.appendAckMessage("bmq://bmq.test.mmap.priority/q1",
                             bmqt::AckResult::e_SUCCESS);
@@ -1601,10 +1635,10 @@ static void test7_dumpAckEvent()
 
     PVV(L_ << ": ACK event dump: " << out.str());
 
-    ASSERT_EQ(regexMatch(out.str(),
-                         "ACK Message #1:.* status: SUCCESS",
-                         s_allocator_p),
-              true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "ACK Message #1:.* status: SUCCESS",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
 
     out.reset();
 
@@ -1615,7 +1649,7 @@ static void test7_dumpAckEvent()
     PVV(L_ << ": advancing time by 2 seconds: ");
     tester.advanceTime(2);
 
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK), false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_ACK), false);
 }
 
 static void test8_dumpPutEvent()
@@ -1639,14 +1673,14 @@ static void test8_dumpPutEvent()
 //   dumpPushEvent
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // QueueManager's 'generateQueueAndSubQueueId' method creates a
     // temporary string using the default allocator when performing queue
     // lookup by canonical URI
 
-    mwctst::TestHelper::printTestName("DUMP PUT EVENT");
+    bmqtst::TestHelper::printTestName("DUMP PUT EVENT");
 
-    Tester tester(s_allocator_p);
+    Tester tester(bmqtst::TestHelperUtil::allocator());
 
     // Insert queues
     tester.insertQueue("bmq://bmq.test.mmap.fanout/q1");
@@ -1657,49 +1691,71 @@ static void test8_dumpPutEvent()
     //    messages.
     tester.processDumpCommand("PUT ON");
 
+#ifdef BMQ_ENABLE_MSG_GROUPID
     tester.packPutMessage("bmq://bmq.test.mmap.fanout/q1", "abcd", "Group 1");
     tester.packPutMessage("bmq://bmq.test.mmap.fanout/q1", "abcd", "Group 2");
+#else
+    tester.packPutMessage("bmq://bmq.test.mmap.fanout/q1", "abcd");
+    tester.packPutMessage("bmq://bmq.test.mmap.fanout/q1", "abcd");
+#endif
     tester.packPutMessage("bmq://bmq.test.mmap.priority/q1", "efgh");
     tester.packPutMessage("bmq://bmq.test.mmap.priority/q2", "ijkl");
 
     // 2. Dump the PUT event and verify that the PUT messages were dumped, and
     //    that no additional messages were dumped.
-    mwcu::MemOutStream out(s_allocator_p);
-    bmqp::Event        event(s_allocator_p);
+    bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+    bmqp::Event        event(bmqtst::TestHelperUtil::allocator());
 
     tester.putEvent(&event);
     tester.dumpPutEvent(out, event);
 
     PVV(L_ << ": PUT event dump: " << out.str());
 
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUT Message #1:.*"
-                         "queue: bmq://bmq.test.mmap.fanout/q1.*"
-                         "msgGroupId: \"Group 1\".*"
-                         "abcd.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUT Message #2:.*"
-                         "queue: bmq://bmq.test.mmap.fanout/q1.*"
-                         "msgGroupId: \"Group 2\".*"
-                         "abcd.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUT Message #3:.*"
-                         "queue: bmq://bmq.test.mmap.priority/q1.*"
-                         "efgh.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "PUT Message #4:.*"
-                         "queue: bmq://bmq.test.mmap.priority/q2.*"
-                         "ijkl.*",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(), "PUT Message #5:.*", s_allocator_p),
-              false);
+#ifdef BMQ_ENABLE_MSG_GROUPID
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUT Message #1:.*"
+                                "queue: bmq://bmq.test.mmap.fanout/q1.*"
+                                "msgGroupId: \"Group 1\".*"
+                                "abcd.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUT Message #2:.*"
+                                "queue: bmq://bmq.test.mmap.fanout/q1.*"
+                                "msgGroupId: \"Group 2\".*"
+                                "abcd.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+#else
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUT Message #1:.*"
+                                "queue: bmq://bmq.test.mmap.fanout/q1.*"
+                                "abcd.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUT Message #2:.*"
+                                "queue: bmq://bmq.test.mmap.fanout/q1.*"
+                                "abcd.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+#endif
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUT Message #3:.*"
+                                "queue: bmq://bmq.test.mmap.priority/q1.*"
+                                "efgh.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUT Message #4:.*"
+                                "queue: bmq://bmq.test.mmap.priority/q2.*"
+                                "ijkl.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "PUT Message #5:.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     false);
 
     out.reset();
 
@@ -1707,7 +1763,7 @@ static void test8_dumpPutEvent()
     //    enabled, and that attempts to do so fail appropriately.
     tester.processDumpCommand("PUT OFF");
 
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT), false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_PUT), false);
 }
 
 static void test9_dumpConfirmEvent()
@@ -1744,14 +1800,14 @@ static void test9_dumpConfirmEvent()
 //   dumpConfirmEvent
 // ------------------------------------------------------------------------
 {
-    s_ignoreCheckDefAlloc = true;
+    bmqtst::TestHelperUtil::ignoreCheckDefAlloc() = true;
     // QueueManager's 'generateQueueAndSubQueueId' method creates a
     // temporary string using the default allocator when performing queue
     // lookup by canonical URI
 
-    mwctst::TestHelper::printTestName("DUMP CONFIRM EVENT");
+    bmqtst::TestHelper::printTestName("DUMP CONFIRM EVENT");
 
-    Tester tester(s_allocator_p);
+    Tester tester(bmqtst::TestHelperUtil::allocator());
 
     // CONSTANTS
 
@@ -1773,43 +1829,49 @@ static void test9_dumpConfirmEvent()
 
     // 2. Dump the CONFIRM event and verify that the first four messages were
     //    dumped, and that no additional messages were dumped.
-    mwcu::MemOutStream out(s_allocator_p);
-    bmqp::Event        event(s_allocator_p);
+    bmqu::MemOutStream out(bmqtst::TestHelperUtil::allocator());
+    bmqp::Event        event(bmqtst::TestHelperUtil::allocator());
 
     tester.confirmEvent(&event);
     tester.dumpConfirmEvent(out, event);
 
     PVV(L_ << ": CONFIRM event dump: " << out.str());
 
-    ASSERT_EQ(regexMatch(out.str(),
-                         "CONFIRM Message #1:.*"
-                         "queue: bmq://bmq.test.mmap.fanout/q1\\?id=foo",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "CONFIRM Message #2:.*"
-                         "queue: bmq://bmq.test.mmap.fanout/q1\\?id=foo",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "CONFIRM Message #3:.*"
-                         "queue: bmq://bmq.test.mmap.fanout/q1\\?id=bar",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "CONFIRM Message #4:.*"
-                         "queue: bmq://bmq.test.mmap.priority/q2",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(), "CONFIRM Message #5:.*", s_allocator_p),
-              false);
+    BMQTST_ASSERT_EQ(
+        regexMatch(out.str(),
+                   "CONFIRM Message #1:.*"
+                   "queue: bmq://bmq.test.mmap.fanout/q1\\?id=foo",
+                   bmqtst::TestHelperUtil::allocator()),
+        true);
+    BMQTST_ASSERT_EQ(
+        regexMatch(out.str(),
+                   "CONFIRM Message #2:.*"
+                   "queue: bmq://bmq.test.mmap.fanout/q1\\?id=foo",
+                   bmqtst::TestHelperUtil::allocator()),
+        true);
+    BMQTST_ASSERT_EQ(
+        regexMatch(out.str(),
+                   "CONFIRM Message #3:.*"
+                   "queue: bmq://bmq.test.mmap.fanout/q1\\?id=bar",
+                   bmqtst::TestHelperUtil::allocator()),
+        true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "CONFIRM Message #4:.*"
+                                "queue: bmq://bmq.test.mmap.priority/q2",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "CONFIRM Message #5:.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     false);
 
     out.reset();
 
     // 3. Ensure that upon exhausting the number of messages to dump, dumping
     //    of CONFIRM events is no longer enabled, and attempts to do so fail
     //    appropriately.
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM), false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
+                     false);
 
     // 4. Process a dump command of 'CONFIRM 2' and build an event with three
     //    CONFIRM messages.
@@ -1826,25 +1888,28 @@ static void test9_dumpConfirmEvent()
 
     PVV(L_ << ": CONFIRM event dump: " << out.str());
 
-    ASSERT_EQ(regexMatch(out.str(),
-                         "CONFIRM Message #1:.*"
-                         "queue: bmq://bmq.test.mmap.priority/q1",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(),
-                         "CONFIRM Message #2:.*"
-                         "queue: bmq://bmq.test.mmap.priority/q1",
-                         s_allocator_p),
-              true);
-    ASSERT_EQ(regexMatch(out.str(), "CONFIRM Message #3:.*", s_allocator_p),
-              false);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "CONFIRM Message #1:.*"
+                                "queue: bmq://bmq.test.mmap.priority/q1",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "CONFIRM Message #2:.*"
+                                "queue: bmq://bmq.test.mmap.priority/q1",
+                                bmqtst::TestHelperUtil::allocator()),
+                     true);
+    BMQTST_ASSERT_EQ(regexMatch(out.str(),
+                                "CONFIRM Message #3:.*",
+                                bmqtst::TestHelperUtil::allocator()),
+                     false);
 
     out.reset();
 
     // 6. Ensure that upon exhausting the number of messages to dump, dumping
     //    of CONFIRM events is no longer enabled, and attempts to do so fail
     //    appropriately.
-    ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM), false);
+    BMQTST_ASSERT_EQ(tester.isEventDumpEnabled(bmqp::EventType::e_CONFIRM),
+                     false);
 }
 
 //=============================================================================
@@ -1853,10 +1918,10 @@ static void test9_dumpConfirmEvent()
 
 int main(int argc, char** argv)
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
-    bmqp::ProtocolUtil::initialize(s_allocator_p);
-    bmqt::UriParser::initialize(s_allocator_p);
+    bmqp::ProtocolUtil::initialize(bmqtst::TestHelperUtil::allocator());
+    bmqt::UriParser::initialize(bmqtst::TestHelperUtil::allocator());
 
     // Initialize Crc32c
     bmqp::Crc32c::initialize();
@@ -1874,15 +1939,15 @@ int main(int argc, char** argv)
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
     bmqt::UriParser::shutdown();
     bmqp::ProtocolUtil::shutdown();
 
-    TEST_EPILOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_EPILOG(bmqtst::TestHelper::e_DEFAULT);
     // For an unidentified reason, 'e_CHECK_DEF_GBL_ALLOC' fails as a
-    // result of initializing 'mwcsys::Time' in the constructor of
+    // result of initializing 'bmqsys::Time' in the constructor of
     // 'Tester'.
 }

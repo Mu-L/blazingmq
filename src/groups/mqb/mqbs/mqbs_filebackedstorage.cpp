@@ -34,11 +34,10 @@
 // BMQ
 #include <bmqp_protocolutil.h>
 
-// MWC
-#include <mwcma_countingallocatorstore.h>
-#include <mwcsys_time.h>
-#include <mwctsk_alarmlog.h>
-#include <mwcu_printutil.h>
+#include <bmqma_countingallocatorstore.h>
+#include <bmqsys_time.h>
+#include <bmqtsk_alarmlog.h>
+#include <bmqu_printutil.h>
 
 // BDE
 #include <bdlt_currenttime.h>
@@ -71,9 +70,8 @@ void FileBackedStorage::purgeCommon(const mqbu::StorageKey& appKey)
     // to be purged, otherwise only the virtual storage associated with the
     // specified 'appKey'.
 
-    d_virtualStorageCatalog.removeAll(appKey);
-
     if (appKey.isNull()) {
+        d_virtualStorageCatalog.removeAll();
         // Remove all records from the physical storage as well.
 
         for (RecordHandleMapConstIter it = d_handles.begin();
@@ -90,11 +88,14 @@ void FileBackedStorage::purgeCommon(const mqbu::StorageKey& appKey)
         // Update stats
         d_capacityMeter.clear();
 
-        if (d_queue_p) {
-            d_queue_p->stats()->onEvent(
-                mqbstat::QueueStatsDomain::EventType::e_PURGE,
-                0);
-        }
+        d_queueStats_sp
+            ->onEvent<mqbstat::QueueStatsDomain::EventType::e_PURGE>(0);
+        d_queueStats_sp
+            ->onEvent<mqbstat::QueueStatsDomain::EventType::e_UPDATE_HISTORY>(
+                d_handles.historySize());
+    }
+    else {
+        d_virtualStorageCatalog.removeAll(appKey);
     }
 }
 
@@ -103,43 +104,39 @@ FileBackedStorage::FileBackedStorage(
     DataStore*                     dataStore,
     const bmqt::Uri&               queueUri,
     const mqbu::StorageKey&        queueKey,
-    const mqbconfm::Domain&        config,
-    mqbu::CapacityMeter*           parentCapacityMeter,
-    const bmqp::RdaInfo&           defaultRdaInfo,
+    mqbi::Domain*                  domain,
     bslma::Allocator*              allocator,
-    mwcma::CountingAllocatorStore* allocatorStore)
+    bmqma::CountingAllocatorStore* allocatorStore)
 : d_allocator_p(allocator)
 , d_store_p(dataStore)
-, d_queue_p(0)
 , d_queueKey(queueKey)
 , d_config()
 , d_queueUri(queueUri, allocator)
 , d_virtualStorageCatalog(
       this,
       allocatorStore ? allocatorStore->get("VirtualHandles") : d_allocator_p)
-, d_ttlSeconds(config.messageTtl())
-, d_capacityMeter("queue [" + queueUri.asString() + "]",
-                  parentCapacityMeter,
-                  allocator)
+, d_ttlSeconds(domain->config().messageTtl())
+, d_capacityMeter(
+      "queue [" + queueUri.asString() + "]",
+      domain->capacityMeter(),
+      allocator,
+      bdlf::BindUtil::bind(&FileBackedStorage::logAppsSubscriptionInfoCb,
+                           this,
+                           bdlf::PlaceHolders::_1)  // stream
+      )
 , d_handles(bsls::TimeInterval()
-                .addMilliseconds(config.deduplicationTimeMs())
+                .addMilliseconds(domain->config().deduplicationTimeMs())
                 .totalNanoseconds(),
             allocatorStore ? allocatorStore->get("Handles") : d_allocator_p)
 , d_queueOpRecordHandles(allocator)
-, d_emptyAppId(allocator)
-, d_nullAppKey()
 , d_isEmpty(1)
-, d_defaultRdaInfo(defaultRdaInfo)
-, d_hasReceipts(!config.consistency().isStrongValue())
+, d_hasReceipts(!domain->config().consistency().isStrongValue())
+, d_currentlyAutoConfirming()
+, d_autoConfirms(d_allocator_p)
+, d_queueStats_sp()
 {
     BSLS_ASSERT(d_store_p);
 
-    if (config.maxDeliveryAttempts()) {
-        d_defaultRdaInfo.setCounter(config.maxDeliveryAttempts());
-    }
-    else {
-        d_defaultRdaInfo.setUnlimited();
-    }
     // Note that the specified 'parentCapacityMeter' (and thus
     // 'd_capacityMeter.parent()') can be zero, so we can't assert on it being
     // non zero.  This is possible when a node comes up, recovers a queue,
@@ -149,6 +146,12 @@ FileBackedStorage::FileBackedStorage(
     // instance associated with it (instead of a 'mqbblp::Cluster' instance),
     // and domain instance will return a zero capacity meter when queries to be
     // passed to the 'FileBackedStorage' instance.
+
+    d_virtualStorageCatalog.setDefaultRda(
+        domain->config().maxDeliveryAttempts());
+
+    d_queueStats_sp.createInplace(d_allocator_p, d_allocator_p);
+    d_queueStats_sp->initialize(queueUri, domain);
 }
 
 FileBackedStorage::~FileBackedStorage()
@@ -174,7 +177,7 @@ FileBackedStorage::get(bsl::shared_ptr<bdlbb::Blob>*   appData,
 
     if (handles[0].primaryLeaseId() < d_store_p->primaryLeaseId()) {
         // Consider this the past that needs translation
-        bmqp::SchemaLearner& learner = d_queue_p->schemaLearner();
+        bmqp::SchemaLearner& learner = queue()->schemaLearner();
 
         attributes->setMessagePropertiesInfo(learner.multiplex(
             learner.createContext(handles[0].primaryLeaseId()),
@@ -189,7 +192,7 @@ mqbi::StorageResult::Enum
 FileBackedStorage::get(mqbi::StorageMessageAttributes* attributes,
                        const bmqt::MessageGUID&        msgGUID) const
 {
-    BSLS_ASSERT_SAFE(d_queue_p);
+    BSLS_ASSERT_SAFE(queue());
 
     RecordHandleMap::const_iterator it = d_handles.find(msgGUID);
     if (it == d_handles.end()) {
@@ -202,7 +205,7 @@ FileBackedStorage::get(mqbi::StorageMessageAttributes* attributes,
 
     if (handles[0].primaryLeaseId() < d_store_p->primaryLeaseId()) {
         // Consider this the past that needs translation
-        bmqp::SchemaLearner& learner = d_queue_p->schemaLearner();
+        bmqp::SchemaLearner& learner = queue()->schemaLearner();
 
         attributes->setMessagePropertiesInfo(learner.multiplex(
             learner.createContext(handles[0].primaryLeaseId()),
@@ -235,7 +238,7 @@ int FileBackedStorage::configure(
     const mqbconfm::Storage&             config,
     const mqbconfm::Limits&              limits,
     const bsls::Types::Int64             messageTtl,
-    const int                            maxDeliveryAttempts)
+    int                                  maxDeliveryAttempts)
 {
     d_config = config;
     d_capacityMeter.setLimits(limits.messages(), limits.bytes())
@@ -243,35 +246,38 @@ int FileBackedStorage::configure(
                                 limits.bytesWatermarkRatio());
     d_ttlSeconds = messageTtl;
 
-    if (maxDeliveryAttempts > 0) {
-        d_defaultRdaInfo.setCounter(maxDeliveryAttempts);
-    }
-    else {
-        d_defaultRdaInfo.setUnlimited();
-    }
+    d_virtualStorageCatalog.setDefaultRda(maxDeliveryAttempts);
+
     return 0;
+}
+
+void FileBackedStorage::setConsistency(const mqbconfm::Consistency& value)
+{
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(value.isEventualValue() || value.isStrongValue());
+
+    d_hasReceipts = value.isEventualValue();
 }
 
 void FileBackedStorage::setQueue(mqbi::Queue* queue)
 {
-    d_queue_p = queue;
+    d_virtualStorageCatalog.setQueue(queue);
 
     // Update queue stats if a queue has been associated with the storage.
+    if (queue) {
+        queue->setStats(d_queueStats_sp);
 
-    if (d_queue_p) {
         const bsls::Types::Int64 numMessage = numMessages(
             mqbu::StorageKey::k_NULL_KEY);
         const bsls::Types::Int64 numByte = numBytes(
             mqbu::StorageKey::k_NULL_KEY);
 
-        d_queue_p->stats()->setQueueContentRaw(numMessage, numByte);
-
         BALL_LOG_INFO << "Associated queue [" << queue->uri() << "] with key ["
-                      << queueKey() << "] and PartitionId ["
+                      << queueKey() << "] and Partition ["
                       << queue->partitionId() << "] with its storage having "
-                      << mwcu::PrintUtil::prettyNumber(numMessage)
+                      << bmqu::PrintUtil::prettyNumber(numMessage)
                       << " messages and "
-                      << mwcu::PrintUtil::prettyNumber(numByte)
+                      << bmqu::PrintUtil::prettyNumber(numByte)
                       << " bytes of outstanding data.";
     }
 }
@@ -286,90 +292,93 @@ FileBackedStorage::put(mqbi::StorageMessageAttributes*     attributes,
                        const bmqt::MessageGUID&            msgGUID,
                        const bsl::shared_ptr<bdlbb::Blob>& appData,
                        const bsl::shared_ptr<bdlbb::Blob>& options,
-                       const StorageKeys&                  storageKeys)
+                       mqbi::DataStreamMessage**           out)
 {
     const int msgSize = appData->length();
 
-    if (storageKeys.empty()) {
-        // Store the specified message in the 'physical' as well as *all*
-        // virtual storages.
+    // Store the specified message in the 'physical' as well as *all*
+    // virtual storages.
 
-        if (d_handles.isInHistory(msgGUID)) {
-            return mqbi::StorageResult::e_DUPLICATE;
+    if (d_handles.isInHistory(msgGUID)) {
+        return mqbi::StorageResult::e_DUPLICATE;
+    }
+
+    // Verify if we have enough capacity.
+    mqbu::CapacityMeter::CommitResult capacity =
+        d_capacityMeter.commitUnreserved(1, msgSize);
+
+    if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
+            capacity != mqbu::CapacityMeter::e_SUCCESS)) {
+        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+
+        return (capacity == mqbu::CapacityMeter::e_LIMIT_MESSAGES
+                    ? mqbi::StorageResult::e_LIMIT_MESSAGES
+                    : mqbi::StorageResult::e_LIMIT_BYTES);  // RETURN
+    }
+
+    // Update
+    DataStoreRecordHandle handle;
+    int                   rc = d_store_p->writeMessageRecord(attributes,
+                                           &handle,
+                                           msgGUID,
+                                           appData,
+                                           options,
+                                           d_queueKey);
+    if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(rc != 0)) {
+        BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+
+        // Rollback reserved capacity.
+        d_capacityMeter.remove(1, msgSize);
+        return mqbi::StorageResult::e_WRITE_FAILURE;  // RETURN
+    }
+
+    InsertRc irc = d_handles.insert(bsl::make_pair(msgGUID, Item()),
+                                    attributes->arrivalTimepoint());
+
+    irc.first->second.d_array.push_back(handle);
+    irc.first->second.d_refCount = attributes->refCount();
+
+    // Looks like extra lookup in
+    // VirtualStorageIterator::loadMessageAndAttributes() can be avoided
+    // if we keep `irc` (like we keep 'DataStoreRecordHandle').
+
+    if (d_autoConfirms.empty()) {
+        d_virtualStorageCatalog.put(
+            msgGUID,
+            msgSize,
+            d_virtualStorageCatalog.numVirtualStorages(),
+            out);
+    }
+    else {
+        mqbi::DataStreamMessage* dataStreamMessage = 0;
+        if (out == 0) {
+            out = &dataStreamMessage;
         }
+        d_virtualStorageCatalog.put(
+            msgGUID,
+            msgSize,
+            d_virtualStorageCatalog.numVirtualStorages(),
+            out);
 
-        // Verify if we have enough capacity.
-        mqbu::CapacityMeter::CommitResult capacity =
-            d_capacityMeter.commitUnreserved(1, msgSize);
-
-        if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(
-                capacity != mqbu::CapacityMeter::e_SUCCESS)) {
-            BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
-
-            return (capacity == mqbu::CapacityMeter::e_LIMIT_MESSAGES
-                        ? mqbi::StorageResult::e_LIMIT_MESSAGES
-                        : mqbi::StorageResult::e_LIMIT_BYTES);  // RETURN
+        // Move auto confirms to the data record
+        for (AutoConfirms::const_iterator it = d_autoConfirms.begin();
+             it != d_autoConfirms.end();
+             ++it) {
+            irc.first->second.d_array.push_back(it->d_confirmRecordHandle);
+            d_virtualStorageCatalog.autoConfirm(*out, it->d_appKey);
         }
+        d_autoConfirms.clear();
+    }
+    d_currentlyAutoConfirming = bmqt::MessageGUID();
 
-        // Update
-        DataStoreRecordHandle handle;
-        int                   rc = d_store_p->writeMessageRecord(attributes,
-                                               &handle,
-                                               msgGUID,
-                                               appData,
-                                               options,
-                                               d_queueKey);
-        if (BSLS_PERFORMANCEHINT_PREDICT_UNLIKELY(rc != 0)) {
-            BSLS_PERFORMANCEHINT_UNLIKELY_HINT;
+    BSLS_ASSERT_SAFE(queue());
+    queue()
+        ->stats()
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_ADD_MESSAGE>(
 
-            // Rollback reserved capacity.
-            d_capacityMeter.remove(1, msgSize);
-            return mqbi::StorageResult::e_WRITE_FAILURE;  // RETURN
-        }
-
-        InsertRc irc = d_handles.insert(bsl::make_pair(msgGUID, Item()),
-                                        attributes->arrivalTimepoint());
-
-        irc.first->second.d_array.push_back(handle);
-        irc.first->second.d_refCount = attributes->refCount();
-
-        // Looks like extra lookup in
-        // VirtualStorageIterator::loadMessageAndAttributes() can be avoided
-        // if we keep `irc` (like we keep 'DataStoreRecordHandle').
-        d_virtualStorageCatalog.put(msgGUID,
-                                    msgSize,
-                                    d_defaultRdaInfo,
-                                    bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID,
-                                    mqbu::StorageKey::k_NULL_KEY);
-
-        BSLS_ASSERT_SAFE(d_queue_p);
-        d_queue_p->stats()->onEvent(
-            mqbstat::QueueStatsDomain::EventType::e_ADD_MESSAGE,
             msgSize);
 
-        d_isEmpty.storeRelaxed(0);
-
-        return mqbi::StorageResult::e_SUCCESS;  // RETURN
-    }
-
-    // Store the specified message only in the virtual storages identified by
-    // the specified 'storageKeys'.  Note that since message is not added to
-    // the 'physical' storage, we don't modify 'd_capacityMeter', 'd_isEmpty',
-    // etc variables.
-    BSLS_ASSERT(hasMessage(msgGUID));
-
-    for (size_t i = 0; i < storageKeys.size(); ++i) {
-        d_virtualStorageCatalog.put(msgGUID,
-                                    msgSize,
-                                    d_defaultRdaInfo,
-                                    bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID,
-                                    storageKeys[i]);
-    }
-
-    // Note that unlike 'InMemoryStorage', we don't add the message to the
-    // 'physical' storage in this case, because proxies don't use
-    // FileBackedStorage.
-    // TBD: this logic needs to be cleaned up.
+    d_isEmpty.storeRelaxed(0);
 
     return mqbi::StorageResult::e_SUCCESS;  // RETURN
 }
@@ -377,15 +386,6 @@ FileBackedStorage::put(mqbi::StorageMessageAttributes*     attributes,
 bslma::ManagedPtr<mqbi::StorageIterator>
 FileBackedStorage::getIterator(const mqbu::StorageKey& appKey)
 {
-    if (appKey.isNull()) {
-        bslma::ManagedPtr<mqbi::StorageIterator> mp(
-            new (*d_allocator_p)
-                FileBackedStorageIterator(this, d_handles.begin()),
-            d_allocator_p);
-
-        return mp;  // RETURN
-    }
-
     return d_virtualStorageCatalog.getIterator(appKey);
 }
 
@@ -394,51 +394,49 @@ FileBackedStorage::getIterator(bslma::ManagedPtr<mqbi::StorageIterator>* out,
                                const mqbu::StorageKey&  appKey,
                                const bmqt::MessageGUID& msgGUID)
 {
-    if (appKey.isNull()) {
-        RecordHandleMap::const_iterator it = d_handles.find(msgGUID);
-        if (it == d_handles.end()) {
-            return mqbi::StorageResult::e_GUID_NOT_FOUND;  // RETURN
-        }
-
-        out->load(new (*d_allocator_p) FileBackedStorageIterator(this, it),
-                  d_allocator_p);
-
-        return mqbi::StorageResult::e_SUCCESS;  // RETURN
-    }
-
     return d_virtualStorageCatalog.getIterator(out, appKey, msgGUID);
 }
 
 mqbi::StorageResult::Enum
-FileBackedStorage::releaseRef(const bmqt::MessageGUID& msgGUID,
-                              const mqbu::StorageKey&  appKey,
-                              bsls::Types::Int64       timestamp,
-                              bool                     onReject)
+FileBackedStorage::confirm(const bmqt::MessageGUID& msgGUID,
+                           const mqbu::StorageKey&  appKey,
+                           bsls::Types::Int64       timestamp,
+                           bool                     onReject)
 {
+    // PRECONDITIONS
+    BSLS_ASSERT_SAFE(!appKey.isNull());
+
     RecordHandleMap::iterator it = d_handles.find(msgGUID);
     if (it == d_handles.end()) {
         return mqbi::StorageResult::e_GUID_NOT_FOUND;  // RETURN
     }
 
-    if (!appKey.isNull()) {
-        mqbi::StorageResult::Enum rc = d_virtualStorageCatalog.remove(msgGUID,
-                                                                      appKey);
-        if (mqbi::StorageResult::e_SUCCESS != rc) {
-            return rc;  // RETURN
-        }
+    const mqbi::StorageResult::Enum rc =
+        d_virtualStorageCatalog.confirm(msgGUID, appKey);
+    if (mqbi::StorageResult::e_SUCCESS != rc) {
+        return rc;  // RETURN
     }
 
     RecordHandlesArray& handles = it->second.d_array;
     BSLS_ASSERT_SAFE(!handles.empty());
 
+    if (0 == --it->second.d_refCount) {
+        // Outstanding refCount for this message is zero now.
+        // In this case we intentionally skip recording the last CONFIRM
+        // due to optimization of journal file usage
+
+        return mqbi::StorageResult::e_ZERO_REFERENCES;  // RETURN
+    }
+
     DataStoreRecordHandle handle;
-    int                   rc = d_store_p->writeConfirmRecord(&handle,
-                                           msgGUID,
-                                           d_queueKey,
-                                           appKey,
-                                           timestamp,
-                                           onReject);
-    if (0 != rc) {
+    const int             writeResult = d_store_p->writeConfirmRecord(
+        &handle,
+        msgGUID,
+        d_queueKey,
+        appKey,
+        timestamp,
+        onReject ? ConfirmReason::e_REJECTED : ConfirmReason::e_CONFIRMED);
+    if (0 != writeResult) {
         // If 'appKey' isn't null, we have already removed 'msgGUID' from the
         // virtual storage of 'appKey'.  This is ok, because if above 'write'
         // has failed, its game over for this node anyways.
@@ -448,28 +446,91 @@ FileBackedStorage::releaseRef(const bmqt::MessageGUID& msgGUID,
 
     handles.push_back(handle);
 
-    if (0 == --it->second.d_refCount) {
-        return mqbi::StorageResult::e_ZERO_REFERENCES;  // RETURN
-    }
-
     return mqbi::StorageResult::e_NON_ZERO_REFERENCES;
 }
 
 mqbi::StorageResult::Enum
-FileBackedStorage::remove(const bmqt::MessageGUID& msgGUID,
-                          int*                     msgSize,
-                          bool                     clearAll)
+FileBackedStorage::releaseRef(const bmqt::MessageGUID& guid)
+{
+    RecordHandleMapIter it = d_handles.find(guid);
+    if (it == d_handles.end()) {
+        return mqbi::StorageResult::e_GUID_NOT_FOUND;
+    }
+
+    if (0 == it->second.d_refCount) {
+        // Outstanding refCount for this message is already zero.
+
+        return mqbi::StorageResult::e_INVALID_OPERATION;
+    }
+
+    const RecordHandlesArray& handles = it->second.d_array;
+    BSLS_ASSERT_SAFE(!handles.empty());
+
+    if (0 == --it->second.d_refCount) {
+        // This appKey was the last outstanding client for this message.
+        // Message can now be deleted.
+
+        int msgLen = static_cast<int>(d_store_p->getMessageLenRaw(handles[0]));
+
+        int rc = d_store_p->writeDeletionRecord(
+            guid,
+            d_queueKey,
+            DeletionRecordFlag::e_NONE,
+            bdlt::EpochUtil::convertToTimeT64(bdlt::CurrentTime::utc()));
+
+        if (0 != rc) {
+            BMQTSK_ALARMLOG_ALARM("FILE_IO")
+                << "Partition [" << partitionId() << "] failed to write "
+                << "DELETION record for GUID: " << guid << ", for queue '"
+                << d_queueUri << "', queueKey '" << d_queueKey
+                << "' while attempting to purge the message, rc: " << rc
+                << BMQTSK_ALARMLOG_END;
+        }
+
+        // If a queue is associated, inform it about the message being
+        // deleted, and update queue stats.
+        // The same 'e_DEL_MESSAGE' is about 3 cases: TTL, no SC quorum,
+        // and a purge.
+        if (queue()) {
+            queue()->queueEngine()->beforeMessageRemoved(guid);
+        }
+        d_queueStats_sp
+            ->onEvent<mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE>(
+                msgLen);
+
+        // There is not really a need to remove the guid from all virtual
+        // storages, because we can be here only if guid doesn't exist in
+        // any virtual storage apart from 'vs' (because updated outstanding
+        // refCount is zero).  So we just delete records associated with
+        // the guid from the underlying (this) storage.
+
+        for (unsigned int i = 0; i < handles.size(); ++i) {
+            d_store_p->removeRecordRaw(handles[i]);
+        }
+
+        d_capacityMeter.remove(1, msgLen);
+        d_handles.erase(it);
+
+        d_queueStats_sp
+            ->onEvent<mqbstat::QueueStatsDomain::EventType::e_UPDATE_HISTORY>(
+                d_handles.historySize());
+
+        return mqbi::StorageResult::e_ZERO_REFERENCES;
+    }
+    else {
+        return mqbi::StorageResult::e_NON_ZERO_REFERENCES;
+    }
+}
+
+mqbi::StorageResult::Enum
+FileBackedStorage::remove(const bmqt::MessageGUID& msgGUID, int* msgSize)
 {
     RecordHandleMap::iterator it = d_handles.find(msgGUID);
     if (it == d_handles.end()) {
         return mqbi::StorageResult::e_GUID_NOT_FOUND;  // RETURN
     }
 
-    if (clearAll) {
-        d_virtualStorageCatalog.remove(msgGUID, mqbu::StorageKey::k_NULL_KEY);
-    }
-
-    BSLS_ASSERT_SAFE(!d_virtualStorageCatalog.hasMessage(msgGUID));
+    d_virtualStorageCatalog.remove(msgGUID);
 
     const RecordHandlesArray& handles = it->second.d_array;
     BSLS_ASSERT_SAFE(!handles.empty());
@@ -497,10 +558,17 @@ FileBackedStorage::remove(const bmqt::MessageGUID& msgGUID,
     // Update stats
     d_capacityMeter.remove(1, msgLen);
 
-    BSLS_ASSERT_SAFE(d_queue_p);
-    d_queue_p->stats()->onEvent(
-        mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE,
-        msgLen);
+    BSLS_ASSERT_SAFE(queue());
+    queue()
+        ->stats()
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE>(
+
+            msgLen);
+    queue()
+        ->stats()
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_UPDATE_HISTORY>(
+
+            d_handles.historySize());
 
     if (msgSize) {
         *msgSize = msgLen;
@@ -516,19 +584,83 @@ FileBackedStorage::remove(const bmqt::MessageGUID& msgGUID,
 mqbi::StorageResult::Enum
 FileBackedStorage::removeAll(const mqbu::StorageKey& appKey)
 {
-    bsl::string appId;
+    mqbi::StorageResult::Enum rc;
+
     if (!appKey.isNull()) {
-        if (!d_virtualStorageCatalog.hasVirtualStorage(appKey, &appId)) {
-            return mqbi::StorageResult::e_APPKEY_NOT_FOUND;  // RETURN
+        rc = d_virtualStorageCatalog.purge(
+            appKey,
+            bdlf::BindUtil::bind(&FileBackedStorage::writeAppPurgeRecord,
+                                 this,
+                                 false,
+                                 bdlf::PlaceHolders::_1,
+                                 bdlf::PlaceHolders::_2));
+        if (d_handles.empty()) {
+            d_isEmpty.storeRelaxed(1);
+        }
+    }
+    else {
+        rc = writeQueuePurgeRecord();
+        if (mqbi::StorageResult::e_SUCCESS == rc) {
+            purgeCommon(mqbu::StorageKey::k_NULL_KEY);
+
+            d_isEmpty.storeRelaxed(1);
+
+            return mqbi::StorageResult::e_SUCCESS;  // RETURN
         }
     }
 
+    d_queueStats_sp
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_UPDATE_HISTORY>(
+            d_handles.historySize());
+
+    return rc;
+}
+
+bool FileBackedStorage::removeVirtualStorage(const mqbu::StorageKey& appKey,
+                                             bool                    asPrimary)
+{
+    BSLS_ASSERT_SAFE(!appKey.isNull());
+
+    VirtualStorageCatalog::PurgeCallback cb;
+
+    if (asPrimary) {
+        cb = bdlf::BindUtil::bind(&FileBackedStorage::writeAppPurgeRecord,
+                                  this,
+                                  true,
+                                  bdlf::PlaceHolders::_1,
+                                  bdlf::PlaceHolders::_2);
+    }
+
+    mqbi::StorageResult::Enum rc =
+        d_virtualStorageCatalog.removeVirtualStorage(appKey, cb);
+
+    if (d_handles.empty()) {
+        d_isEmpty.storeRelaxed(1);
+    }
+
+    return mqbi::StorageResult::e_SUCCESS == rc;
+}
+
+mqbi::StorageResult::Enum FileBackedStorage::writeQueuePurgeRecord()
+{
+    return writePurgeRecordImpl(false,
+                                mqbu::StorageKey::k_NULL_KEY,
+                                DataStoreRecordHandle());
+}
+
+mqbi::StorageResult::Enum
+FileBackedStorage::writePurgeRecordImpl(bool                        alsoDelete,
+                                        const mqbu::StorageKey&     appKey,
+                                        const DataStoreRecordHandle start)
+{
+    const bsls::Types::Uint64 timestamp = bdlt::EpochUtil::convertToTimeT64(
+        bdlt::CurrentTime::utc());
     DataStoreRecordHandle handle;
-    int                   rc = d_store_p->writeQueuePurgeRecord(
-        &handle,
-        d_queueKey,
-        appKey,
-        bdlt::EpochUtil::convertToTimeT64(bdlt::CurrentTime::utc()));
+    int                   rc = d_store_p->writeQueuePurgeRecord(&handle,
+                                              d_queueKey,
+                                              appKey,
+                                              timestamp,
+                                              start);
 
     if (0 != rc) {
         return mqbi::StorageResult::e_WRITE_FAILURE;  // RETURN
@@ -536,116 +668,48 @@ FileBackedStorage::removeAll(const mqbu::StorageKey& appKey)
 
     d_queueOpRecordHandles.push_back(handle);
 
-    if (appKey.isNull()) {
-        purgeCommon(appKey);  // or 'mqbu::StorageKey::k_NULL_KEY'
-        dispatcherFlush(true, false);
-        d_isEmpty.storeRelaxed(1);
-        return mqbi::StorageResult::e_SUCCESS;  // RETURN
-    }
+    if (alsoDelete) {
+        // Write QueueDeletionRecord to data store for removed appIds.
+        //
+        // TODO_CSL Do not write this record when we logically delete the
+        // QLIST file
 
-    // A specific appKey is being purged.
-
-    bslma::ManagedPtr<mqbi::StorageIterator> iter =
-        d_virtualStorageCatalog.getIterator(appKey);
-    while (!iter->atEnd()) {
-        const bmqt::MessageGUID& guid = iter->guid();
-        RecordHandleMapIter      it   = d_handles.find(guid);
-        if (it == d_handles.end()) {
-            BALL_LOG_WARN
-                << "#STORAGE_PURGE_ERROR "
-                << "PartitionId [" << partitionId() << "]"
-                << ": Attempting to purge GUID '" << guid
-                << "' from virtual storage with appId '" << appId
-                << "' & appKey '" << appKey << "' for queue '" << queueUri()
-                << "' & queueKey '" << queueKey()
-                << "', but GUID does not exist in the underlying storage.";
-            iter->advance();
-            continue;  // CONTINUE
+        rc = d_store_p->writeQueueDeletionRecord(&handle,
+                                                 d_queueKey,
+                                                 appKey,
+                                                 timestamp);
+        if (0 != rc) {
+            return mqbi::StorageResult::e_WRITE_FAILURE;  // RETURN
         }
 
-        if (0 == it->second.d_refCount) {
-            // Outstanding refCount for this message is already zero.
-
-            MWCTSK_ALARMLOG_ALARM("REPLICATION")
-                << "PartitionId [" << partitionId() << "]"
-                << ": Attempting to purge GUID '" << guid
-                << "' from virtual storage with appId '" << appId
-                << "' & appKey '" << appKey << "] for queue '" << queueUri()
-                << "' & queueKey '" << queueKey()
-                << "', for which refCount is already zero."
-                << MWCTSK_ALARMLOG_END;
-            iter->advance();
-            continue;  // CONTINUE
-        }
-
-        const RecordHandlesArray& handles = it->second.d_array;
-        BSLS_ASSERT_SAFE(!handles.empty());
-
-        if (0 == --it->second.d_refCount) {
-            // This appKey was the last outstanding client for this message.
-            // Message can now be deleted.
-
-            int msgLen = static_cast<int>(
-                d_store_p->getMessageLenRaw(handles[0]));
-
-            rc = d_store_p->writeDeletionRecord(
-                guid,
-                d_queueKey,
-                DeletionRecordFlag::e_NONE,
-                bdlt::EpochUtil::convertToTimeT64(bdlt::CurrentTime::utc()));
-
-            if (0 != rc) {
-                MWCTSK_ALARMLOG_ALARM("FILE_IO")
-                    << "PartitionId [" << partitionId() << "] failed to write "
-                    << "DELETION record for GUID: " << guid << ", for queue '"
-                    << d_queueUri << "', queueKey '" << d_queueKey
-                    << "' while attempting to purge the message, rc: " << rc
-                    << MWCTSK_ALARMLOG_END;
-                iter->advance();
-                continue;  // CONTINUE
-            }
-
-            // If a queue is associated, inform it about the message being
-            // deleted, and update queue stats.
-            // The same 'e_DEL_MESSAGE' is about 3 cases: TTL, no SC quorum,
-            // and a purge.
-            if (d_queue_p) {
-                d_queue_p->queueEngine()->beforeMessageRemoved(guid);
-                d_queue_p->stats()->onEvent(
-                    mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE,
-                    msgLen);
-            }
-
-            // There is not really a need to remove the guid from all virtual
-            // storages, because we can be here only if guid doesn't exist in
-            // any virtual storage apart from 'vs' (because updated outstanding
-            // refCount is zero).  So we just delete records associated with
-            // the guid from the underlying (this) storage.
-
-            for (unsigned int i = 0; i < handles.size(); ++i) {
-                d_store_p->removeRecordRaw(handles[i]);
-            }
-
-            d_capacityMeter.remove(1, msgLen);
-            d_handles.erase(it);
-        }
-
-        iter->advance();
+        d_queueOpRecordHandles.push_back(handle);
     }
 
-    purgeCommon(appKey);
-    dispatcherFlush(true, false);
-
-    if (d_handles.empty()) {
-        d_isEmpty.storeRelaxed(1);
-    }
+    flushStorage();
 
     return mqbi::StorageResult::e_SUCCESS;
 }
 
-void FileBackedStorage::dispatcherFlush(bool storage, bool queues)
+mqbi::StorageResult::Enum FileBackedStorage::writeAppPurgeRecord(
+    bool                                             alsoDelete,
+    const mqbu::StorageKey&                          appKey,
+    const VirtualStorageCatalog::DataStreamIterator& first)
 {
-    d_store_p->dispatcherFlush(storage, queues);
+    // double lookup
+    RecordHandleMap::iterator itRecord = d_handles.find(first->first);
+    BSLS_ASSERT_SAFE(itRecord != d_handles.end());
+
+    DataStoreRecordHandle     start;  // !isValid()
+    const RecordHandlesArray& handles = itRecord->second.d_array;
+    BSLS_ASSERT(!handles.empty());
+    start = handles[0];
+
+    return writePurgeRecordImpl(alsoDelete, appKey, start);
+}
+
+void FileBackedStorage::flushStorage()
+{
+    d_store_p->flushStorage();
 }
 
 int FileBackedStorage::gcExpiredMessages(
@@ -662,12 +726,12 @@ int FileBackedStorage::gcExpiredMessages(
 
     int                numMsgsDeleted     = 0;
     int                numMsgsUnreceipted = 0;
-    bsls::Types::Int64 now   = mwcsys::Time::highResolutionTimer();
+    bsls::Types::Int64 now   = bmqsys::Time::highResolutionTimer();
     int                limit = k_GC_MESSAGES_BATCH_SIZE;
     bsls::Types::Int64 deduplicationTimeNs =
-        d_queue_p ? d_queue_p->domain()->config().deduplicationTimeMs() *
-                        bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND
-                  : 0;
+        queue() ? queue()->domain()->config().deduplicationTimeMs() *
+                      bdlt::TimeUnitRatio::k_NANOSECONDS_PER_MILLISECOND
+                : 0;
 
     for (RecordHandleMapIter next = d_handles.begin(), cit;
          next != d_handles.end() && --limit;) {
@@ -708,13 +772,13 @@ int FileBackedStorage::gcExpiredMessages(
                                                 deletionFlag,
                                                 secondsFromEpoch);
         if (0 != rc) {
-            MWCTSK_ALARMLOG_ALARM("FILE_IO")
-                << "PartitionId [" << partitionId() << "]"
+            BMQTSK_ALARMLOG_ALARM("FILE_IO")
+                << "Partition [" << partitionId() << "]"
                 << " failed to write DELETION record for "
                 << "GUID: " << cit->first << ", for queue '" << d_queueUri
                 << "', queueKey '" << d_queueKey << "' while attempting to GC "
                 << "the message due to TTL/ACK expiration, rc: " << rc
-                << MWCTSK_ALARMLOG_END;
+                << BMQTSK_ALARMLOG_END;
             // Do NOT remove the expired record without replicating Deletion.
             return numMsgsDeleted;  // RETURN
         }
@@ -723,16 +787,15 @@ int FileBackedStorage::gcExpiredMessages(
         // and update queue stats.
 
         // The same 'e_DEL_MESSAGE' is about 3 cases: TTL, no SC quorum, purge.
-        if (d_queue_p) {
-            d_queue_p->queueEngine()->beforeMessageRemoved(cit->first);
-            d_queue_p->stats()->onEvent(
-                mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE,
-                msgLen);
+        if (queue()) {
+            queue()->queueEngine()->beforeMessageRemoved(cit->first);
         }
+        d_queueStats_sp
+            ->onEvent<mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE>(
+                msgLen);
 
         // Remove message from all virtual storages.
-        d_virtualStorageCatalog.remove(cit->first,
-                                       mqbu::StorageKey::k_NULL_KEY);
+        d_virtualStorageCatalog.gc(cit->first);
 
         // Delete all items pointed by all handles for this GUID (i.e., delete
         // message from the underlying storage).
@@ -746,17 +809,20 @@ int FileBackedStorage::gcExpiredMessages(
         ++numMsgsDeleted;
     }
 
-    if (d_queue_p && numMsgsDeleted > 0) {
+    if (numMsgsDeleted > 0) {
         if (numMsgsDeleted > numMsgsUnreceipted) {
-            d_queue_p->stats()->onEvent(
-                mqbstat::QueueStatsDomain::EventType::e_GC_MESSAGE,
-                numMsgsDeleted - numMsgsUnreceipted);
+            d_queueStats_sp
+                ->onEvent<mqbstat::QueueStatsDomain::EventType::e_GC_MESSAGE>(
+                    numMsgsDeleted - numMsgsUnreceipted);
         }
         if (numMsgsUnreceipted) {
-            d_queue_p->stats()->onEvent(
-                mqbstat::QueueStatsDomain::EventType::e_NO_SC_MESSAGE,
+            d_queueStats_sp->onEvent<
+                mqbstat::QueueStatsDomain::EventType::e_NO_SC_MESSAGE>(
                 numMsgsUnreceipted);
         }
+        d_queueStats_sp
+            ->onEvent<mqbstat::QueueStatsDomain::EventType::e_UPDATE_HISTORY>(
+                d_handles.historySize());
     }
 
     if (d_handles.empty()) {
@@ -768,8 +834,14 @@ int FileBackedStorage::gcExpiredMessages(
 
 bool FileBackedStorage::gcHistory()
 {
-    return d_handles.gc(mwcsys::Time::highResolutionTimer(),
-                        k_GC_MESSAGES_BATCH_SIZE);
+    bool hasMoreToGc = d_handles.gc(bmqsys::Time::highResolutionTimer(),
+                                    k_GC_MESSAGES_BATCH_SIZE);
+
+    d_queueStats_sp
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_UPDATE_HISTORY>(
+            d_handles.historySize());
+
+    return hasMoreToGc;
 }
 
 void FileBackedStorage::processMessageRecord(
@@ -784,25 +856,48 @@ void FileBackedStorage::processMessageRecord(
     RecordHandleMapIter it = d_handles.find(guid);
     if (d_handles.end() == it) {
         InsertRc irc = d_handles.insert(bsl::make_pair(guid, Item()),
-                                        mwcsys::Time::highResolutionTimer());
+                                        bmqsys::Time::highResolutionTimer());
         irc.first->second.d_array.push_back(handle);
         irc.first->second.d_refCount = refCount;
 
-        // Add 'guid' to all virtual storages, if any.
-        d_virtualStorageCatalog.put(guid,
-                                    msgLen,
-                                    d_defaultRdaInfo,
-                                    bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID,
-                                    mqbu::StorageKey::k_NULL_KEY);
+        if (d_autoConfirms.empty()) {
+            d_virtualStorageCatalog.put(guid, msgLen, refCount);
+        }
+        else {
+            if (!d_currentlyAutoConfirming.isUnset()) {
+                if (d_currentlyAutoConfirming == guid) {
+                    mqbi::DataStreamMessage* dataStreamMessage = 0;
+                    d_virtualStorageCatalog.put(guid,
+                                                msgLen,
+                                                refCount +
+                                                    d_autoConfirms.size(),
+                                                &dataStreamMessage);
+
+                    // Move auto confirms to the data record
+                    for (AutoConfirms::const_iterator cit =
+                             d_autoConfirms.begin();
+                         cit != d_autoConfirms.end();
+                         ++cit) {
+                        irc.first->second.d_array.push_back(
+                            cit->d_confirmRecordHandle);
+                        d_virtualStorageCatalog.autoConfirm(dataStreamMessage,
+                                                            cit->d_appKey);
+                    }
+                }
+                else {
+                    clearSelection();
+                }
+            }
+            d_autoConfirms.clear();
+        }
+        d_currentlyAutoConfirming = bmqt::MessageGUID();
 
         // Update the messages & bytes monitors, and the stats.
         d_capacityMeter.forceCommit(1, msgLen);  // Return value ignored.
 
-        if (d_queue_p) {
-            d_queue_p->stats()->onEvent(
-                mqbstat::QueueStatsDomain::EventType::e_ADD_MESSAGE,
+        d_queueStats_sp
+            ->onEvent<mqbstat::QueueStatsDomain::EventType::e_ADD_MESSAGE>(
                 msgLen);
-        }
 
         d_isEmpty.storeRelaxed(0);
     }
@@ -810,41 +905,54 @@ void FileBackedStorage::processMessageRecord(
         // Received a message record for a guid for which an entry already
         // exists.  This is an error.
 
-        MWCTSK_ALARMLOG_ALARM("REPLICATION")
-            << "PartitionId [" << partitionId() << "]"
+        BMQTSK_ALARMLOG_ALARM("REPLICATION")
+            << "Partition [" << partitionId() << "]"
             << " received MESSAGE record for GUID '" << guid << "' for queue '"
             << queueUri() << "', queueKey '" << queueKey()
             << "' for which an entry already exists. Ignoring this message."
-            << MWCTSK_ALARMLOG_END;
+            << BMQTSK_ALARMLOG_END;
     }
 }
 
 void FileBackedStorage::processConfirmRecord(
     const bmqt::MessageGUID&     guid,
     const mqbu::StorageKey&      appKey,
+    ConfirmReason::Enum          reason,
     const DataStoreRecordHandle& handle)
 {
     BSLS_ASSERT_SAFE(RecordType::e_CONFIRM == handle.type());
 
+    if (reason == ConfirmReason::e_AUTO_CONFIRMED) {
+        if (d_currentlyAutoConfirming != guid) {
+            if (!d_currentlyAutoConfirming.isUnset()) {
+                clearSelection();
+            }
+            d_currentlyAutoConfirming = guid;
+        }
+
+        d_autoConfirms.emplace_back(appKey, handle);
+        return;  // RETURN
+    }
+
     RecordHandleMapIter it = d_handles.find(guid);
     if (it == d_handles.end()) {
-        MWCTSK_ALARMLOG_ALARM("REPLICATION")
-            << "PartitionId [" << partitionId() << "]"
+        BMQTSK_ALARMLOG_ALARM("REPLICATION")
+            << "Partition [" << partitionId() << "]"
             << " received CONFIRM record for GUID '" << guid << "' for queue '"
             << queueUri() << "', queueKey '" << queueKey()
             << "' for which no entry exists. Ignoring this message."
-            << MWCTSK_ALARMLOG_END;
+            << BMQTSK_ALARMLOG_END;
         return;  // RETURN
     }
 
     if (0 == it->second.d_refCount) {
         // Outstanding refCount for this message is already zero at this node.
-        MWCTSK_ALARMLOG_ALARM("REPLICATION")
-            << "PartitionId [" << partitionId() << "]"
+        BMQTSK_ALARMLOG_ALARM("REPLICATION")
+            << "Partition [" << partitionId() << "]"
             << "' received CONFIRM record for GUID '" << guid
             << "' for queue '" << queueUri() << "', queueKey '" << queueKey()
             << "' for which refCount is already zero. Ignoring this message."
-            << MWCTSK_ALARMLOG_END;
+            << BMQTSK_ALARMLOG_END;
         return;  // RETURN
     }
 
@@ -856,11 +964,11 @@ void FileBackedStorage::processConfirmRecord(
     --it->second.d_refCount;  // Update outstanding refCount
 
     if (!appKey.isNull()) {
-        mqbi::StorageResult::Enum rc = d_virtualStorageCatalog.remove(guid,
-                                                                      appKey);
+        const mqbi::StorageResult::Enum rc =
+            d_virtualStorageCatalog.confirm(guid, appKey);
         if (mqbi::StorageResult::e_SUCCESS != rc) {
-            BALL_LOG_ERROR << "#STORAGE_INVALID_CONFIRM "
-                           << "PartitionId [" << partitionId() << "]"
+            BALL_LOG_ERROR << "#STORAGE_INVALID_CONFIRM " << "Partition ["
+                           << partitionId() << "]"
                            << "' attempting to confirm GUID '" << guid
                            << "' for appKey '" << appKey
                            << "' which does not exist in its virtual storage, "
@@ -876,12 +984,12 @@ void FileBackedStorage::processDeletionRecord(const bmqt::MessageGUID& guid)
 {
     RecordHandleMapIter it = d_handles.find(guid);
     if (it == d_handles.end()) {
-        MWCTSK_ALARMLOG_ALARM("REPLICATION")
-            << "PartitionId [" << partitionId() << "]"
+        BMQTSK_ALARMLOG_ALARM("REPLICATION")
+            << "Partition [" << partitionId() << "]"
             << " received DELETION record for GUID '" << guid
             << "' for queue '" << queueUri() << "', queueKey '" << queueKey()
             << "' for which no entry exists. Ignoring this message."
-            << MWCTSK_ALARMLOG_END;
+            << BMQTSK_ALARMLOG_END;
         return;  // RETURN
     }
 
@@ -900,19 +1008,18 @@ void FileBackedStorage::processDeletionRecord(const bmqt::MessageGUID& guid)
     const RecordHandlesArray& handles = it->second.d_array;
     const unsigned int        msgLen = d_store_p->getMessageLenRaw(handles[0]);
 
-    if (d_queue_p) {
-        d_queue_p->queueEngine()->beforeMessageRemoved(guid);
-        d_queue_p->stats()->onEvent(
-            mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE,
-            msgLen);
+    if (queue()) {
+        queue()->queueEngine()->beforeMessageRemoved(guid);
     }
+    d_queueStats_sp
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_DEL_MESSAGE>(msgLen);
 
     // Delete 'guid' from all virtual storages, if any.  Note that 'guid'
     // should have already been removed from each virtual storage when confirm
     // records were received earlier for each appKey, but we remove the guid
     // again, just in case.  When the code is mature enough, we could remove
     // this.
-    d_virtualStorageCatalog.remove(guid, mqbu::StorageKey::k_NULL_KEY);
+    d_virtualStorageCatalog.remove(guid);
 
     d_capacityMeter.remove(1, msgLen, true /* silent mode; don't log */);
 
@@ -930,6 +1037,10 @@ void FileBackedStorage::processDeletionRecord(const bmqt::MessageGUID& guid)
     if (d_handles.empty()) {
         d_isEmpty.storeRelaxed(1);
     }
+
+    d_queueStats_sp
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_UPDATE_HISTORY>(
+            d_handles.historySize());
 }
 
 void FileBackedStorage::addQueueOpRecordHandle(
@@ -937,10 +1048,11 @@ void FileBackedStorage::addQueueOpRecordHandle(
 {
     BSLS_ASSERT_SAFE(handle.isValid());
 
+    // The first Record must be 'e_CREATION'
 #ifdef BSLS_ASSERT_SAFE_IS_ACTIVE
-    if (!d_queueOpRecordHandles.empty()) {
+    if (d_queueOpRecordHandles.empty()) {
         QueueOpRecord rec;
-        d_store_p->loadQueueOpRecordRaw(&rec, d_queueOpRecordHandles[0]);
+        d_store_p->loadQueueOpRecordRaw(&rec, handle);
         BSLS_ASSERT_SAFE(QueueOpType::e_CREATION == rec.type());
     }
 #endif
@@ -952,7 +1064,7 @@ void FileBackedStorage::purge(const mqbu::StorageKey& appKey)
 {
     purgeCommon(appKey);
 
-    if (d_queue_p) {
+    if (queue()) {
         bsl::string appId;
         if (appKey.isNull()) {
             appId = bmqp::ProtocolUtil::k_NULL_APP_ID;
@@ -964,126 +1076,78 @@ void FileBackedStorage::purge(const mqbu::StorageKey& appKey)
             static_cast<void>(rc);
         }
 
-        d_queue_p->queueEngine()->afterQueuePurged(appId, appKey);
+        queue()->queueEngine()->afterQueuePurged(appId, appKey);
     }
 }
 
-// -------------------------------
-// class FileBackedStorageIterator
-// -------------------------------
-
-// PRIVATE MANIPULATORS
-void FileBackedStorageIterator::clear()
+void FileBackedStorage::selectForAutoConfirming(
+    const bmqt::MessageGUID& msgGUID)
 {
-    // Clear previous state, if any.  This is required so that new state can be
-    // loaded in 'appData', 'options' or 'attributes' routines.
-    d_appData_sp.reset();
-    d_options_sp.reset();
-    d_attributes.reset();
+    clearSelection();
+    d_currentlyAutoConfirming = msgGUID;
 }
 
-// PRIVATE ACCESSORS
-void FileBackedStorageIterator::loadMessageAndAttributes() const
+mqbi::StorageResult::Enum
+FileBackedStorage::autoConfirm(const mqbu::StorageKey& appKey,
+                               bsls::Types::Uint64     timestamp)
 {
-    BSLS_ASSERT_SAFE(!atEnd());
-    if (!d_appData_sp) {
-        const RecordHandlesArray& array = d_iterator->second.d_array;
-        BSLS_ASSERT_SAFE(!array.empty());
-        d_storage_p->d_store_p->loadMessageRaw(&d_appData_sp,
-                                               &d_options_sp,
-                                               &d_attributes,
-                                               array[0]);
+    BSLS_ASSERT_SAFE(!appKey.isNull());
+    BSLS_ASSERT_SAFE(!d_currentlyAutoConfirming.isUnset());
+
+    DataStoreRecordHandle handle;
+    int                   rc = d_store_p->writeConfirmRecord(&handle,
+                                           d_currentlyAutoConfirming,
+                                           d_queueKey,
+                                           appKey,
+                                           timestamp,
+                                           ConfirmReason::e_AUTO_CONFIRMED);
+    if (0 != rc) {
+        return mqbi::StorageResult::e_WRITE_FAILURE;  // RETURN
     }
+    d_autoConfirms.emplace_back(appKey, handle);
+
+    return mqbi::StorageResult::e_SUCCESS;
 }
 
-// CREATORS
-FileBackedStorageIterator::FileBackedStorageIterator()
-: d_storage_p(0)
-, d_iterator()
-, d_attributes()
-, d_appData_sp()
-, d_options_sp()
+void FileBackedStorage::setPrimary()
 {
-    // NOTHING
+    d_queueStats_sp
+        ->onEvent<mqbstat::QueueStatsDomain::EventType::e_CHANGE_ROLE>(
+            mqbstat::QueueStatsDomain::Role::e_PRIMARY);
 }
 
-FileBackedStorageIterator::FileBackedStorageIterator(
-    const FileBackedStorage*        storage,
-    const RecordHandleMapConstIter& initialPosition)
-: d_storage_p(storage)
-, d_iterator(initialPosition)
-, d_attributes()
+void FileBackedStorage::calibrate()
 {
+    d_virtualStorageCatalog.calibrate();
 }
 
-FileBackedStorageIterator::~FileBackedStorageIterator()
+void FileBackedStorage::clearSelection()
 {
-    // NOTHING
+    for (AutoConfirms::const_iterator it = d_autoConfirms.begin();
+         it != d_autoConfirms.end();
+         ++it) {
+        d_store_p->removeRecordRaw(it->d_confirmRecordHandle);
+    }
+    d_autoConfirms.clear();
+
+    d_currentlyAutoConfirming = bmqt::MessageGUID();
 }
 
-// MANIPULATORS
-bool FileBackedStorageIterator::advance()
+bsl::ostream&
+FileBackedStorage::logAppsSubscriptionInfoCb(bsl::ostream& stream) const
 {
-    // PRECONDITIONS
-    BSLS_ASSERT_SAFE(!atEnd());
+    if (queue()) {
+        mqbi::Storage::AppInfos appInfos(d_allocator_p);
+        loadVirtualStorageDetails(&appInfos);
 
-    clear();
-    ++d_iterator;
-    return !atEnd();
-}
+        for (mqbi::Storage::AppInfos::const_iterator cit = appInfos.begin();
+             cit != appInfos.end();
+             ++cit) {
+            queue()->queueEngine()->logAppSubscriptionInfo(stream, cit->first);
+        }
+    }
 
-void FileBackedStorageIterator::reset()
-{
-    clear();
-
-    // Reset iterator to beginning.
-    d_iterator = d_storage_p->d_handles.begin();
-}
-
-// ACCESSORS
-const bmqt::MessageGUID& FileBackedStorageIterator::guid() const
-{
-    return d_iterator->first;
-}
-
-bmqp::RdaInfo& FileBackedStorageIterator::rdaInfo() const
-{
-    static bmqp::RdaInfo dummy;
-    return dummy;
-}
-
-unsigned int FileBackedStorageIterator::subscriptionId() const
-{
-    return bmqp::Protocol::k_DEFAULT_SUBSCRIPTION_ID;
-}
-
-const bsl::shared_ptr<bdlbb::Blob>& FileBackedStorageIterator::appData() const
-{
-    loadMessageAndAttributes();
-    return d_appData_sp;
-}
-
-const bsl::shared_ptr<bdlbb::Blob>& FileBackedStorageIterator::options() const
-{
-    loadMessageAndAttributes();
-    return d_options_sp;
-}
-
-const mqbi::StorageMessageAttributes&
-FileBackedStorageIterator::attributes() const
-{
-    loadMessageAndAttributes();
-    return d_attributes;
-}
-
-bool FileBackedStorageIterator::atEnd() const
-{
-    return d_iterator == d_storage_p->d_handles.end();
-}
-
-bool FileBackedStorageIterator::hasReceipt() const
-{
-    return atEnd() ? false : d_iterator->second.d_array[0].hasReceipt();
+    return stream;
 }
 
 }  // close package namespace

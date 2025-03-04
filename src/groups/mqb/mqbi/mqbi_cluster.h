@@ -50,12 +50,12 @@
 #include <bmqp_ctrlmsg_messages.h>
 #include <bmqp_requestmanager.h>
 
-// MWC
-#include <mwcio_status.h>
+#include <bmqio_status.h>
 
 // BDE
 #include <bsl_functional.h>
 #include <bsl_memory.h>
+#include <bsl_optional.h>
 #include <bsl_ostream.h>
 #include <bsl_string.h>
 #include <bsls_timeinterval.h>
@@ -86,6 +86,10 @@ class Cluster;
 }
 namespace mqbnet {
 class ClusterNode;
+}
+namespace mqbnet {
+template <class REQUEST, class RESPONSE, class TARGET>
+class MultiRequestManager;
 }
 
 namespace mqbi {
@@ -210,7 +214,7 @@ class Cluster : public DispatcherClient {
 
     /// Signature of the callback passed to the `openQueue()` method: if the
     /// specified `status` is SUCCESS, the operation was a success and the
-    /// specified `queue` contains the resulting queue, and the specified
+    /// specified `queueHandle` contains the queue handle, and the specified
     /// `openQueueResponse` contains the upstream response (if applicable,
     /// otherwise an injected response having valid routing configuration);
     /// otherwise `status` contains the category, error code and description
@@ -220,7 +224,7 @@ class Cluster : public DispatcherClient {
     /// above).
     typedef bsl::function<void(
         const bmqp_ctrlmsg::Status&            status,
-        Queue*                                 queue,
+        QueueHandle*                           queueHandle,
         const bmqp_ctrlmsg::OpenQueueResponse& openQueueResponse,
         const OpenQueueConfirmationCookie&     confirmationCookie)>
         OpenQueueCallback;
@@ -236,6 +240,11 @@ class Cluster : public DispatcherClient {
     typedef bmqp::RequestManager<bmqp_ctrlmsg::ControlMessage,
                                  bmqp_ctrlmsg::ControlMessage>
         RequestManagerType;
+
+    typedef mqbnet::MultiRequestManager<bmqp_ctrlmsg::ControlMessage,
+                                        bmqp_ctrlmsg::ControlMessage,
+                                        mqbnet::ClusterNode*>
+        MultiRequestManagerType;
 
     /// Signature of a `void` functor method.
     typedef bsl::function<void(void)> VoidFunctor;
@@ -257,8 +266,12 @@ class Cluster : public DispatcherClient {
     /// Initiate the shutdown of the cluster and invoke the specified
     /// `callback` upon completion of (asynchronous) shutdown sequence. It
     /// is expected that `stop()` will be called soon after this routine is
-    /// invoked.
-    virtual void initiateShutdown(const VoidFunctor& callback) = 0;
+    /// invoked.  If the optional (temporary) specified 'supportShutdownV2' is
+    /// 'true' execute shutdown logic V2 where upstream (not downstream) nodes
+    /// deconfigure  queues and the shutting down node (not downstream) wait
+    /// for CONFIRMS.
+    virtual void initiateShutdown(const VoidFunctor& callback,
+                                  bool supportShutdownV2 = false) = 0;
 
     /// Stop the `Cluster`; this is the counterpart of the `start()`
     /// operation.
@@ -271,6 +284,10 @@ class Cluster : public DispatcherClient {
     /// Return a reference offering modifiable access to the request manager
     /// used by this cluster.
     virtual RequestManagerType& requestManager() = 0;
+
+    // Return a reference offering a modifiable access to the multi request
+    // manager used by this cluster.
+    virtual MultiRequestManagerType& multiRequestManager() = 0;
 
     /// Register the specified `observer` to be notified of cluster state
     /// changes.
@@ -354,6 +371,10 @@ class Cluster : public DispatcherClient {
     /// Load the cluster state to the specified `out` object.
     virtual void loadClusterStatus(mqbcmd::ClusterResult* out) = 0;
 
+    /// Purge and force GC queues in this cluster on a given domain.
+    virtual void purgeAndGCQueueOnDomain(mqbcmd::ClusterResult* result,
+                                         const bsl::string& domainName) = 0;
+
     // ACCESSORS
 
     /// Return the name of this cluster.
@@ -412,6 +433,92 @@ class Cluster : public DispatcherClient {
     /// represents a proxy, otherwise null.
     virtual const mqbcfg::ClusterProxyDefinition*
     clusterProxyConfig() const = 0;
+
+    /// Gets all the nodes which are a primary for some partition of this
+    /// cluster, storing each external node into the given `nodes` vector
+    /// and/or marking `isSelfPrimary` as true if the self node is a primary.
+    /// The self node will never be added to the `nodes` vector. Populates `rc`
+    /// with 0 on success or a non-zero error code on failure. In the case of
+    /// an error, the `errorDescription` output stream will be populated. Note
+    /// this function uses an out parameter for the return code, `rc`. This is
+    /// because this function is designed to be called by the dispatcher
+    /// thread, so the return type of this function should be `void`.
+    virtual void getPrimaryNodes(int*          rc,
+                                 bsl::ostream& errorDescription,
+                                 bsl::vector<mqbnet::ClusterNode*>* nodes,
+                                 bool* isSelfPrimary) const = 0;
+
+    /// Gets the node which is the primary for the given partitionId or sets
+    /// `isSelfPrimary` to true if the caller is the primary. Note that the
+    /// self node will never be populated into the given `node` pointer.
+    /// Populates `rc` with 0 on success or a non-zero error code on failure.
+    /// In the case of an error, the `errorDescription` output stream will be
+    /// populated. Note this function uses an out parameter for the return
+    /// code, `rc`. This is because this function is designed to be called by
+    /// the dispatcher thread, so the return type of this function should be
+    /// `void`.
+    virtual void getPartitionPrimaryNode(int*          rc,
+                                         bsl::ostream& errorDescription,
+                                         mqbnet::ClusterNode** node,
+                                         bool*                 isSelfPrimary,
+                                         int partitionId) const = 0;
+};
+
+struct ClusterResources {
+    // Resources to use for all queues in all clusters
+  public:
+    // TYPES
+
+    /// Pool of shared pointers to Blobs
+    typedef bdlcc::SharedObjectPool<
+        bdlbb::Blob,
+        bdlcc::ObjectPoolFunctors::DefaultCreator,
+        bdlcc::ObjectPoolFunctors::RemoveAll<bdlbb::Blob> >
+        BlobSpPool;
+
+  private:
+    // PRIVATE DATA
+
+    /// EventScheduler to use
+    bdlmt::EventScheduler* d_scheduler_p;
+
+    /// Blob buffer factory to use
+    bdlbb::BlobBufferFactory* d_bufferFactory_p;
+
+    /// Pool of shared pointers to blob to
+    /// use.
+    BlobSpPool* d_blobSpPool_p;
+
+    /// Pool of PushStream elements for Proxy/Replica QueueEngine.
+    bsl::optional<bdlma::ConcurrentPool*> d_pushElementsPool;
+
+  public:
+    // CREATORS
+
+    explicit ClusterResources(bdlmt::EventScheduler*    scheduler,
+                              bdlbb::BlobBufferFactory* bufferFactory,
+                              BlobSpPool*               blobSpPool);
+
+    explicit ClusterResources(bdlmt::EventScheduler*    scheduler,
+                              bdlbb::BlobBufferFactory* bufferFactory,
+                              BlobSpPool*               blobSpPool,
+                              bdlma::ConcurrentPool*    pushElementsPool);
+
+    ClusterResources(const ClusterResources& copy);
+
+    // ACCESSORS
+
+    /// Returns a pointer to the event scheduler
+    bdlmt::EventScheduler* scheduler() const;
+
+    /// Returns a pointer to the blob buffer factory
+    bdlbb::BlobBufferFactory* bufferFactory() const;
+
+    /// Returns a pointer to the shared blob objects pool
+    BlobSpPool* blobSpPool() const;
+
+    /// Returns a pointer to the concurrent pool for Push elements
+    const bsl::optional<bdlma::ConcurrentPool*>& pushElementsPool() const;
 };
 
 // ============================================================================
@@ -426,6 +533,70 @@ inline bool Cluster::isCSLModeEnabled() const
 inline bool Cluster::isFSMWorkflow() const
 {
     return false;
+}
+
+inline ClusterResources::ClusterResources(
+    bdlmt::EventScheduler*    scheduler,
+    bdlbb::BlobBufferFactory* bufferFactory,
+    BlobSpPool*               blobSpPool)
+: d_scheduler_p(scheduler)
+, d_bufferFactory_p(bufferFactory)
+, d_blobSpPool_p(blobSpPool)
+, d_pushElementsPool()
+{
+    BSLS_ASSERT_SAFE(d_scheduler_p);
+    BSLS_ASSERT_SAFE(d_bufferFactory_p);
+    BSLS_ASSERT_SAFE(d_blobSpPool_p);
+}
+
+inline ClusterResources::ClusterResources(
+    bdlmt::EventScheduler*    scheduler,
+    bdlbb::BlobBufferFactory* bufferFactory,
+    BlobSpPool*               blobSpPool,
+    bdlma::ConcurrentPool*    pushElementsPool)
+: d_scheduler_p(scheduler)
+, d_bufferFactory_p(bufferFactory)
+, d_blobSpPool_p(blobSpPool)
+, d_pushElementsPool(pushElementsPool)
+{
+    BSLS_ASSERT_SAFE(d_scheduler_p);
+    BSLS_ASSERT_SAFE(d_bufferFactory_p);
+    BSLS_ASSERT_SAFE(d_blobSpPool_p);
+    BSLS_ASSERT_SAFE(d_pushElementsPool);
+}
+
+inline ClusterResources::ClusterResources(const ClusterResources& copy)
+: d_scheduler_p(copy.d_scheduler_p)
+, d_bufferFactory_p(copy.d_bufferFactory_p)
+, d_blobSpPool_p(copy.d_blobSpPool_p)
+, d_pushElementsPool(copy.d_pushElementsPool)
+{
+    // NOTHING
+}
+
+inline bdlmt::EventScheduler* ClusterResources::scheduler() const
+{
+    return d_scheduler_p;
+}
+// EventScheduler to use
+
+inline bdlbb::BlobBufferFactory* ClusterResources::bufferFactory() const
+{
+    return d_bufferFactory_p;
+}
+// Blob buffer factory to use
+
+inline ClusterResources::BlobSpPool* ClusterResources::blobSpPool() const
+{
+    return d_blobSpPool_p;
+}
+// Pool of shared pointers to blob to
+// use.
+
+inline const bsl::optional<bdlma::ConcurrentPool*>&
+ClusterResources::pushElementsPool() const
+{
+    return d_pushElementsPool;
 }
 
 }  // close package namespace

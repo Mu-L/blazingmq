@@ -24,7 +24,7 @@
 #include <bsl_memory.h>
 
 // TEST DRIVER
-#include <mwctst_testhelper.h>
+#include <bmqtst_testhelper.h>
 
 // CONVENIENCE
 using namespace BloombergLP;
@@ -59,25 +59,31 @@ static bmqa::Event convertEvent(const bsl::shared_ptr<bmqimp::Event>& event)
 
 static void test1_breathingTest()
 {
-    mwctst::TestHelper::printTestName("BREATHING TEST");
-    bdlbb::PooledBlobBufferFactory bufferFactory(1024, s_allocator_p);
+    bmqtst::TestHelper::printTestName("BREATHING TEST");
+    bdlbb::PooledBlobBufferFactory bufferFactory(
+        1024,
+        bmqtst::TestHelperUtil::allocator());
     {
         PV("Creating a default uninitialized event");
         bsl::shared_ptr<bmqimp::Event> eventImpl(
-            new (*s_allocator_p) bmqimp::Event(&bufferFactory, s_allocator_p),
-            s_allocator_p);
+            new (*bmqtst::TestHelperUtil::allocator())
+                bmqimp::Event(&bufferFactory,
+                              bmqtst::TestHelperUtil::allocator()),
+            bmqtst::TestHelperUtil::allocator());
         bmqa::Event event = convertEvent(eventImpl);
 
-        ASSERT_EQ(event.isSessionEvent(), false);
-        ASSERT_EQ(event.isMessageEvent(), false);
+        BMQTST_ASSERT_EQ(event.isSessionEvent(), false);
+        BMQTST_ASSERT_EQ(event.isMessageEvent(), false);
         PV("EmptyEvent: " << event);
     }
 
     {
         PV("Creating a SessionEvent");
         bsl::shared_ptr<bmqimp::Event> eventImpl(
-            new (*s_allocator_p) bmqimp::Event(&bufferFactory, s_allocator_p),
-            s_allocator_p);
+            new (*bmqtst::TestHelperUtil::allocator())
+                bmqimp::Event(&bufferFactory,
+                              bmqtst::TestHelperUtil::allocator()),
+            bmqtst::TestHelperUtil::allocator());
         eventImpl->configureAsSessionEvent(bmqt::SessionEventType::e_TIMEOUT,
                                            -3,
                                            bmqt::CorrelationId(13),
@@ -85,15 +91,15 @@ static void test1_breathingTest()
         bmqa::Event event = convertEvent(eventImpl);
 
         // Validate type of the event
-        ASSERT_EQ(event.isSessionEvent(), true);
-        ASSERT_EQ(event.isMessageEvent(), false);
+        BMQTST_ASSERT_EQ(event.isSessionEvent(), true);
+        BMQTST_ASSERT_EQ(event.isMessageEvent(), false);
 
         // Validate session event values
         bmqa::SessionEvent se = event.sessionEvent();
-        ASSERT_EQ(se.type(), bmqt::SessionEventType::e_TIMEOUT);
-        ASSERT_EQ(se.statusCode(), -3);
-        ASSERT_EQ(se.correlationId(), bmqt::CorrelationId(13));
-        ASSERT_EQ(se.errorDescription(), "test");
+        BMQTST_ASSERT_EQ(se.type(), bmqt::SessionEventType::e_TIMEOUT);
+        BMQTST_ASSERT_EQ(se.statusCode(), -3);
+        BMQTST_ASSERT_EQ(se.correlationId(), bmqt::CorrelationId(13));
+        BMQTST_ASSERT_EQ(se.errorDescription(), "test");
         PV("Event: " << event);
     }
 }
@@ -104,16 +110,16 @@ static void test1_breathingTest()
 
 int main(int argc, char* argv[])
 {
-    TEST_PROLOG(mwctst::TestHelper::e_DEFAULT);
+    TEST_PROLOG(bmqtst::TestHelper::e_DEFAULT);
 
     switch (_testCase) {
     case 0:
     case 1: test1_breathingTest(); break;
     default: {
         cerr << "WARNING: CASE '" << _testCase << "' NOT FOUND." << endl;
-        s_testStatus = -1;
+        bmqtst::TestHelperUtil::testStatus() = -1;
     } break;
     }
 
-    TEST_EPILOG(mwctst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
+    TEST_EPILOG(bmqtst::TestHelper::e_CHECK_DEF_GBL_ALLOC);
 }
