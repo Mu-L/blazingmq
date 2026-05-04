@@ -463,7 +463,7 @@ class RootQueueEngine BSLS_KEYWORD_FINAL : public mqbi::QueueEngine {
     bsl::ostream& logAppSubscriptionInfo(bsl::ostream&     stream,
                                          const AppStateSp& appState) const;
 
-    const mqbconfm::Domain& config() const;
+    bsl::shared_ptr<const mqbconfm::Domain> config() const;
 };
 
 // ============================================================================
@@ -474,7 +474,7 @@ class RootQueueEngine BSLS_KEYWORD_FINAL : public mqbi::QueueEngine {
 // struct RootQueueEngine
 // ----------------------
 
-inline const mqbconfm::Domain& RootQueueEngine::config() const
+inline bsl::shared_ptr<const mqbconfm::Domain> RootQueueEngine::config() const
 {
     return d_queueState_p->queue()->domain()->config();
 }
